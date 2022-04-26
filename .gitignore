@@ -48,3 +48,27 @@ Thumbs.db
 *.mov
 *.wmv
 
+# OpenSBLI
+*.tex
+*.o
+*.f
+*.mod
+opensbli/*.pyc
+bin/*.pyc
+tests/__pycache__
+*.pyc
+
+*.cl
+*.c
+*.generated
+*.tex
+*.txt
+
+opensbli_seq
+opensbli_mpi
+opensbli_mpi_inline
+opensbli_mpi_tiled
+opensbli_openmp
+opensbli_cuda
+opensbli_mpi_cuda
+
