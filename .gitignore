@@ -63,6 +63,9 @@ tests/__pycache__
 *.generated
 *.tex
 *.txt
+*.cpp
+*.h
+*.cu
 
 opensbli_seq
 opensbli_mpi
