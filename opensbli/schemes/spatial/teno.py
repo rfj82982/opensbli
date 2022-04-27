@@ -9,7 +9,7 @@ from opensbli.core.opensblifunctions import TenoDerivative
 from opensbli.core.opensbliobjects import ConstantObject, GroupedPiecewise
 from opensbli.core.grid import GridVariable
 from opensbli.schemes.spatial.scheme import Scheme
-from opensbli.schemes.spatial.weno import LLFCharacteristic, ShockCapturing
+from opensbli.schemes.spatial.weno import LFCharacteristic, ShockCapturing
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations
 from sympy.functions.elementary.piecewise import ExprCondPair
@@ -465,14 +465,14 @@ class Teno(Scheme, ShockCapturing):
         return
 
 
-class LLFTeno(LLFCharacteristic, Teno):
+class LLFTeno(LFCharacteristic, Teno):
     """ Local Lax-Friedrichs flux splitting applied to characteristic variables using a TENO scheme.
 
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
     def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False):
-        LLFCharacteristic.__init__(self, physics, averaging)
+        LFCharacteristic.__init__(self, physics, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")

@@ -6,7 +6,7 @@
 
 from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function
 from sympy.core.numbers import Zero
-from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject
+from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel, ConstantsToDeclare
 from opensbli.core.grid import GridVariable
@@ -191,7 +191,7 @@ class EigenSystem(object):
 
     def generate_grid_variable_ev(self, direction, name):
         """ Create a matrix of eigenvalue GridVariable elements. """
-        name = '%s_lambda_%d' % (name, direction)
+        name = '%s_lambda' % (name)
         return self.symbol_matrix(self.eigen_value[direction], name)
 
     def generate_grid_variable_REV(self, direction, name):
@@ -259,10 +259,10 @@ class Characteristic(EigenSystem):
         settings = {"combine_reconstructions": True}
         for i in range(len(derivatives)):
             derivatives[i].update_settings(**settings)
-        pre_process_eqns = self.pre_process(direction, derivatives, solution_vector, block)
+        pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
         interpolated_eqns = self.interpolate_reconstruction_variables(derivatives)
         post_process_eqns = self.post_process(direction, derivatives, block)
-        return [pre_process_eqns, interpolated_eqns, post_process_eqns]
+        return [pre_process_eqns, reduction_eqns, interpolated_eqns, post_process_eqns]
 
     def remove_zero_equations(self, equations):
         for eqn in equations[:]:
@@ -299,6 +299,25 @@ class Characteristic(EigenSystem):
             substitutions[d] = increment_dataset(d, direction, location)
         return symbolics.subs(substitutions)
 
+    def set_global_eigenvalues(self, block):
+        """ Reduction variables for the global flux-splitting."""
+        self.global_eigenvalue_reductions, self.global_eigenvalues = {}, {}
+        # Get the eigenvalues for all directions from the characteristic system
+        for dire in range(block.ndim):
+            ev_dict, LEV_dict, REV_dict, required_metrics, inv_metric = self.euler.apply_direction(dire)
+            self.global_eigenvalues[dire] = ev_dict[dire]
+            name = str(ev_dict[dire][0,0])
+            reduction_names = [name+'_max' for _ in range(block.ndim)] + [name+'_plus'+'_max'] + [name+'_minus'+'_max']
+            reduction_vars = [ReductionVariable(x, 'max') for x in reduction_names]
+
+            symbolic_matrix = zeros(*(block.ndim+2, block.ndim+2))
+            for i in range(block.ndim+2):
+                for j in range(block.ndim+2):
+                    if i == j:
+                        symbolic_matrix[i, j] = reduction_vars[i]
+            self.global_eigenvalue_reductions[dire] = symbolic_matrix
+        return
+
     def characteristic_setup(self, direction, name, derivatives, block):
         """ Perform the initial characteristic steps used in both LLF and RF."""
         ev_dict, LEV_dict, REV_dict, required_metrics, inv_metric = self.euler.apply_direction(direction)
@@ -314,6 +333,8 @@ class Characteristic(EigenSystem):
         # Add symbols from the derivatives: e.g. pressure is required
         for d in derivatives:
             required_symbols = required_symbols.union(d.atoms(DataSetBase))
+        # Dictionary for reduction operatons
+        self.set_global_eigenvalues(block)
         return inv_metric, averaged_equations, required_symbols
 
     def create_LEV_inverses(self, direction, avg_LEV_values):
@@ -339,19 +360,20 @@ class Characteristic(EigenSystem):
         return eqns
 
 
-class LLFCharacteristic(Characteristic):
+class LFCharacteristic(Characteristic):
     """ This class contains the base Local Lax-Fedrich scheme performed in characteristic space.
 
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, physics, averaging=None):
+    def __init__(self, physics, flux_type='LLF', averaging=None):
         Characteristic.__init__(self, physics)
         if averaging is None:
             self.average = SimpleAverage([0, 1]).average
         else:
             self.average = averaging.average
         self.flux_split = True
+        self.flux_type = flux_type
         return
 
     def pre_process(self, direction, derivatives, solution_vector, block):
@@ -383,10 +405,19 @@ class LLFCharacteristic(Characteristic):
         pre_process_equations += flatten(self.generate_equations_from_matrices(grid_LEV, avg_LEV_values))
 
         # Create characteristic matrices and add their evaluations to pre_process
+        # Check whether the time advanced quantities are in conservative form or not
+        if not self.conservative:
+            rho = solution_vector[0]
+            assert str(rho.base.simplelabel()) == 'rho'
+            solution_vector = [rho] + [rho*x for x in solution_vector[1:]]
         evaluations, CS_matrix, CF_matrix = self.create_characteristic_matrices(direction, derivatives, solution_vector, avg_name)
         pre_process_equations += evaluations
-        # Get max wavespeeds and their evaluations
-        grid_EV, pre_process_equations = self.create_max_characteristic_wave_speed(pre_process_equations, direction, block)
+        # Get max wavespeeds and their evaluations, eigenvalues evaluated either local or globally
+        if self.flux_type is 'LLF':
+            grid_EV, pre_process_equations = self.create_max_characteristic_wave_speed(pre_process_equations, direction, block)
+            reduction_equations = []
+        else:
+            grid_EV, reduction_equations, pre_process_equations = self.calculate_eigenvalue_reductions(pre_process_equations, direction, block)
         # Transform the flux vector and the solution vector to characteristic space
         if hasattr(self, 'flux_split') and self.flux_split:
             self.characteristic_flux_splitting(grid_EV, CS_matrix, CF_matrix, derivatives)
@@ -395,8 +426,33 @@ class LLFCharacteristic(Characteristic):
         # Remove '0' entries and gamma - 1 factors from pre_process_equations
         pre_process_equations = self.remove_zero_equations(pre_process_equations)
         pre_process_equations = self.replace_gamma_factor(pre_process_equations)
-        return pre_process_equations
+        return pre_process_equations, reduction_equations
 
+    def calculate_eigenvalue_reductions(self, pre_process_equations, direction, block):
+        """ Performs a reduction of the eigenvalues over the entire domain."""
+        reductions = []
+        ndim = block.ndim
+        # Create a reduction kernel to compute the eigenvalues globally over the domain for all directions
+        if direction == 0:
+            for dire in range(block.ndim):
+                global_EV_reductions = self.global_eigenvalue_reductions[dire]
+                global_EVs = self.global_eigenvalues[dire]
+                # u, u+a, u-a
+                u = self.convert_symbolic_to_dataset(global_EVs[0,0], 0, 0, block)
+                upa = self.convert_symbolic_to_dataset(global_EVs[ndim,ndim], 0, 0, block)
+                uma = self.convert_symbolic_to_dataset(global_EVs[ndim+1,ndim+1], 0, 0, block)
+                reductions += [OpenSBLIEq(global_EV_reductions[0,0], Abs(u))]
+                reductions += [OpenSBLIEq(global_EV_reductions[ndim,ndim], Abs(upa))]
+                reductions += [OpenSBLIEq(global_EV_reductions[ndim+1,ndim+1], Abs(uma))]
+
+        # Assign the max wave speed to the correct reduced variables for this direction
+        grid_vars, reduction_vars = self.generate_grid_variable_ev(direction, 'max'), self.global_eigenvalue_reductions[direction]
+        # print(grid_vars)
+        # grid_vars[0,0] = '*'+str(self.global_eigenvalue_reductions[direction][0,0])
+        # pprint(str(self.global_eigenvalue_reductions[0][0,0]))
+        # exit()
+        pre_process_equations += [x for x in self.generate_equations_from_matrices(grid_vars, reduction_vars) if x != 0]
+        return grid_vars, reductions, pre_process_equations
 
     def central_diff_formula(self, component, reconstruction_variable):
         """ Central difference formula based on the f_i = 0.5*(f_(i+1/2) - f_(i-1/2)) half-node locations. Applied in characteristic space

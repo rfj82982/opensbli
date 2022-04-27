@@ -7,7 +7,7 @@
 from sympy.core.compatibility import is_sequence
 from sympy.printing.ccode import C99CodePrinter
 from sympy.core.relational import Equality
-from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise
+from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable
 from sympy import Symbol, flatten
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
@@ -61,7 +61,12 @@ class OPSCCodePrinter(C99CodePrinter):
         C99CodePrinter.__init__(self, settings={})
 
     def _print_ReductionVariable(self, expr):
-        return '*%s' % str(expr)
+        if expr.usage is 'lhs':
+            return '*%s' % str(expr)
+        elif expr.usage is 'rhs':
+            return '*%s' % str(expr)
+        else:
+            raise ValueError("The reduction variable does not have a status in the equation.")
 
     def _print_Rational(self, expr):
         """ Settings: if rational is True then rational numbers are printed as they are.
@@ -158,7 +163,7 @@ class OPSCCodePrinter(C99CodePrinter):
         return out
 
     def _print_UserFunction(self, fn):
-        """ Prints the user defined funtion, we do not check if the funciton exists in the header files.
+        """ Prints the user defined funtion, we do not check if the function exists in the header files.
         This allows for users to write their own OPS functions and use them in the code."""
         return self._print(fn.args[0]) + '(%s)' % (', '.join([self._print(arg) for arg in fn.args[1:]]))
 
@@ -272,6 +277,8 @@ class OPSC(object):
         if algorithm.simulation_monitor:
             if algorithm.simulation_monitor.output_file:
                 self.monitoring_output_file = True
+            else:
+                self.monitoring_output_file = False
         else:
             self.monitoring_output_file = False
         # First write the kernels, with this we will have the Rational constants to declare
@@ -327,18 +334,22 @@ class OPSC(object):
 
     def kernel_header(self, tuple_list):
         code = []
-        dtype = SimulationDataType.opsc()
         for key, val in (tuple_list):
-            # if any of the list has the datatype then use the data type
-            if str(key) == 'rkA' or str(key) == 'rkB' or str(key) == 'rkold' or str(key) == 'rknew':
+            if str(key) == 'rkA' or str(key) == 'rkB' or str(key) == 'rkold' or str(key) == 'rknew': # RK coefficients in the kernel header
                 code += ['const double *%s' % key]
             elif str(key) == 'iter': # current iteration counter
                 code += ['const int *%s' % key]
+            elif isinstance(key, ReductionVariable):
+                if val is 'input':
+                    code += ['const %s *%s' % (key.datatype.opsc(), key)]
+                else:
+                    code += ['%s *%s' % (key.datatype.opsc(), key)]
             else:
+                # if any of the list has the datatype then use the data type
                 if hasattr(key, "datatype") and key.datatype:
                     code += [self.ops_headers[val] % (key.datatype.opsc(), key)]
                 else:
-                    code += [self.ops_headers[val] % (dtype, key)]
+                    code += [self.ops_headers[val] % (SimulationDataType.opsc(), key)]
         code = ', '.join(code)
         return code
 
@@ -358,6 +369,10 @@ class OPSC(object):
             raise NotImplementedError("Input output of global variables is not implemented")
         all_dataset_inps += list(global_ins) + list(global_outs)
         all_dataset_types += ['input' for i in global_ins] + ['output' for o in global_outs]
+        # Add any reduction variables present in the kernel, to generate the kernel headers
+        reduction_ins, reduction_outs = kernel.reduction_variables
+        all_dataset_inps += list(reduction_ins) + list(reduction_outs)
+        all_dataset_types += ['input' for i in reduction_ins] + ['output' for o in reduction_outs]
         # Use list of tuples as dictionary messes the order
         header_dictionary = list(zip(all_dataset_inps, all_dataset_types))
         if kernel.IndexedConstants:
@@ -377,7 +392,14 @@ class OPSC(object):
         gridvariables = set()
         out = []
         for eq in kernel.equations:
+            # Get the grid variables
             gridvariables = gridvariables.union(eq.atoms(GridVariable))
+            # Get the reduction variables and detect whether they are input or output
+            for rv in eq.lhs.atoms(ReductionVariable):
+                rv.usage = 'lhs'
+            for rv in eq.rhs.atoms(ReductionVariable):
+                rv.usage = 'rhs'
+
             if isinstance(eq, Equality):
                 out += [ccode(eq, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
             elif isinstance(eq, GroupedPiecewise):
@@ -506,12 +528,14 @@ class OPSC(object):
         datasets_dec = []
         output += [WriteString("#include \"defdec_data_set.h\"")]
         # Sort the declarations alphabetically before writing out
-        store_stencils, store_dsets = [], []
+        store_stencils, store_dsets, store_reductions = [], [], []
         for d in algorithm.defnitionsdeclarations.components:
             if isinstance(d, DataSetBase):
                 store_dsets.append(d)
             elif isinstance(d, StencilObject):
                 store_stencils.append(d)
+            elif isinstance(d, ReductionVariable):
+                store_reductions.append(d)
             else:
                 print(d)
                 print(type(d))
@@ -527,6 +551,11 @@ class OPSC(object):
         output += [WriteString("// Define and declare stencils")]
         for d in store_stencils:
             output += self.ops_stencils_declare(d)
+        if len(store_reductions) > 0:
+            output += [WriteString("// Define and declare OPS reduction handles")]
+            for rv in store_reductions:
+                output += self.declare_reduction(rv)
+
         # Loop through algorithm components to include any halo exchanges
         exchange_list = self.loop_alg(algorithm, Exchange)
         if exchange_list:
@@ -702,6 +731,13 @@ class OPSC(object):
             else:
                 halo_p += [0]
         return halo_m, halo_p
+
+    def declare_reduction(self, rv):
+        dtype = SimulationDataType.dtype()
+        variable_declaration = WriteString("%s %s = 0.0;" % (dtype.opsc(), str(rv.value)))
+        handle_declaration = WriteString('ops_reduction %s = ops_decl_reduction_handle(sizeof(%s), \"%s\", \"reduction_%s\");' % (str(rv), dtype.opsc(), dtype.opsc(), str(rv)))
+        out = [variable_declaration, handle_declaration]
+        return out
 
     def declare_dataset(self, dset):
         declaration = WriteString("ops_dat %s;" % dset)

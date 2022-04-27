@@ -379,6 +379,7 @@ class TraditionalAlgorithmRK(object):
             defdecs.add_components(list(b.Rational_constants.values()))
             defdecs.add_components(list(b.block_datasets.values()))
             defdecs.add_components(list(b.block_stencils.values()))
+            defdecs.add_components(list(b.block_reductions.values()))
         return defdecs
 
     def generate_solution(self, blocks):
@@ -432,7 +433,6 @@ class TraditionalAlgorithmRK(object):
             temporal_iteration = sc.temporal_iteration
             if self.simulation_monitor is not None:
                 t = (Or(Equality((temporal_iteration + 1) % self.simulation_monitor.frequency, 0), Equality(temporal_iteration, 0)))
-                # t = Equality((temporal_iteration + 1) % self.simulation_monitor.frequency, 0)
                 cond = Condition(t)
                 cond.add_components(self.simulation_monitor)
                 in_time += [cond]

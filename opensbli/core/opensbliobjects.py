@@ -125,6 +125,61 @@ class Constant(object):
     pass
 
 
+class ReductionVariable(EinsteinTerm, Constant):
+    """A constant object which can have Einstein indices to be expanded. This is used to
+    differentiate between different Einstein terms, which are used in differentiation.
+
+    **Used during parsing and Einstein expansion process**
+
+    :param str label: name of the constant object
+    :returns: declared constant
+    :rtype: ReductionVariable """
+    is_commutative = True
+
+    def __new__(cls, label, intent, **kwargs):
+        ret = super(ReductionVariable, cls).__new__(cls, label, **kwargs)
+        ret.is_constant = True
+        ret.is_input = True
+        if intent is 'max':
+            ret.intent = 'OPS_MAX'
+        elif intent is 'min':
+            ret.intent = 'OPS_MIN'
+        elif intent is 'sum':
+            ret.intent = 'OPS_INC'
+        else:
+            raise ValueError("Reduction variables require an intent: min, max, or sum.")
+        ret._datatype = SimulationDataType()
+        ret.value = '%s_out' % str(label)
+        # ret.usage = None
+        return ret
+
+    def __hash__(self):
+        h = hash(self._hashable_content())
+        self._mhash = h
+        return h
+
+    def _hashable_content(self):
+        return str(self.name)
+
+    @property
+    def datatype(self):
+        """Numeric datatype of the ReductionVariable.
+
+        :returns: Numerical datatype (see :class:`.SimulationDataType`)
+        :rtype: str """
+        return self._datatype
+
+    @datatype.setter
+    def datatype(self, dtype):
+        """Set the data type of the ReductionVariable."""
+        self._datatype = dtype
+
+    # @property
+    # def usage(self):
+    #     """Input/output status of the ReductionVariable.
+    #     :rtype: str """
+    #     return self.usage
+
 class ConstantObject(EinsteinTerm, Constant):
     """A constant object which can have Einstein indices to be expanded. This is used to
     differentiate between different Einstein terms, which are used in differentiation.

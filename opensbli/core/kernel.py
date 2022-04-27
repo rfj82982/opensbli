@@ -4,9 +4,9 @@
    @details
 """
 
-from sympy import flatten, Equality
+from sympy import flatten, Equality, pprint
 from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, ConstantObject,\
-    GlobalValue, GroupedPiecewise, Constant
+    GlobalValue, GroupedPiecewise, Constant, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.grid import Grididx
 from opensbli.core.datatypes import SimulationDataType
@@ -102,6 +102,10 @@ class Kernel(object):
             raise ValueError("Error when adding equations to the kernel.")
         return
 
+    def set_reduction_variables(self, equation):
+
+        return
+
     def set_grid_range(self, block):
         """ Sets the kernel range equal to the block ranges."""
         self.ranges = copy.deepcopy(block.ranges)
@@ -146,6 +150,26 @@ class Kernel(object):
         return datasets
 
     @property
+    def rhs_reduction_variables(self):
+        reduction_vars = set()
+        for eq in self.equations:
+            if isinstance(eq, _known_equation_types):
+                reduction_vars = reduction_vars.union(eq.rhs.atoms(ReductionVariable))
+            elif isinstance(eq, Equality):
+                raise TypeError("Equality should be of types %s" % _known_equation_types)
+        return reduction_vars
+
+    @property
+    def lhs_reduction_variables(self):
+        reduction_vars = set()
+        for eq in self.equations:
+            if isinstance(eq, _known_equation_types):
+                reduction_vars = reduction_vars.union(eq.lhs.atoms(ReductionVariable))
+            elif isinstance(eq, Equality):
+                raise TypeError("Equality should be of types %s" % _known_equation_types)
+        return reduction_vars
+
+    @property
     def constants(self):
         consts = set()
         for eq in self.equations:
@@ -169,6 +193,13 @@ class Kernel(object):
             if isinstance(eq, _known_equation_types):
                 globals_vars_lhs = globals_vars_lhs.union(eq.atoms(GlobalValue))
         return globals_vars_lhs, globals_vars_rhs
+
+    @property
+    def reduction_variables(self):
+        reductions_lhs = self.lhs_reduction_variables
+        reductions_rhs = self.rhs_reduction_variables    
+        return reductions_rhs, reductions_lhs
+    
 
     @property
     def grid_indices_used(self):
@@ -239,6 +270,11 @@ class Kernel(object):
         inouts = ins.intersection(outs)
         ins = ins.difference(inouts)
         outs = outs.difference(inouts)
+        # Check for any reduction variables in the kernel
+        rvs_in = self.rhs_reduction_variables
+        # rvs_in = rvs_in.intersection(rvs_in)
+        rvs_out = self.lhs_reduction_variables
+        # rvs_out = rvs_out.intersection(rvs_out)
         if len(self.equations) == 0:
             raise ValueError("Kernel %s does not have any equations." % self.computation_name)
         range_of_eval = self.total_range()
@@ -269,7 +305,17 @@ class Kernel(object):
                 code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (c, 1, c.datatype.opsc(), self.opsc_access['outs'])]
         if self.grid_indices_used:
             code += ["ops_arg_idx()"]
+        # Add any reduction variables
+        for r in rvs_out:
+            code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, r.intent)]
+        for r in rvs_in:
+            code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, 'OPS_READ')]
         code = [',\n'.join(code) + ');\n\n']  # WARNING dtype
+
+        # Write out the reduction result if required
+        if len(rvs_out) > 0:
+            for r in rvs_out:
+                code = code = [',\n\n\n'.join(code) + 'ops_reduction_result(%s, &%s);\n' % (str(r), r.value)]
         code = iter_name_code + code
         return code
 
@@ -322,4 +368,8 @@ class Kernel(object):
                 self.stencil_names[dset] = block.block_stencils[stencil].name
             else:
                 self.stencil_names[dset].add(block.block_stencils[stencil].name)
+        # Add any reduction quantities to the block, for reduction handle declarations
+        rvs = self.lhs_reduction_variables.union(self.rhs_reduction_variables)
+        for rv in rvs:
+            block.block_reductions[str(rv)] = rv
         return
