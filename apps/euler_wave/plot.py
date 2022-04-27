@@ -36,9 +36,9 @@ class plotFunctions(object):
         read_start = [abs(d) for d in d_m]
         read_end = [s-abs(d) for d, s in zip(d_m, size)]
         if len(read_end) == 2:
-            read_data = group["%s" % (dataset)].value[read_start[0]:read_end[0], read_start[1]:read_end[1]]
+            read_data = group["%s" % (dataset)][read_start[0]:read_end[0], read_start[1]:read_end[1]]
         elif len(read_end) == 3:
-            read_data = group["%s" % (dataset)].value[read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
+            read_data = group["%s" % (dataset)][read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
         else:
             raise NotImplementedError("")
         return read_data
@@ -90,7 +90,7 @@ class Plot(plotFunctions):
             plt.savefig(directory + "output_%s.pdf" % name, bbox_inches='tight')
             plt.clf()
 
-        # Constant values for exact solution
+        # Constants for exact solution
         v_const = -0.5
         u_const = 1.0
         t = 2.5

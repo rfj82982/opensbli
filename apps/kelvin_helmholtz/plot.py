@@ -41,9 +41,9 @@ def plot(files, n_levels, min_val, max_val):
         print "Processing image: %d" % num
         f, group = read_file(file)
         np = group["rho_B0"].shape
-        rho = group["rho_B0"].value
+        rho = group["rho_B0"]
         rho = rho[5:-5, 5:-5]
-        x, y = group["x0_B0"].value, group["x1_B0"].value
+        x, y = group["x0_B0"], group["x1_B0"].value
         x, y = x[5:-5, 5:-5], y[5:-5, 5:-5]
         fig = plt.figure()
         contour_local(fig, levels, "\\rho", x, y, rho)

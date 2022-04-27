@@ -25,8 +25,8 @@ def plot(path):
     f = h5py.File(dump[-1], 'r')
     group = f["opensbliblock00"]
 
-    phi = group["phi_B0"].value
-    x = group["x0_B0"].value
+    phi = group["phi_B0"]
+    x = group["x0_B0"]
 
     # Ignore the 2 halo nodes at either end of the domain
     phi = phi[halo:nx+halo]
