@@ -1,4 +1,4 @@
-from sympy import flatten, simplify, symbols
+from sympy import flatten, simplify, symbols, factor, count_ops, pprint
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet
 from opensbli.core.grid import GridVariable
 from opensbli.core.opensblifunctions import CentralDerivative
@@ -22,7 +22,9 @@ class StoreSome(Central):
         """ Creates CentralDerivative objects of the derivatives to be stored."""
         data_objects = flatten([symbols('%s' % self.fns, **{'cls': DataObject})])
         data_sets = [block.location_dataset(str(d)) for d in data_objects]
-        coords = [c for c in coordinates if not c.get_coordinate_type()]
+        # coords = [c for c in coordinates if not c.get_coordinate_type()]
+        # Fix for Neil's issue with multiple passive scalars
+        coords = [c for c in coordinates if not str(c) == 't']
         self.derivatives_to_store = []
         for a in data_sets:
             for b in coords:
@@ -109,6 +111,14 @@ class StoreSome(Central):
         # Apply to the convective terms
         convective = [OpenSBLIEq(x, y) for x, y in zip(residual_arrays, convective)]
         convective_equations = self.SS(convective, block, 'Convective')
+        # Factor the equations
+        reduce_count = False
+        if reduce_count:
+            if convective_equations:  
+                for i, eqn in enumerate(convective_equations):
+                    factored = factor(eqn.rhs)
+                    if count_ops(factored) < count_ops(eqn.rhs):
+                        convective_equations[i] = OpenSBLIEq(eqn.lhs, factored)
         # Apply to the viscous terms
         viscous = [OpenSBLIEq(x, x+y) for x, y in zip(residual_arrays, viscous)]
         viscous_equations = self.SS(viscous, block, 'Viscous')
