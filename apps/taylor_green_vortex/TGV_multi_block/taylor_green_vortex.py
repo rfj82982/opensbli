@@ -173,13 +173,13 @@ mb_bcs[3] = block3_bc
 
 
 # set the boundaries for the block
-multi_block.set_block_boundaries(boundaries)
-# set the IO class to write out arrays
+multi_block.set_block_boundaries(mb_bcs)
+# x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays)
-# h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
-multi_block.setio(copy.deepcopy(h5))
+h5.add_arrays(simulation_eq.time_advance_arrays)# + [x, y, z])
+multi_block.setio([h5])
+
 # set the equations to be solved on the block
 multi_block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 # set the discretisation schemes
