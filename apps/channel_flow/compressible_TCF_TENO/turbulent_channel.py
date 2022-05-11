@@ -212,9 +212,9 @@ block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equat
 # Create the dictionary of schemes
 weno_order = 6
 Avg = RoeAverage([0, 1])
-LLF = LLFTeno(weno_order, averaging=Avg)
+LF = LFTeno(weno_order, averaging=Avg)
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent

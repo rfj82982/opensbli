@@ -62,9 +62,9 @@ constituent.add_equations(shock_sensor)
 store_sensor = True
 teno_order = 5
 Avg = RoeAverage([0, 1])
-LLF = LLFTeno(teno_order, formulation='adaptive', averaging=Avg, sensor=sensor_array, store_sensor=True)
+LF = LFTeno(teno_order, formulation='adaptive', averaging=Avg, sensor=sensor_array, store_sensor=True)
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 # cent = Central(4)
 fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)

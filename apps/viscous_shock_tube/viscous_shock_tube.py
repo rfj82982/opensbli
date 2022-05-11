@@ -39,9 +39,9 @@ block = SimulationBlock(ndim, block_number=0)
 
 teno_order = 5
 Avg = RoeAverage([0, 1])
-LLF = LLFTeno(teno_order, averaging=Avg)
+LF = LFTeno(teno_order, averaging=Avg)
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 fns = 'u0 u1 u2'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent

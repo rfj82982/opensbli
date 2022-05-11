@@ -38,10 +38,10 @@ block = SimulationBlock(ndim, block_number=0)
 
 weno_order = 5
 Avg = RoeAverage([0, 1])
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 rk = RungeKutta(3)
 schemes[rk.name] = rk
 

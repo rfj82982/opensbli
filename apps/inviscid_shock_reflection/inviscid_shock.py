@@ -54,10 +54,10 @@ schemes = {}
 weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
 Avg = SimpleAverage([0, 1])
-# LLF scheme
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+# LF scheme
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 # Add to schemes
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
