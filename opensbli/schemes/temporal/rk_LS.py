@@ -4,8 +4,9 @@
    @details
 """
 
-from sympy import flatten, Idx, sqrt, Rational
+from sympy import flatten, Idx, sqrt, Rational, pprint
 from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Globalvariable
+from opensbli.core.grid import GridVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel
 from opensbli.core.datatypes import Int
@@ -25,7 +26,7 @@ class RungeKuttaLS(Scheme):
 
         :arg int order: The order of accuracy of the scheme."""
 
-    def __init__(cls, order, formulation=None, constant_dt=None):
+    def __init__(cls, order, formulation=None, conservative=True):
         Scheme.__init__(cls, "RungeKutta", order)
         if order == 3:  # 3rd order schemes are 3-stage
             n_stages = order
@@ -40,7 +41,6 @@ class RungeKuttaLS(Scheme):
         else:
             print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
         cls.schemetype = "Temporal"
-        cls.nloops = 2
         cls.stage = Idx('stage', n_stages)
         cls.solution_coeffs = ConstantIndexed('rkB', cls.stage)
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
@@ -52,17 +52,15 @@ class RungeKuttaLS(Scheme):
         cls.iteration_number = Globalvariable("iter", integer=True)
         cls.iteration_number._value = None
         cls.iteration_number.datatype = Int()
-        # As iteration number is used in a for loop we dont add them to
-        # constants to declare
+        # Whether the variables are in conservative form or not
+        cls.conservative = conservative
+        # As iteration number is used in a for loop we dont add them to constants to declare
         cls.temporal_iteration = Idx(cls.iteration_number, niter_symbol)
         CTD.add_constant(niter_symbol)
         CTD.add_constant(cls.solution_coeffs)
         CTD.add_constant(cls.stage_coeffs)
         cls.solution = {}
-        if constant_dt:
-            raise NotImplementedError("")
-        else:
-            cls.constant_time_step = True
+        cls.constant_time_step = True
         cls.time_step = ConstantObject("dt")
         CTD.add_constant(cls.time_step)
         return
@@ -125,6 +123,7 @@ class RungeKuttaLS(Scheme):
             # Create a Kernel for the update ()
             temp_data_sets = cls.create_temp_data_sets(td_fns, block)
             new_data_sets = [eq.time_advance_array for eq in td_fns]
+            cls.var_solved = new_data_sets
             # Create the stage and solution updates
             residuals = [eq.residual for eq in flatten(type_of_eq.equations)]
             zipped = zip(temp_data_sets, new_data_sets, residuals)
@@ -135,6 +134,16 @@ class RungeKuttaLS(Scheme):
             type_of_eq.temporalsolution.kernels += kernels
             type_of_eq.temporalsolution.start_kernels += cls.solution[type_of_eq].start_kernels
         return
+
+    def convert_to_conservative(cls, equations, block):
+        # Convert between conservative/primitive form before and after the time update
+        rho = block.location_dataset('rho')
+        rho_inv = GridVariable('rho_inv')
+        output = [OpenSBLIEq(rho_inv, 1./rho)]
+        primitive_to_conservative = [OpenSBLIEq(var, rho*var) for var in cls.var_solved[1:]]
+        conservative_to_primitive = [OpenSBLIEq(var, rho_inv*var) for var in cls.var_solved[1:]]
+        output += primitive_to_conservative + equations + conservative_to_primitive
+        return output
 
     def create_discretisation_kernel(cls, zipped, block):
         """ Creates the kernels for the intermediate step and time update.
@@ -148,6 +157,9 @@ class RungeKuttaLS(Scheme):
         # Update the solution and stages
         if cls.constant_time_step:
             solution_update = cls.constant_time_step_solution(zipped)
+        if not cls.conservative:
+            solution_update = cls.convert_to_conservative(solution_update, block)
+
         solution_update_kernel.add_equation(solution_update)
         solution_update_kernel.update_block_datasets(block)
         return [solution_update_kernel]
@@ -174,7 +186,7 @@ class RungeKuttaLS(Scheme):
         temp_data_sets = []
         for no, eq in enumerate(flatten(equations)):
             fn = eq.time_advance_array
-            temp_data_sets += [block.work_array('tempRK_%s' % fn.base.label)]
+            temp_data_sets += [block.work_array('%s_RKold' % fn.base.label)]
         return temp_data_sets
 
     def generate_inner_loop(cls, kernels):
