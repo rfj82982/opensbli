@@ -137,7 +137,7 @@ j = block.grid_indexes[1]
 grid_condition = j >= 169
 BF = BinomialFilter(block, order=10, grid_condition=grid_condition, sigma=0.01)
 
-ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True)
+ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF')
 
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq] + ShockFilter.equation_classes + BF.equation_classes)

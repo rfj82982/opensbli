@@ -17,8 +17,8 @@ directories = [\
 '/channel_flow/turbulent_3D/',
 '/channel_flow/compressible_TCF_Central/',
 '/channel_flow/compressible_TCF_TENO/',
-'/Delery_bump/inviscid/',
-'/Delery_bump/viscous/',
+#'/Delery_bump/inviscid/',
+#'/Delery_bump/viscous/',
 '/transitional_SBLI/',
 '/cylinder/supersonic_cylinder/',
 '/aerofoils/multi_block/NACA4412/3D/'
@@ -39,8 +39,8 @@ file_names = [\
 'turbulent_channel.py',
 'turbulent_channel.py',
 'turbulent_channel.py',
-'inviscid_shock_delery_aerofoil_forced.py',
-'viscous_shock_delery_aerofoil.py',
+#'inviscid_shock_delery_aerofoil_forced.py',
+#'viscous_shock_delery_aerofoil.py',
 'transitional_SBLI.py',
 'supersonic_cylinder.py',
 'NACA4412.py'

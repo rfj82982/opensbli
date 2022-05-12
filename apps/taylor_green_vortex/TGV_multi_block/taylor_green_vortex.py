@@ -91,10 +91,10 @@ x0 = "Eq(GridVariable(x0), block.deltas[0]*block.grid_indexes[0])"
 x1 = "Eq(GridVariable(x1), block.deltas[1]*block.grid_indexes[1])"
 x2 = "Eq(GridVariable(x2), block.deltas[2]*block.grid_indexes[2])"
 
-u0 = "Eq(GridVariable(u0),sin(x0)*cos(x1)*cos(x2))"
-u1 = "Eq(GridVariable(u1),-cos(x0)*sin(x1)*cos(x2))"
+u0 = "Eq(GridVariable(u0),sin(DataObject(x0))*cos(DataObject(x1))*cos(DataObject(x2)))"
+u1 = "Eq(GridVariable(u1),-cos(DataObject(x0))*sin(DataObject(x1))*cos(DataObject(x2)))"
 u2 = "Eq(GridVariable(u2), 0.0)"
-p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*x0)+cos(2.0*x1))*(2.0 + cos(2.0*x2)))"
+p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*DataObject(x0))+cos(2.0*DataObject(x1)))*(2.0 + cos(2.0*DataObject(x2))))"
 r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
 
 rho = "Eq(DataObject(rho), r)"
@@ -103,17 +103,58 @@ rhou1 = "Eq(DataObject(rhou1), r*u1)"
 rhou2 = "Eq(DataObject(rhou2), r*u2)"
 rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
 
-eqns = [x0, x1, x2, u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]
+eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]
 
 # parse the initial conditions
 initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
 initial = GridBasedInitialisation()
 initial.add_equations(initial_equations)
 
+mb_initial_conditions = {0:None, 1:None, 2:None, 3:None}
+# Block 0
+block0_init = []
+x0 = "Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])"
+x1 = "Eq(DataObject(x1), block.deltas[1]*block.grid_indexes[1])"
+x2 = "Eq(DataObject(x2), block.deltas[2]*block.grid_indexes[2])"
+coords = [parse_expr(eq, local_dict=local_dict) for eq in [x0, x1, x2]]
+init_coords = GridBasedInitialisation()
+init_coords.add_equations(coords + initial_equations)
+mb_initial_conditions[0] = [init_coords]
+
+# Block 1
+block1_init = []
+x0 = "Eq(DataObject(x0), M_PI + block.deltas[0]*block.grid_indexes[0])"
+x1 = "Eq(DataObject(x1), block.deltas[1]*block.grid_indexes[1])"
+x2 = "Eq(DataObject(x2), block.deltas[2]*block.grid_indexes[2])"
+coords = [parse_expr(eq, local_dict=local_dict) for eq in [x0, x1, x2]]
+init_coords = GridBasedInitialisation()
+init_coords.add_equations(coords + initial_equations)
+mb_initial_conditions[1] = [init_coords]
+
+# Block 2
+block2_init = []
+x0 = "Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])"
+x1 = "Eq(DataObject(x1), M_PI + block.deltas[1]*block.grid_indexes[1])"
+x2 = "Eq(DataObject(x2), block.deltas[2]*block.grid_indexes[2])"
+coords = [parse_expr(eq, local_dict=local_dict) for eq in [x0, x1, x2]]
+init_coords = GridBasedInitialisation()
+init_coords.add_equations(coords + initial_equations)
+mb_initial_conditions[2] = [init_coords]
+
+# Block 3
+block3_init = []
+x0 = "Eq(DataObject(x0), M_PI + block.deltas[0]*block.grid_indexes[0])"
+x1 = "Eq(DataObject(x1), M_PI + block.deltas[1]*block.grid_indexes[1])"
+x2 = "Eq(DataObject(x2), block.deltas[2]*block.grid_indexes[2])"
+coords = [parse_expr(eq, local_dict=local_dict) for eq in [x0, x1, x2]]
+init_coords = GridBasedInitialisation()
+init_coords.add_equations(coords + initial_equations)
+mb_initial_conditions[3] = [init_coords]
+
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
-fns = 'u0 u1 u2'
+fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
@@ -121,7 +162,7 @@ rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
-multi_block.set_equations([initial])
+multi_block.set_initial_conditions(mb_initial_conditions)
 
 # block 0 boundary conditions
 mb_bcs = {0:None, 1:None, 2:None, 3:None}
@@ -130,8 +171,8 @@ mb_bcs = {0:None, 1:None, 2:None, 3:None}
 block0_bc = []
 block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, True)))
 block0_bc.append(InterfaceBC(direction=0, side=1,  match=(1, 0, 0, True)))
-block0_bc.append(InterfaceBC(direction=0, side=0,  match=(2, 1, 1, True)))
-block0_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 1, 0, True)))
+block0_bc.append(InterfaceBC(direction=1, side=0,  match=(2, 1, 1, True)))
+block0_bc.append(InterfaceBC(direction=1, side=1,  match=(2, 1, 0, True)))
 block0_bc.append(PeriodicBC(direction=2, side=0))
 block0_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[0] = block0_bc
@@ -141,8 +182,8 @@ mb_bcs[0] = block0_bc
 block1_bc = []
 block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, 1, True)))
 block1_bc.append(InterfaceBC(direction=0, side=1,  match=(0, 0, 0, True)))
-block1_bc.append(InterfaceBC(direction=0, side=0,  match=(3, 1, 1, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  match=(3, 1, 0, True)))
+block1_bc.append(InterfaceBC(direction=1, side=0,  match=(3, 1, 1, True)))
+block1_bc.append(InterfaceBC(direction=1, side=1,  match=(3, 1, 0, True)))
 block1_bc.append(PeriodicBC(direction=2, side=0))
 block1_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[1] = block1_bc
@@ -152,19 +193,19 @@ mb_bcs[1] = block1_bc
 block2_bc = []
 block2_bc.append(InterfaceBC(direction=0, side=0,  match=(3, 0, 1, True)))
 block2_bc.append(InterfaceBC(direction=0, side=1,  match=(3, 0, 0, True)))
-block2_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 1, 1, True)))
-block2_bc.append(InterfaceBC(direction=0, side=1,  match=(0, 1, 0, True)))
+block2_bc.append(InterfaceBC(direction=1, side=0,  match=(0, 1, 1, True)))
+block2_bc.append(InterfaceBC(direction=1, side=1,  match=(0, 1, 0, True)))
 block2_bc.append(PeriodicBC(direction=2, side=0))
 block2_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[2] = block2_bc
 
-# Boundary conditions for block 2
+# Boundary conditions for block 3
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block3_bc = []
 block3_bc.append(InterfaceBC(direction=0, side=0,  match=(2, 0, 1, True)))
 block3_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, True)))
-block3_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 1, 1, True)))
-block3_bc.append(InterfaceBC(direction=0, side=1,  match=(1, 1, 0, True)))
+block3_bc.append(InterfaceBC(direction=1, side=0,  match=(1, 1, 1, True)))
+block3_bc.append(InterfaceBC(direction=1, side=1,  match=(1, 1, 0, True)))
 block3_bc.append(PeriodicBC(direction=2, side=0))
 block3_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[3] = block3_bc
@@ -174,14 +215,14 @@ mb_bcs[3] = block3_bc
 
 # set the boundaries for the block
 multi_block.set_block_boundaries(mb_bcs)
-# x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
+x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays)# + [x, y, z])
+h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z])
 multi_block.setio([h5])
 
 # set the equations to be solved on the block
-multi_block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
+multi_block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq)])
 # set the discretisation schemes
 multi_block.set_discretisation_schemes(schemes)
 
@@ -195,11 +236,19 @@ alg = TraditionalAlgorithmRKMB(multi_block)
 SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
-OPSC(alg)
+OPSC(alg, OPS_diagnostics=1, OPS_V2=True)
 
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho_B0')
 
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values = ['1600.0', '1.4', '0.1', '0.71', '0.0003385', '100', '256', '256', '256', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter']
+values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '100']
+constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
+constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
+constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
+constants += ['block3np0', 'block3np1', 'block3np2', 'Delta0block3', 'Delta1block3', 'Delta2block3']
+values += ['128', '128', '128', 'M_PI/block0np0', 'M_PI/block0np1', '2*M_PI/block0np2']
+values += ['128', '128', '128', 'M_PI/block1np0', 'M_PI/block1np1', '2*M_PI/block1np2']
+values += ['128', '128', '128', 'M_PI/block2np0', 'M_PI/block2np1', '2*M_PI/block2np2']
+values += ['128', '128', '128', 'M_PI/block3np0', 'M_PI/block3np1', '2*M_PI/block3np2']
 substitute_simulation_parameters(constants, values)
