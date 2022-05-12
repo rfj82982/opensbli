@@ -21,7 +21,8 @@ directories = [\
 #'/Delery_bump/viscous/',
 '/transitional_SBLI/',
 '/cylinder/supersonic_cylinder/',
-'/aerofoils/multi_block/NACA4412/3D/'
+'/aerofoils/multi_block/NACA4412/3D/',
+'taylor_green_vortex/TGV_multi_block/'
 ]
 file_names = [\
 'wave.py',
@@ -43,11 +44,12 @@ file_names = [\
 #'viscous_shock_delery_aerofoil.py',
 'transitional_SBLI.py',
 'supersonic_cylinder.py',
-'NACA4412.py'
+'NACA4412.py',
+'taylor_green_vortex.py'
 ]
 
 assert len(directories) == len(file_names)
-print("Found %d OpenSBLI applications." % len(file_names))
+print('\33[4m' + "Found %d OpenSBLI applications." % len(file_names) + '\033[0m')
 # Current working directory
 owd = os.getcwd()
 # Optional diff between the generated codes
@@ -64,7 +66,7 @@ with open(os.devnull, 'w') as devnull:
         print("Generating the %s application." % (directory+fname))
         output_code = subprocess.call(["python %s" % fname], shell=True, cwd=owd+directory, stdout=devnull)
         if output_code == 0:
-            print("%s generated successfully." % fname)
+            print('\33[92m' + "%s generated successfully." % fname + '\033[0m')
             # Compare the output code to a previously generated one
             if check_diff:
                 file1, file2 = old_code_dir + directory + 'opensbli.cpp', owd + directory + 'opensbli.cpp'
@@ -72,5 +74,5 @@ with open(os.devnull, 'w') as devnull:
                 for line in difflib.unified_diff(text1, text2):
                     print(line)
         else:
-            print("Generation of %s has failed." % fname)
+            print('\33[91m' + "Generation of %s has failed." % fname + '\033[0m')
             exit()
