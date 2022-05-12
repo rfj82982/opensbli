@@ -108,9 +108,9 @@ class DRPFilter(object):
         if order == 0:
             UDF.computation_name = 'Zero the filter array'
         elif order == 1:
-            UDF.computation_name = 'DRP filter calculation, direction %s' % block.direction_labels[direction]
+            UDF.computation_name = 'DRP filter calculation direction %s' % block.direction_labels[direction]
         else:
-            UDF.computation_name = 'DRP filter update, direction %s' % block.direction_labels[direction]
+            UDF.computation_name = 'DRP filter update direction %s' % block.direction_labels[direction]
         # Place the filter at the very end
         UDF.order = 10000 + direction + order
         UDF.add_equations(equations)
