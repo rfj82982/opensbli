@@ -17,9 +17,19 @@ class WENOFilter(NonSimulationEquations):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', Mach_correction=False):
+    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', conservative=True):
         self.reconstruction_kernels = []
         self.residual_kernels = []
+        self.conservative = conservative
+        self.flux_type = flux_type
+        if self.conservative:
+            self.rhou = 'rhou'
+            self.mom_lhs = 'rhou'
+            self.energy_lhs = 'rhoE'
+        else:
+            self.rhou = 'rho*u'
+            self.mom_lhs = 'u'
+            self.energy_lhs = 'Et'
         block.shock_filter = True
         # Choice of how to evaluate the amount of dissipation to be added (varies spatially in the domain)
         self.dissipation_sensor = dissipation_sensor
@@ -97,11 +107,15 @@ class WENOFilter(NonSimulationEquations):
                 energy = "Eq(Der(rhoE,t), - %s/detJ)" % (a)
                 output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
             # Only stretching is applied
-            else:
+            else: ### Only added non-conservative for this stretched case
                 coordinate_symbol = "x"
                 mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
-                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+                if self.conservative:
+                    momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                    energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+                else:
+                    momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                    energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
                 governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])                          
         return output_equations
@@ -142,23 +156,41 @@ class WENOFilter(NonSimulationEquations):
                 grouped[direction] = [cd]
         return grouped
 
+    def reduction_operations(self, reduction_equations):
+        reduction_halos = []
+        for _ in range(self.ndim):
+            reduction_halos.append([self.halo_type, self.halo_type])
+        reduction_kernel = self.create_kernel('Global wave-speed reduction evaluations', reduction_equations, reduction_halos, block)
+        self.component_counter += 1
+        self.add_kernel(reduction_kernel)
+        return
+
     def constituent_relations(self, block):
         """ Evalutes the constiteunt relations on the state at the end of a full step
         of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
         CR_eqns = []
         # Conservative Q array entries from the current state
-        rho, rhoE = self.solution_vector[0], self.solution_vector[-1]
-        momentum_components = [self.solution_vector[i+1] for i in range(block.ndim)]
+        rho, energy = self.solution_vector[0], self.solution_vector[-1]
+        # Pressure and speed of sound
+        p, a = block.location_dataset('p'), block.location_dataset('a')
         inv_rho = GridVariable('inv_rho')
         CR_eqns += [OpenSBLIEq(inv_rho, 1.0/rho)]
-        # Primitive components and speed of sound
-        velocity_components = [block.location_dataset('u%d' % i ) for i in range(block.ndim)]
-        CR_eqns += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
-        # Pressure equation
-        p, a = block.location_dataset('p'), block.location_dataset('a')
-        # rhoE = p/(gama-1) + 0.5*(rhou**2)/rho
-        CR_eqns += [OpenSBLIEq(p, (self.gama-1)*(rhoE - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
+        velocity_components = [block.location_dataset('u%d' % i ) for i in range(self.ndim)]
+
+        if self.conservative:
+            
+            momentum_components = [self.solution_vector[i+1] for i in range(self.ndim)]
+            # Primitive components and speed of sound
+            
+            CR_eqns += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
+            # rhoE = p/(gama-1) + 0.5*(rhou**2)/rho
+            CR_eqns += [OpenSBLIEq(p, (self.gama-1)*(energy - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
+        else:
+            # Et = p/((gamma-1)*rho) + 0.5*u**2
+            CR_eqns += [OpenSBLIEq(p, rho*(self.gama-1)*(energy - 0.5*sum([dset**2 for dset in velocity_components])))]
+        # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(self.gama*p*inv_rho))]
+
         # Projected velocities if full curvilinear coordinates are being used
         if self.curvilinear:
             metric_vel = "Eq(U_i, D_i_j*u_j)"
@@ -166,37 +198,26 @@ class WENOFilter(NonSimulationEquations):
 
         # Optiional Low Mach number correction
         if self.Mach_correction:
-            M_var, M_eqns = self.evaluate_Yee_Mach_sensor(block)
+            M_var, M_eqns = self.evaluate_Yee_Mach_sensor(velocity_components, p, a, block)
             CR_eqns += M_eqns
 
         CR_halos = []
-        for _ in range(block.ndim):
+        for _ in range(self.ndim):
             CR_halos.append([self.halo_type, self.halo_type])
         CR_kernel = self.create_kernel('Constituent Relations evaluation', CR_eqns, CR_halos, block)
         self.component_counter += 1
-        # Add the kernel
         self.add_kernel(CR_kernel)
         return
 
-    def evaluate_Yee_Mach_sensor(self, block):
+    def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
         """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
-        (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010). Primitive variables are computed locally
-        to reduce the number of input/output arrays to the kernel."""
-        Mach_equations = []
+        (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
         # Evaluate the local Mach number
-        M, inv_a, p, inv_rho = symbols('M inv_a p inv_rho', **{'cls' : GridVariable})
-        # Conservative quantities
-        rho, rhoE = self.solution_vector[0], self.solution_vector[-1]
-        momentum_components = [self.solution_vector[i+1] for i in range(block.ndim)]
-        velocity_components = [GridVariable('u%d' % i ) for i in range(block.ndim)]
-        Mach_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
-        Mach_equations += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
-        Mach_equations += [OpenSBLIEq(p, (self.gama-1)*(rhoE - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
-        Mach_equations += [OpenSBLIEq(inv_a, 1.0/sqrt(self.gama*p*inv_rho))]
-        Mach_equations += [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))*inv_a)]
+        M  = symbols('M', **{'cls' : GridVariable})
+        Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
         # Evaluation of the kappa parameter to control the amount of dissipaton
         Mach_correct = block.location_dataset('Mach_sensor')
-        Mach_equations += [OpenSBLIEq(Mach_correct, Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1))]
+        Mach_equations += [OpenSBLIEq(Mach_correct, Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
         return Mach_correct, Mach_equations
 
     def evaluate_Ducros_sensor(self, block):
@@ -211,7 +232,7 @@ class WENOFilter(NonSimulationEquations):
 
         # Halo points for the sensor kernel
         sensor_halos = []
-        for _ in range(block.ndim):
+        for _ in range(self.ndim):
             sensor_halos.append([self.halo_type, self.halo_type])
         sensor_kernel = self.create_kernel('Shock sensor', flatten(output_eqns), sensor_halos, block)
         # Add the kernel
@@ -242,7 +263,17 @@ class WENOFilter(NonSimulationEquations):
     def filter_application(self, solution_vector, block):
         """ Applies the non-linear filter by subtracting from the q vector after a full RK time-step."""
         resid_kernel = self.residual_kernels[0]
-        modified_equations = []
+        nvars = len(solution_vector)
+        # Previous in conservative form
+        q_grid = [GridVariable('q%d' % i) for i in range(nvars)]
+        rho = self.solution_vector[0]
+        if not self.conservative:
+            q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
+        else:
+            q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
+        modified_equations = q_vars[:]
+        inv_rho = GridVariable('inv_rho')
+        modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
         # Global parameter to control the dissipation to give extra control of the dissipation in the C code
         FC = ConstantObject('shock_filter_control')
         FC.value = 1 # Default condition has no scaling
@@ -264,7 +295,6 @@ class WENOFilter(NonSimulationEquations):
             for direction in range(self.ndim):
                 for location in [-2, -1, 0, 1, 2]:
                     formula = Max(formula, increment_dataset(kappa, direction, location))
-
             kappa_max = GridVariable('kappa_max')
             modified_equations += [OpenSBLIEq(kappa_max, formula)]
         else:
@@ -275,9 +305,19 @@ class WENOFilter(NonSimulationEquations):
         modified_equations += wall_equations
 
         # Apply the filter
+        update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
-            q = self.solution_vector[i]
-            modified_equations.append(OpenSBLIEq(q, q + wall_detection*FC*kappa_max*ConstantObject('dt')*eqn.rhs))
+            q = q_vars[i].lhs
+            update_equations.append(OpenSBLIEq(q, q + wall_detection*FC*kappa_max*ConstantObject('dt')*eqn.rhs))
+
+        # Update the global q arrays
+        update_equations.append(OpenSBLIEq(self.solution_vector[0], q_vars[0].lhs))
+        for i, var in enumerate(self.solution_vector[1:]):
+            if not self.conservative:
+                update_equations.append(OpenSBLIEq(var, inv_rho*q_vars[i+1].lhs))
+            else:
+                update_equations.append(OpenSBLIEq(var, q_vars[i+1].lhs))
+        modified_equations += update_equations
 
         resid_kernel.equations = modified_equations
         residual_kernel = self.create_kernel('Non-linear filter application', resid_kernel.equations, resid_kernel.halo_ranges, block)
@@ -290,7 +330,6 @@ class WENOFilter(NonSimulationEquations):
         zeroed_equations = []
         for i in range((self.ndim+2)*self.ndim):
             zeroed_equations += [OpenSBLIEq(block.location_dataset('wk%d' % i), 0.0)]
-
         zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, resid_kernel.halo_ranges, block)
         self.component_counter += 1
         self.add_kernel(zero_kernel)
@@ -310,18 +349,21 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LLFWeno(scheme_order, formulation='JS', averaging=SimpleAverage([0, 1]), shock_filter=True)
+        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=self.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
         self.Kernels = []
         self.create_residual_arrays(block)
-        CR, solution_vector = WS.discretise(self, block)
+        CR, solution_vector, reductions = WS.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
+        # exit()
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
-
+        # Reductions if needed
+        if len(reductions) > 0:
+            self.reduction_operations(reductions)
         # Zero the work arrays
         # self.zero_work_arrays(block)
         # Create the WENO reconstruction kernels
