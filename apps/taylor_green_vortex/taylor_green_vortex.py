@@ -7,18 +7,14 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Number of dimensions of the system to be solved
 ndim = 3
-
-
-# Define the compresible Navier-Stokes equations in Einstein notation# Feiereisen quadratic skew-symmetric formulation, no change in continuity
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "mu"]
-
 # # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = False
-NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative)
+# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -143,11 +139,18 @@ alg = TraditionalAlgorithmRK(block)
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
 
+# Simulation monitor
+arrays = ['p_B0']
+probe_locations = [(30, 30, 30)]
+SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100)
+# Add the simulation monitor to the algorithm
+alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
+
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=5, OPS_V2=True)
 
 # NaN check and iteration counter
-print_iteration_ops(NaN_check='rho_B0', every=250)
+# print_iteration_ops(NaN_check='rho_B0', every=250)
 
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
 values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '5000', '64', '64', '64', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
