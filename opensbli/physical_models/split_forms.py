@@ -1,0 +1,141 @@
+from sympy import flatten, Idx, sqrt, Rational, pprint, factor, nsimplify, collect
+from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Globalvariable
+from opensbli.core.grid import GridVariable
+from opensbli.equation_types.opensbliequations import OpenSBLIEq
+from opensbli.core.kernel import Kernel
+from opensbli.core.datatypes import Int
+from opensbli.core.parsing import EinsteinEquation
+
+class NS_Split(object):
+    """ Split forms for the convective parts of the Navier-Stokes equations with central/DRP schemes."""
+
+    def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None):
+        self.split_type = split_type
+        self.conservative = conservative
+        self.coordinate_symbol = coordinate_symbol
+        self.constants = constants
+        self.ndim = ndim
+        self.viscosity = viscosity
+        self.EE = EinsteinEquation()
+        self.replace_factors = False
+        # Storing either the conservative or primitive variables as the q vector to advance in time.
+        if self.conservative:
+            self.rhou = 'rhou'
+            self.mom_lhs = 'rhou'
+            self.energy_lhs = 'rhoE'
+        else:
+            self.rhou = 'rho*u'
+            self.mom_lhs = 'u'
+            self.energy_lhs = 'Et'
+        # Kennedy_Gruber coefficients
+        if split_type is 'Kennedy_Gruber':
+            self.Aq, self.Bq = Rational(1,2), Rational(1,2)
+            full = False
+            if full:
+                self.A, self.B = Rational(1,4), Rational(1,4)
+            else:
+                self.A, self.B = Rational(1,2), 0
+            self.Y = 1 - self.A - 2*self.B
+        # Diffusive terms
+        self.substitutions = self.diffusive_terms()
+        self.mass = self.continuity_eq()
+        self.momentum = self.momentum_eq()
+        self.energy = self.energy_eq()
+        # self.diffusive = self.diffusive_eq()
+        return
+
+    def factor_replace(self, original_eqn):
+        from sympy import symbols, count_ops, S
+        print("Original operation count: {:}".format(original_eqn.count_ops()))
+        a, b, c = ConstantObject('one_over_4'), ConstantObject('one_over_2'), ConstantObject('two_over_3')
+        constant_dict = {a : Rational(1,4), b: Rational(1,2), c: Rational(2,3)}
+        # Add the values
+        for key, num in constant_dict.items():
+            key.value = num
+        reverse_dict = {v: k for k, v in constant_dict.items()}
+        # Substitute the rational constants
+        output = original_eqn.subs(reverse_dict)
+        for key, value in constant_dict.items():
+            output = collect(output, key)
+        # Substitute simulation constants
+        if ConstantObject('mu') in self.constants:
+            output = collect(output, ConstantObject('mu')*ConstantObject('invRe'))
+        else: # variable viscosity
+            output = collect(output, ConstantObject('invRe'))
+        # pprint(output)
+        print("New operation count: {:}".format(output.count_ops()))
+        return output
+
+    def common_factors(self, eqn):
+        """ Simplifies the equation by taking out common rational numbers."""
+        lhs, rhs = eqn.lhs, eqn.rhs
+        optimized = False
+        if optimized:
+            rhs = self.factor_replace(rhs)
+        return OpenSBLIEq(lhs, rhs)
+
+    def diffusive_terms(self):
+        if self.viscosity is 'constant':
+            stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
+        else:
+            stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            heat_flux = "Eq(q_j, ((mu/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
+        substitutions = [stress_tensor, heat_flux]
+        return substitutions
+
+    def continuity_eq(self):
+        if self.split_type == 'Feiereisen':
+            out = "Eq(Der(rho, t), - Conservative(%s_j, x_j))" % self.rhou
+        elif self.split_type == 'Kennedy_Gruber':
+            Aq, Bq = self.Aq, self.Bq
+            out = "Eq(Der(rho, t), - Conservative(%s*%s_j, x_j) - %s*(rho*divV + u_j*Der(rho, x_j)))" % (Aq, self.rhou, Bq)
+        else:
+            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+        out = self.EE.expand(out, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        if self.replace_factors:
+            out = self.common_factors(out)
+        return out
+
+    def momentum_eq(self):
+        momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
+        out = self.EE.expand(momentum, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        if self.split_type == 'Feiereisen':
+            convective = "(1/2) * (Conservative(%s_i*u_j, x_j) + %s_j*Der(u_i,x_j) + u_i * Der(%s_j,x_j))" % (self.rhou, self.rhou, self.rhou)
+        # Kennedy Gruber cubic split
+        elif self.split_type == 'Kennedy_Gruber':
+            A, Aq, B, Bq, Y = self.A, self.Aq, self.B, self.Bq, self.Y
+            convective = "%s*Conservative(%s_i*u_j, x_j) + %s*(rho*Conservative(u_i*u_j, x_j) + u_i*Conservative(%s_j, x_j) + u_j*Conservative(%s_i, x_j)) + %s*(u_i*u_j*Der(rho, x_j) + %s_j*Der(u_i, x_j) + %s_i * divV)" % (A, self.rhou, B, self.rhou, self.rhou, Y, self.rhou, self.rhou)
+        else:
+            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+        # Add convective parts
+        expanded_convective = self.EE.expand(convective, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        for no, value in enumerate(out):
+            temp = OpenSBLIEq(out[no].lhs,  out[no].rhs - expanded_convective[no])
+            if self.replace_factors:
+                out[no] = self.common_factors(temp)
+            else:
+                out[no] = temp
+        return out
+
+    def energy_eq(self):
+        if self.split_type == 'Feiereisen':
+            if self.conservative:
+                convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
+            else:
+                convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
+            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        elif self.split_type == 'Kennedy_Gruber':
+            A, Aq, B, Bq, Y = self.A, self.Aq, self.B, self.Bq, self.Y
+            if self.conservative:
+                convective = "Conservative(%s*rhoE*u_j, x_j) + Conservative(%s*p*u_j, x_j) + %s*(rho*Conservative(rhoE/rho * u_j, x_j) + (rhoE/rho)*Conservative(%s_j, x_j) + u_j*Conservative(rhoE, x_j)) + %s*((rhoE/rho)*u_j*Der(rho, x_j) + %s_j*Conservative(rhoE/rho, x_j) + rhoE*divV) + %s*(p*divV + u_j*Der(p, x_j)) " % (A, Aq, B, self.rhou, Y, self.rhou, Bq)
+            else:
+                convective = "Conservative(%s*rho*Et*u_j, x_j) + Conservative(%s*p*u_j, x_j) + %s*(rho*Conservative(Et * u_j, x_j) + Et*Conservative(%s_j, x_j) + u_j*Conservative(rho*Et, x_j)) + %s*(Et*u_j*Der(rho, x_j) + %s_j*Conservative(Et, x_j) + rho*Et*divV) + %s*(p*divV + u_j*Der(p, x_j)) " % (A, Aq, B, self.rhou, Y, self.rhou, Bq)
+
+            energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        else:
+            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+        out = self.EE.expand(energy, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        if self.replace_factors:
+            out = self.common_factors(out)
+        return out

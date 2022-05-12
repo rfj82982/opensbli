@@ -236,7 +236,7 @@ alg = TraditionalAlgorithmRKMB(multi_block)
 SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
-OPSC(alg, OPS_diagnostics=1, OPS_V2=True)
+OPSC(alg, OPS_diagnostics=5, OPS_V2=True)
 
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho_B0')

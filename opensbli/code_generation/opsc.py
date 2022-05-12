@@ -471,7 +471,7 @@ class OPSC(object):
         """ Exits the OPS program with optional kernel-based timing output."""
         output = []
         if self.OPS_diagnostics > 1:
-            output += [WriteString("ops_timing_output(stdout);")]
+            output += [WriteString("ops_timing_output(std::cout);")]
         if self.monitoring_output_file:
             output += [WriteString("fclose(f);")]
         output += [WriteString("ops_exit();")]
