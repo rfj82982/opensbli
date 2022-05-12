@@ -126,7 +126,11 @@ h5.add_arrays(simulation_eq.time_advance_arrays)
 # h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
-block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
+
+# Dispersion relation preserving filters
+DRP_filt = DRPFilter(block, q=simulation_eq.time_advance_arrays, optimized=True)
+
+block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial] + DRP_filt.equation_classes)
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 
