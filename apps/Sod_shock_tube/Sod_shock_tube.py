@@ -5,7 +5,7 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 ndim = 1
-sc1 = "**{\'scheme\':\'Teno\'}"
+sc1 = "**{\'scheme\':\'Weno\'}"
 # Define the compresible Navier-Stokes equations in Einstein notation.
 a = "Conservative(rhou_j,x_j,%s)" % sc1
 mass = "Eq(Der(rho,t), - %s)" % (a)
@@ -84,13 +84,13 @@ for direction in range(ndim):
 pprint
 schemes = {}
 # Local LaxFredirich scheme for weno
-teno_order = 5
+weno_order = 3
 # Averaging procedure to be used for the eigen system evaluation
 Avg = RoeAverage([0, 1])
-# LLF scheme
-LLF = LLFTeno(teno_order, averaging=Avg)
+# LF scheme
+LF = LFWeno(weno_order, averaging=Avg, flux_type='GLF')
 # Add to schemes
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
@@ -114,3 +114,4 @@ OPSC(alg)
 constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT']
 values = ['1.4', '0.0002', 'ceil(0.2/0.0002)', '200', '1.0/(block0np0-1)', '1.0e-16', '1.0e-5']
 substitute_simulation_parameters(constants, values)
+print_iteration_ops(NaN_check='rho_B0')

@@ -64,9 +64,9 @@ shock_sensor, sensor_array = SS.ducros_equations(block, coordinate_symbol, metri
 store_sensor = True
 teno_order = 6
 Avg = RoeAverage([0, 1])
-LLF = LLFTeno(teno_order, formulation='adaptive', averaging=Avg, sensor=sensor_array, store_sensor=store_sensor)
+LF = LFTeno(teno_order, formulation='adaptive', averaging=Avg, sensor=sensor_array, store_sensor=store_sensor)
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 fns = 'u0 u1 u2'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent

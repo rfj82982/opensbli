@@ -56,9 +56,9 @@ weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
 Avg = SimpleAverage([0, 1])
 # LLF scheme
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 # Add to schemes
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 rk = RungeKutta(3)
 schemes[rk.name] = rk
 
@@ -112,3 +112,5 @@ OPSC(alg)
 constants = ['gama', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
 values = ['1.4', '0.001', '2500', '400', '400', '2.0/(block0np0)', '2.0/(block0np1)']
 substitute_simulation_parameters(constants, values)
+print_iteration_ops(NaN_check='rho_B0')
+

@@ -95,11 +95,11 @@ schemes = {}
 # Local LaxFredirich scheme for weno
 weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
-Avg = RoeAverage([0, 1])
-# LLF scheme
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+Avg = SimpleAverage([0, 1])
+# LF scheme
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg,flux_type='GLF')
 # Add to schemes
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
@@ -119,5 +119,6 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
 constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0']
-values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '3200', '10.0/(block0np0-1)']
+values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '320', '10.0/(block0np0-1)']
 substitute_simulation_parameters(constants, values)
+print_iteration_ops(NaN_check='rho_B0')

@@ -66,6 +66,7 @@ tests/__pycache__
 *.cpp
 *.h
 *.cu
+*.h5
 
 opensbli_seq
 opensbli_mpi
