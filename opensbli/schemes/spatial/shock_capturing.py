@@ -306,8 +306,12 @@ class Characteristic(EigenSystem):
         for dire in range(block.ndim):
             ev_dict, LEV_dict, REV_dict, required_metrics, inv_metric = self.euler.apply_direction(dire)
             self.global_eigenvalues[dire] = ev_dict[dire]
-            name = str(ev_dict[dire][0,0])
-            reduction_names = [name+'_max' for _ in range(block.ndim)] + [name+'_plus'+'_max'] + [name+'_minus'+'_max']
+            # name = str(ev_dict[dire][0,0])#
+            name = str('u%d' % dire) # hard-coded eigenvalue names for now
+            if block.ndim == 1:
+                reduction_names = [name+'_minus'+'_max']+ [name+'_max'] + [name+'_plus'+'_max'] 
+            else:
+                reduction_names = [name+'_max' for _ in range(block.ndim)] + [name+'_plus'+'_max'] + [name+'_minus'+'_max']
             reduction_vars = [ReductionVariable(x, 'max') for x in reduction_names]
 
             symbolic_matrix = zeros(*(block.ndim+2, block.ndim+2))
@@ -437,13 +441,15 @@ class LFCharacteristic(Characteristic):
             for dire in range(block.ndim):
                 global_EV_reductions = self.global_eigenvalue_reductions[dire]
                 global_EVs = self.global_eigenvalues[dire]
-                # u, u+a, u-a
+                # u, u+a, u-a eigenvalue ordering assumed
                 u = self.convert_symbolic_to_dataset(global_EVs[0,0], 0, 0, block)
                 upa = self.convert_symbolic_to_dataset(global_EVs[ndim,ndim], 0, 0, block)
                 uma = self.convert_symbolic_to_dataset(global_EVs[ndim+1,ndim+1], 0, 0, block)
                 reductions += [OpenSBLIEq(global_EV_reductions[0,0], Abs(u))]
                 reductions += [OpenSBLIEq(global_EV_reductions[ndim,ndim], Abs(upa))]
                 reductions += [OpenSBLIEq(global_EV_reductions[ndim+1,ndim+1], Abs(uma))]
+                # pprint(reductions)
+                # exit()
 
         # Assign the max wave speed to the correct reduced variables for this direction
         grid_vars, reduction_vars = self.generate_grid_variable_ev(direction, 'max'), self.global_eigenvalue_reductions[direction]

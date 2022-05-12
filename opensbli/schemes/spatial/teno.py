@@ -465,19 +465,26 @@ class Teno(Scheme, ShockCapturing):
         return
 
 
-class LLFTeno(LFCharacteristic, Teno):
+class LFTeno(LFCharacteristic, Teno):
     """ Local Lax-Friedrichs flux splitting applied to characteristic variables using a TENO scheme.
 
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False):
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF'):
         LFCharacteristic.__init__(self, physics, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")
         else:
             self.sensor_array = sensor
+        if flux_type is 'LLF':
+            print("Local Lax-Friedrich flux splitting.")
+        elif flux_type is 'GLF':
+            print("Global Lax-Friedrich flux splitting.")
+        else:
+            raise ValueError("Please select either LLF or GLF for the flux-splitting.")
+        self.conservative = conservative
         self.store_sensor = store_sensor
         Teno.__init__(self, order, formulation)
         self.formulation = formulation
