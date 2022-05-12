@@ -60,9 +60,16 @@ class MultiBlock():
     
     def set_block_boundaries(self, bclist):    
         if len(bclist.keys()) != self.nblocks:
-            raise ValueError("")
+            raise ValueError("Please specify the correct number of boundary conditions for the number of blocks.")
         for b in self.blocks:
             b.set_block_boundaries(bclist[b.blocknumber])
+        return
+
+    def set_initial_conditions(self, initial_conditions):
+        if len(initial_conditions.keys()) != self.nblocks:
+            raise ValueError("Please specify the correct number of initial conditions for the number of blocks.")
+        for b in self.blocks:
+            b.set_equations([copy.deepcopy(e) for e in initial_conditions[b.blocknumber]])
         return
     
     def discretise(self):
