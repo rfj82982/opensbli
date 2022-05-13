@@ -426,10 +426,10 @@ class TraditionalAlgorithmRKMB(object):
         if self.MultiBlock:
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
-                defdecs.add_components(b.constants.values())
-                defdecs.add_components(b.Rational_constants.values())
-                defdecs.add_components(b.block_datasets.values())
-                defdecs.add_components(b.block_stencils.values())
+                defdecs.add_components(list(b.constants.values()))
+                defdecs.add_components(list(b.Rational_constants.values()))
+                defdecs.add_components(list(b.block_datasets.values()))
+                defdecs.add_components(list(b.block_stencils.values()))
         return defdecs
 
     def comapre_no_sims(self, s1, s2):
@@ -453,26 +453,17 @@ class TraditionalAlgorithmRKMB(object):
         latex = LatexWriter()
         latex.open(fname, "Algorithm for the equations")
         if self.MultiBlock:
-            bc_kernels = []
-            inner_temporal_advance_kernels = []
-            temporal_start = []
-            temporal_end = []
-            spatial_kernels = []
-            before_time = []
-            after_time = []
-            in_time = []
-            non_simulation_eqs = []
-            metrics = []
-            tloop_blocks = []
-            inner_loop_blocks = []
+            bc_kernels, inner_temporal_advance_kernels, temporal_start, temporal_end, spatial_kernels = [], [], [], [], []
+            before_time, after_time, in_time, non_simulation_eqs = [], [], [], []
+            metrics, tloop_blocks, inner_loop_blocks = [], [], []
+            # Loop over the multiple blocks in turn
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
                 for scheme in b.get_temporal_schemes:
-                    #print scheme
                     inner_loop_blocks += [scheme.stage]
                     tloop_blocks += [scheme.temporal_iteration]
-                    for key, value in scheme.solution.iteritems():
-                        #print key
+                    for key, value in iter(scheme.solution.items()):
+                        #print(key, value)
                         if isinstance(key, SimulationEquations):
                             # Solution advancement kernels
                             temporal_start += scheme.solution[key].start_kernels
@@ -500,7 +491,7 @@ class TraditionalAlgorithmRKMB(object):
                             raise NotImplementedError("In Non-simulation equations")
                         else:
                             in_time += key.Kernels
-            # Process the metircs we will control here it self later we will move this to multi block
+            # Process the metrics we will control here it self later we will move this to multi block
             # The first derivatives this includes bc application
             for m in metrics:
                 before_time += m.fd_kernels
