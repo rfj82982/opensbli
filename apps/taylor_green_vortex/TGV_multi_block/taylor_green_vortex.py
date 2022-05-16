@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # Import all the functions from opensbli
 from opensbli import *
 import copy
@@ -47,6 +46,15 @@ def TGV_initial_condition(block_number):
     init_class = GridBasedInitialisation()
     init_class.add_equations(coords + vortex_condition)
     return [init_class]
+
+def TGV_boundaries(block_number, match_conditions):
+    xm = InterfaceBC(direction=0, side=0,  match=match_conditions[block_number][0])
+    xp = InterfaceBC(direction=0, side=1,  match=match_conditions[block_number][1])
+    ym = InterfaceBC(direction=1, side=0,  match=match_conditions[block_number][2])
+    yp = InterfaceBC(direction=1, side=1,  match=match_conditions[block_number][3])
+    zm = PeriodicBC(direction=2, side=0)
+    zp = PeriodicBC(direction=2, side=1)
+    return [xm, xp, ym, yp, zm, zp]
 
 # Number of dimensions of the system to be solved
 ndim = 3
@@ -141,57 +149,20 @@ rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
-# block 0 boundary conditions
 mb_bcs = {0:None, 1:None, 2:None, 3:None}
-# Boundary conditions for block 0
-# Matching boundaries are located at are [1,0,0] and [2, 1, 0]
-block0_bc = []
-block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, True)))
-block0_bc.append(InterfaceBC(direction=0, side=1,  match=(1, 0, 0, True)))
-block0_bc.append(InterfaceBC(direction=1, side=0,  match=(2, 1, 1, True)))
-block0_bc.append(InterfaceBC(direction=1, side=1,  match=(2, 1, 0, True)))
-block0_bc.append(PeriodicBC(direction=2, side=0))
-block0_bc.append(PeriodicBC(direction=2, side=1))
-mb_bcs[0] = block0_bc
+# Matching conditions
+match_conditions = {0: None, 1:None, 2:None, 3:None}
+match_conditions[0] = [(1, 0, 1, True), (1, 0, 0, True), (2, 1, 1, True), (2, 1, 0, True)]
+match_conditions[1] = [(0, 0, 1, True), (0, 0, 0, True), (3, 1, 1, True), (3, 1, 0, True)]
+match_conditions[2] = [(3, 0, 1, True), (3, 0, 0, True), (0, 1, 1, True), (0, 1, 0, True)]
+match_conditions[3] = [(2, 0, 1, True), (2, 0, 0, True), (1, 1, 1, True), (1, 1, 0, True)]
 
-# Boundary conditions for block 1
-# Matching boundaries are located at are [0,0,0] and [2, 0, 0]
-block1_bc = []
-block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, 1, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  match=(0, 0, 0, True)))
-block1_bc.append(InterfaceBC(direction=1, side=0,  match=(3, 1, 1, True)))
-block1_bc.append(InterfaceBC(direction=1, side=1,  match=(3, 1, 0, True)))
-block1_bc.append(PeriodicBC(direction=2, side=0))
-block1_bc.append(PeriodicBC(direction=2, side=1))
-mb_bcs[1] = block1_bc
-
-# Boundary conditions for block 2
-# Matching boundaries are located at are [1,0,1] and [0, 1, 0]
-block2_bc = []
-block2_bc.append(InterfaceBC(direction=0, side=0,  match=(3, 0, 1, True)))
-block2_bc.append(InterfaceBC(direction=0, side=1,  match=(3, 0, 0, True)))
-block2_bc.append(InterfaceBC(direction=1, side=0,  match=(0, 1, 1, True)))
-block2_bc.append(InterfaceBC(direction=1, side=1,  match=(0, 1, 0, True)))
-block2_bc.append(PeriodicBC(direction=2, side=0))
-block2_bc.append(PeriodicBC(direction=2, side=1))
-mb_bcs[2] = block2_bc
-
-# Boundary conditions for block 3
-# Matching boundaries are located at are [1,0,1] and [0, 1, 0]
-block3_bc = []
-block3_bc.append(InterfaceBC(direction=0, side=0,  match=(2, 0, 1, True)))
-block3_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, True)))
-block3_bc.append(InterfaceBC(direction=1, side=0,  match=(1, 1, 1, True)))
-block3_bc.append(InterfaceBC(direction=1, side=1,  match=(1, 1, 0, True)))
-block3_bc.append(PeriodicBC(direction=2, side=0))
-block3_bc.append(PeriodicBC(direction=2, side=1))
-mb_bcs[3] = block3_bc
-
-
-
-
+for i in range(nblocks):
+    mb_bcs[i] = TGV_boundaries(i, match_conditions)
 # set the boundaries for the block
 multi_block.set_block_boundaries(mb_bcs)
+
+# Input/output arguments
 x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
