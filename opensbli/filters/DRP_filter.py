@@ -106,11 +106,11 @@ class DRPFilter(object):
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=False)
         if order == 0:
-            UDF.computation_name = 'Zero the filter array'
+            UDF.computation_name = 'Block %d: Zero the filter array' % block.blocknumber
         elif order == 1:
-            UDF.computation_name = 'DRP filter calculation direction %s' % block.direction_labels[direction]
+            UDF.computation_name = 'Block %d: DRP filter calculation direction %s' % (block.blocknumber, block.direction_labels[direction])
         else:
-            UDF.computation_name = 'DRP filter update direction %s' % block.direction_labels[direction]
+            UDF.computation_name = 'Block %d: DRP filter update direction %s' % (block.blocknumber, block.direction_labels[direction])
         # Place the filter at the very end
         UDF.order = 10000 + direction + order
         UDF.add_equations(equations)

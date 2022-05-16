@@ -506,7 +506,7 @@ class TraditionalAlgorithmRKMB(object):
             innerloop = DoLoop(inner_loop_blocks[0])
             innerloop.add_components(spatial_kernels + inner_temporal_advance_kernels + bc_kernels)
 
-            print("Found %d kernels." % len(spatial_kernels + inner_temporal_advance_kernels + bc_kernels))
+            print("Found %d kernels." % len(spatial_kernels + inner_temporal_advance_kernels + bc_kernels + in_time))
             ## Add BC kernels to temporal start
             temporal_start = bc_kernels + temporal_start
             #temporal_iteration = sc.temporal_iteration
