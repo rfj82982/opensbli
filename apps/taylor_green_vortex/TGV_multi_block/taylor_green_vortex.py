@@ -169,6 +169,13 @@ h5 = iohdf5(save_every=10000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z])
 multi_block.setio([h5])
 
+
+# Add DRP filtering on each block
+filter_list = []
+for no, block in enumerate(multi_block.blocks):
+    filter_list += [DRPFilter(block, q=simulation_eq.time_advance_arrays, optimized=True).equation_classes]
+multi_block.set_filters(filter_list)
+
 # set the equations to be solved on the block
 multi_block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq)])
 # set the discretisation schemes
