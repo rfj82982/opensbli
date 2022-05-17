@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+import glob, os, time, re
 
 class OpenSBLIPreProcess(object):
     """ Commonly used plotting routines in OpenSBLI."""
@@ -16,8 +17,17 @@ class OpenSBLIPreProcess(object):
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.f, self.block_name, self.dsets = f, block_name, dsets
-        self.nhalos = f[block_name][dsets[0]].attrs['d_m']
+        self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
+        self.shape = list(f[block_name][dsets[0]].shape)
+        self.shape = tuple([x-10 for x in self.shape])
         return
+
+    def find_files(self, directory):
+        """ Finds a list of OpenSBLI HDF5 files from a specified directory."""
+        file_list = sorted(glob.glob(directory + '/opensbli_output_*.h5'))
+        iteration_numbers = [re.findall("\d+", s)[0].lstrip('0') for s in file_list]
+        print("Found {:} OpenSBLI output files.\n".format(len(file_list)))
+        return file_list, iteration_numbers
 
     def NaN_check(self, dset):
         data = self.f[self.block_name][dset]
@@ -26,6 +36,11 @@ class OpenSBLIPreProcess(object):
             print("NaN detected in dataset: %s" % dset)
         else:
             print("No NaN detected.")
+        return
+
+    def MinMax(self):
+        for dset in self.dsets:
+            data = self.read_full_dset(dset)
         return
 
     def remove_halos(self, dataset):
@@ -49,21 +64,21 @@ class OpenSBLIPreProcess(object):
         return data
 
 
-    def read_x_slice(self, dset, location, remove_halos=True):
+    def x_slice(self, dset, location, remove_halos=True):
         """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
         data = self.f[self.block_name][dset][:,:,location]
         if remove_halos:
             data = self.remove_halos(data)
         return data
 
-    def read_y_slice(self, dset, location, remove_halos=True):
+    def y_slice(self, dset, location, remove_halos=True):
         """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
         data = self.f[self.block_name][dset][:,location,:]
         if remove_halos:
             data = self.remove_halos(data)
         return data
 
-    def read_z_slice(self, dset, location, remove_halos=True):
+    def z_slice(self, dset, location, remove_halos=True):
         """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
         data = self.f[self.block_name][dset][location,:,:]
         if remove_halos:
@@ -83,6 +98,7 @@ class OpenSBLIPlot(object):
     def __init__(self):
         # self.file_name = file_name
         self.open_files = []
+        self.nlevels = 30
         return
 
     def create_figure(self):
@@ -115,11 +131,14 @@ class OpenSBLIPlot(object):
         self.fig
         return
 
-    def simple_contour_plot(self, data, coordinates):
+    def simple_contour_plot(self, dset, coordinates, count_plot=0):
         import cmocean
+        cmap = cmocean.cm.balance
+        x, y = coordinates[0], coordinates[1]
 
-
-        return
+        if count_plot == 0:
+            dset_im = self.ax.contourf(x, y, dset.T, self.nlevels, cmap=cmap)
+        return dset_im
 
     def save_figure(self, fname, dpi=300):
         plt.savefig('%s.png' % fname, dpi=dpi, bbox_inches='tight')
