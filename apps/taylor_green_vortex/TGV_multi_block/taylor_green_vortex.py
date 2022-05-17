@@ -35,11 +35,18 @@ def TGV_initial_condition(block_number):
     p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*DataObject(x0))+cos(2.0*DataObject(x1)))*(2.0 + cos(2.0*DataObject(x2))))"
     r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
     # Conservative form
-    rho = "Eq(DataObject(rho), r)"
-    rhou0 = "Eq(DataObject(rhou0), r*u0)"
-    rhou1 = "Eq(DataObject(rhou1), r*u1)"
-    rhou2 = "Eq(DataObject(rhou2), r*u2)"
-    rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
+    if conservative:
+        rho = "Eq(DataObject(rho), r)"
+        rhou0 = "Eq(DataObject(rhou0), r*u0)"
+        rhou1 = "Eq(DataObject(rhou1), r*u1)"
+        rhou2 = "Eq(DataObject(rhou2), r*u2)"
+        rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
+    else:
+        rho = "Eq(DataObject(rho), r)"
+        rhou0 = "Eq(DataObject(u0), u0)"
+        rhou1 = "Eq(DataObject(u1), u1)"
+        rhou2 = "Eq(DataObject(u2), u2)"
+        rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"
     # Parse the initial conditions
     vortex_condition = [parse_expr(eq, local_dict=local_dict) for eq in [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]]
     
@@ -62,74 +69,63 @@ nblocks = 4
 multi_block = MultiBlock(ndim, nblocks)
 SimulationDataType.set_datatype(Double)
 
-# Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
-# Specify the schemes
-mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
-momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
-energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-
-# Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (1.0/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-
-substitutions = [stress_tensor, heat_flux]
-
-# Constants that are used
+# Number of dimensions of the system to be solved
+ndim = 3
+# # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "mu"]
-
-# symbol for the coordinate system in the equations
+# # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
+# symbol for the coordinate system in the equations
+conservative = False
+# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
 
 # Constituent relations used in the system
 velocity = "Eq(u_i, rhou_i/rho)"
-pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
+if conservative:
+    pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+    velocity = "Eq(u_i, rhou_i/rho)"
+else:
+    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
+
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-
-# Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
-einstein_eq = EinsteinEquation()
-
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-
-# Expand mass and add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
-# Expand momentum add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
-# Expand energy equation add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
 
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
+einstein_eq = EinsteinEquation()
 
 # Expand momentum add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
+if conservative:
+    eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+    constituent.add_equations(eqns)
 
 # Expand pressure add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Expand temperature add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
-# Write the expanded equations to a Latex file with a given name and titile
-latex = LatexWriter()
-latex.open('equations.tex', "Einstein Expansion of the simulation equations")
-latex.write_string("Simulation equations\n")
-for index, eq in enumerate(flatten(simulation_eq.equations)):
-    latex.write_expression(eq)
+# # Write the expanded equations to a Latex file with a given name and titile
+# latex = LatexWriter()
+# latex.open('equations.tex', "Einstein Expansion of the simulation equations")
+# latex.write_string("Simulation equations\n")
+# for index, eq in enumerate(flatten(simulation_eq.equations)):
+#     latex.write_expression(eq)
 
-latex.write_string("Constituent relations\n")
-for index, eq in enumerate(flatten(constituent.equations)):
-    latex.write_expression(eq)
+# latex.write_string("Constituent relations\n")
+# for index, eq in enumerate(flatten(constituent.equations)):
+#     latex.write_expression(eq)
 
-latex.close()
+# latex.close()
 
 # Set the initial conditions on each of the blocks
 mb_initial_conditions = {0:None, 1:None, 2:None, 3:None}
@@ -145,7 +141,7 @@ fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3)
+rk = RungeKuttaLS(3, conservative=conservative)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
