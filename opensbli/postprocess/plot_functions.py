@@ -1,0 +1,130 @@
+import numpy as np
+import h5py
+import matplotlib.pyplot as plt
+
+class OpenSBLIPreProcess(object):
+    """ Commonly used plotting routines in OpenSBLI."""
+    def __init__(self):
+        # self.file_name = file_name
+        self.open_files = []
+        return
+
+    def read_file(self, file_name, remove_halos=True):
+        print("Reading from file: %s" % file_name)
+        f = h5py.File(file_name, 'r')
+        block_name = list(f.keys())[0]
+        dsets = list(f[block_name].keys())
+        print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
+        self.f, self.block_name, self.dsets = f, block_name, dsets
+        self.nhalos = f[block_name][dsets[0]].attrs['d_m']
+        return
+
+    def NaN_check(self, dset):
+        data = self.f[self.block_name][dset]
+        NaN = np.isnan(np.sum(data))
+        if NaN:
+            print("NaN detected in dataset: %s" % dset)
+        else:
+            print("No NaN detected.")
+        return
+
+    def remove_halos(self, dataset):
+        size = dataset.shape
+        read_start = [abs(d) for d in self.nhalos]
+        read_end = [s-abs(d) for d, s in zip(self.nhalos, size)]
+        if len(read_end) == 1:
+            read_data = dataset[read_start[0]:read_end[0]]
+        elif len(read_end) == 2:
+            read_data = dataset[read_start[0]:read_end[0], read_start[1]:read_end[1]]
+        else:
+            read_data = dataset[read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
+        return read_data
+
+    def read_full_dset(self, dset, remove_halos=True, min_max=True):
+        if remove_halos:
+            data = self.remove_halos(self.f[self.block_name][dset])
+        else:
+            data = self.f[self.block_name][dset]
+        print("Reading dataset: {:}, Min: {:.3f}, Max: {:.3f}".format(dset, np.min(data), np.max(data)))
+        return data
+
+
+    def read_x_slice(self, dset, location, remove_halos=True):
+        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
+        data = self.f[self.block_name][dset][:,:,location]
+        if remove_halos:
+            data = self.remove_halos(data)
+        return data
+
+    def read_y_slice(self, dset, location, remove_halos=True):
+        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
+        data = self.f[self.block_name][dset][:,location,:]
+        if remove_halos:
+            data = self.remove_halos(data)
+        return data
+
+    def read_z_slice(self, dset, location, remove_halos=True):
+        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
+        data = self.f[self.block_name][dset][location,:,:]
+        if remove_halos:
+            data = self.remove_halos(data)
+        return data
+
+    def add_flow_attributes(self):
+        """ Add the numerical values of flow paramters to the HDF5 file."""
+        return
+
+
+
+
+
+class OpenSBLIPlot(object):
+    """ Commonly used plotting routines in OpenSBLI."""
+    def __init__(self):
+        # self.file_name = file_name
+        self.open_files = []
+        return
+
+    def create_figure(self):
+        fig, ax = plt.subplots()
+        self.fig, self.ax = fig, ax
+        return fig, ax
+
+    def get_figure(self):
+        return self.fig, self.ax
+
+    def set_labels(self, ax, direction):
+        if direction == 'xy':
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+        elif direction == 'xz':
+            ax.set_xlabel('x')
+            ax.set_ylabel('z')
+        elif direction == 'zy':
+            ax.set_xlabel('z')
+            ax.set_ylabel('y')
+        else:
+            raise NotImplementedError("Direction should be xy, xz, or zy.")
+        return ax
+
+
+    def simple_imshow_plot(self, data, var_label):
+        import cmocean
+        cmap = cmocean.cm.balance
+        self.ax.imshow(data, cmap=cmap)
+        self.fig
+        return
+
+    def simple_contour_plot(self, data, coordinates):
+        import cmocean
+
+
+        return
+
+    def save_figure(self, fname, dpi=300):
+        plt.savefig('%s.png' % fname, dpi=dpi, bbox_inches='tight')
+        return
+
+
+
+
