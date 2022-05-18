@@ -146,21 +146,6 @@ constituent.add_equations(eqns)
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
 
-
-### SET EQUATIONS HERE BEFORE
-
-
-# Add filters to each block
-# filter_list = []
-# for no, block in enumerate(multi_block.blocks):
-#     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-#         j = block.grid_indexes[1]
-#         grid_condition = j >= 10
-#     else: # Filter everywhere 
-#         grid_condition = None
-#     filter_list += [BinomialFilter(block, order=4, grid_condition=grid_condition, sigma=0.01).equation_classes]
-# multi_block.set_filters(filter_list)
-
 # Specify the numerical schemes
 schemes = {}
 rk = RungeKuttaLS(3, formulation='SSP')
@@ -239,15 +224,18 @@ mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
 
-# # Add shock-capturing
-# filter_list = []
-# for i, block in enumerate(multi_block.blocks):
-#     if i == 1: # aerofoil block
-#         ShockFilter = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True)
-#         filter_list += [ShockFilter.equation_classes]
-#     else:
-#         filter_list += [[]]
-# multi_block.set_filters(filter_list)
+# Add filters to each block
+filter_list = {0:None, 1:None, 2:None}
+for no, block in enumerate(multi_block.blocks):
+    if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+    #     j = block.grid_indexes[1]
+    #     grid_condition = j >= 10
+    # else: # Filter everywhere 
+    #     grid_condition = None
+        filter_list[no] = [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='LLF').equation_classes]
+    else:
+        filter_list[no] = None
+multi_block.set_filters(filter_list)
 
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
@@ -287,13 +275,13 @@ for no, eq in enumerate(b.list_of_equation_classes):
         eq.boundary_kernels += wake_ker
 
 # Create the OPS C code
-alg = TraditionalAlgorithmRKMB(multi_block)
+alg = TraditionalAlgorithmRKMB(multi_block, OPS_diagnostics=2)
 OPSC(alg)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho_B0')
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt'] # strength of the free-stream filtering
-values = ['1.4', '0.5', '0.72', '50000.0', '0.0001', '100000', '0.01']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt']
+values = ['1.4', '0.75', '0.72', '50000.0', '0.0002', '100000', '0.01']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
 values += ['801', '692', '5', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)', '0.12/block0np2']

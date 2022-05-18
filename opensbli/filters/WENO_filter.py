@@ -18,6 +18,7 @@ class WENOFilter(NonSimulationEquations):
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
     def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', conservative=True):
+        print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         self.reconstruction_kernels = []
         self.residual_kernels = []
         self.conservative = conservative
@@ -276,7 +277,7 @@ class WENOFilter(NonSimulationEquations):
         modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
         # Global parameter to control the dissipation to give extra control of the dissipation in the C code
         FC = ConstantObject('shock_filter_control')
-        FC.value = 1 # Default condition has no scaling
+        FC.value = 0.25 # Default condition has no scaling
         CTD.add_constant(FC)
         # The amount of dissipation to apply, using a local flow sensor
         if self.dissipation_sensor == 'Ducros':

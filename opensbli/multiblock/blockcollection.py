@@ -52,10 +52,11 @@ class MultiBlock():
             b.set_equations([copy.deepcopy(e) for e in list_of_equations])
         return
 
-    def set_filters(self, list_of_filters):
+    def set_filters(self, filter_dictionary):
         for i, b in enumerate(self.blocks):
-            filt = flatten(list_of_filters[i])
-            b.set_equations(filt)
+            if filter_dictionary[i] is not None:
+                filt = flatten(filter_dictionary[i])
+                b.set_equations(filt)
         return
     
     def set_block_boundaries(self, bclist):    
