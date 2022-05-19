@@ -281,6 +281,11 @@ class OPSC(object):
                 self.monitoring_output_file = False
         else:
             self.monitoring_output_file = False
+        # Add a start timer for the simulation
+        from opensbli.core.kernel import ConstantsToDeclare as CTD
+        start_time = ConstantObject('tstart')
+        CTD.add_constant(start_time)
+        start_time.value = 0.0
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
