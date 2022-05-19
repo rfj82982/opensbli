@@ -105,15 +105,16 @@ mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
 momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
 energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
 # Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (1.0/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
+stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
+heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
 substitutions = [stress_tensor, heat_flux]
 # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "mu"]
+constants = ["Re", "Pr", "gama", "Minf"]
 # Formulas for the variables used in the equations
 velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
+viscosity = "Eq(mu, T**0.7)"
 
 einstein_expasion = EinsteinEquation()
 einstein_expasion.optional_subs_dict = optional_subs_dict
@@ -142,6 +143,8 @@ eqns = einstein_expasion.expand(pressure, ndim, coordinate_symbol, substitutions
 constituent.add_equations(eqns)
 eqns = einstein_expasion.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
 constituent.add_equations(eqns)
+eqns = einstein_expasion.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+constituent.add_equations(eqns)
 
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
@@ -151,7 +154,7 @@ schemes = {}
 rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
 # cent = Central(4)
-cent = StoreSome(4, 'u0 u1 u2 T')
+cent = StoreSome(4, 'u0 u1 u2')
 schemes[cent.name] = cent
 multi_block.set_discretisation_schemes(schemes)
 
@@ -225,25 +228,23 @@ mb_bcs[2] = block2_bc
 multi_block.set_block_boundaries(mb_bcs)
 
 # Add filters to each block
-filter_list = {0:None, 1:None, 2:None}
+filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-    #     j = block.grid_indexes[1]
-    #     grid_condition = j >= 10
-    # else: # Filter everywhere 
-    #     grid_condition = None
-        filter_list[no] = [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='LLF').equation_classes]
-    else:
-        filter_list[no] = None
-multi_block.set_filters(filter_list)
+        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF').equation_classes]
+
+# Add DRP filters for freestream
+for no, block in enumerate(multi_block.blocks):
+    filters[no] += [DRPFilter(block, [0,1], width=9, q=simulation_eq.time_advance_arrays, optimized=False, sigma=0.1, wall_control=True).equation_classes]
 
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
+multi_block.set_filters(filters)
 
 # HDF5 input/output
 x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=10000, **kwargs)
+h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z])
 multi_block.setio([h5])
 # Read in the grid file
@@ -275,10 +276,10 @@ for no, eq in enumerate(b.list_of_equation_classes):
         eq.boundary_kernels += wake_ker
 
 # Create the OPS C code
-alg = TraditionalAlgorithmRKMB(multi_block, OPS_diagnostics=2)
-OPSC(alg)
+alg = TraditionalAlgorithmRKMB(multi_block)
+OPSC(alg, OPS_diagnostics=2)
 # NaN check and iteration counter
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho_B0', every=10)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt']
 values = ['1.4', '0.75', '0.72', '50000.0', '0.0002', '100000', '0.01']

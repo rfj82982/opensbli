@@ -14,7 +14,8 @@ class DRPFilter(object):
     schemes for flow and noise computations, JoCP (2004) 194-214."""
     def __init__(self, block, filter_directions, width=11, q=None, optimized=False, sigma=0.1, wall_control=False):
         self.width, self.optimized = width, optimized
-        print("Using a DRP filter with stencil width %d for block %d, in directions: %s." % (self.width, block.blocknumber, filter_directions))
+        directions = ['x', 'y', 'z']
+        print("Using a DRP filter with stencil width %d for block %d, in directions: %s." % (self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
         self.ndim = block.ndim
         self.block = block

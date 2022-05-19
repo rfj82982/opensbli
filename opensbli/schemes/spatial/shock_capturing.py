@@ -302,6 +302,7 @@ class Characteristic(EigenSystem):
     def set_global_eigenvalues(self, block):
         """ Reduction variables for the global flux-splitting."""
         self.global_eigenvalue_reductions, self.global_eigenvalues = {}, {}
+        block_no = block.blocknumber
         # Get the eigenvalues for all directions from the characteristic system
         for dire in range(block.ndim):
             ev_dict, LEV_dict, REV_dict, required_metrics, inv_metric = self.euler.apply_direction(dire)
@@ -309,9 +310,9 @@ class Characteristic(EigenSystem):
             # name = str(ev_dict[dire][0,0])#
             name = str('u%d' % dire) # hard-coded eigenvalue names for now
             if block.ndim == 1:
-                reduction_names = [name+'_minus'+'_max']+ [name+'_max'] + [name+'_plus'+'_max'] 
+                reduction_names = [name+'_minus'+'_max'+'_B%d' % block_no] + [name+'_max'+'_B%d' % block_no] + [name+'_plus'+'_max'+'_B%d' % block_no] 
             else:
-                reduction_names = [name+'_max' for _ in range(block.ndim)] + [name+'_plus'+'_max'] + [name+'_minus'+'_max']
+                reduction_names = [name+'_max'+'_B%d' % block_no for _ in range(block.ndim)] + [name+'_plus'+'_max'+'_B%d' % block_no] + [name+'_minus'+'_max'+'_B%d' % block_no]
             reduction_vars = [ReductionVariable(x, 'max') for x in reduction_names]
 
             symbolic_matrix = zeros(*(block.ndim+2, block.ndim+2))
