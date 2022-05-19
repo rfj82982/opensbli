@@ -12,12 +12,15 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class DRPFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, width=11, q=None, optimized=False, sigma=0.1, wall_control=False):
+    def __init__(self, block, filter_directions, width=11, q=None, optimized=False, sigma=0.1, wall_control=False):
         self.width, self.optimized = width, optimized
-        print("Using a DRP filter with stencil width %d for block %d." % (self.width, block.blocknumber))
+        print("Using a DRP filter with stencil width %d for block %d, in directions: %s." % (self.width, block.blocknumber, filter_directions))
         self.depth = int(width/2.0)
         self.ndim = block.ndim
         self.block = block
+        self.filter_directions = filter_directions
+        for x in filter_directions:
+            assert isinstance(x, int)
         # Arrays to filter
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
@@ -183,7 +186,7 @@ class DRPFilter(object):
             self.detect_wall_boundaries()
             self.detect_interface_boundaries()
         # Create a kernel at the end of the time loop, every iteration (no frequency)
-        for direction in range(block.ndim):
+        for direction in self.filter_directions:
             # Create the equations
             application, update = self.create_equations(block, direction)
             filter1 = self.create_UDF(block, application, direction, 1)
