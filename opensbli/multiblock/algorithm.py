@@ -364,6 +364,7 @@ class Algorithm(object):
                 defdecs.add_components(b.Rational_constants.values())
                 defdecs.add_components(b.block_datasets.values())
                 defdecs.add_components(b.block_stencils.values())
+                defdecs.add_components(b.block_reductions.values())
         self._def_decs = defdecs
         return
     
@@ -430,6 +431,7 @@ class TraditionalAlgorithmRKMB(object):
                 defdecs.add_components(list(b.Rational_constants.values()))
                 defdecs.add_components(list(b.block_datasets.values()))
                 defdecs.add_components(list(b.block_stencils.values()))
+                defdecs.add_components(list(b.block_reductions.values()))
         return defdecs
 
     def comapre_no_sims(self, s1, s2):

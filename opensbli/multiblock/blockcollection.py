@@ -54,9 +54,9 @@ class MultiBlock():
 
     def set_filters(self, filter_dictionary):
         for i, b in enumerate(self.blocks):
-            if filter_dictionary[i] is not None:
-                filt = flatten(filter_dictionary[i])
-                b.set_equations(filt)
+            for filt in flatten(filter_dictionary[i]):
+                if filt is not None:
+                    b.set_equations([filt])
         return
     
     def set_block_boundaries(self, bclist):    
