@@ -69,6 +69,19 @@ class WENOFilter(NonSimulationEquations):
             raise ValueError("Please set boundary conditions on the block before calling the shock filter.")
         return
 
+    def detect_interface_boundaries(self):
+        """ The shock-filter is turned off close to block interfaces. This function detects which directions, if any, have
+        interface boundary conditions."""
+        self.interface_boundaries = [[False, False] for _ in range(self.ndim)]
+        try:
+            for direction in range(self.ndim):
+                for side in [0,1]:
+                    if isinstance(self.block.boundary_types[direction][side], InterfaceBC) or isinstance(self.block.boundary_types[direction][side], SharedInterfaceBC):
+                        self.interface_boundaries[direction][side] = True
+        except:
+            raise ValueError("Please set boundary conditions on the block before calling the shock filter.")
+        return
+
     def process_metrics(self, metrics):
         # Uniform mesh
         if metrics is None:
@@ -242,7 +255,8 @@ class WENOFilter(NonSimulationEquations):
         return kappa
 
     def wall_control(self):
-        """ Turns off the filter close to any of the walls in the problem."""
+        """ Turns off the filter close to any of the walls or block interfaces in the problem."""
+        buffer = 5
         wall_var = GridVariable('Wall')
         wall_conditions, wall_equations = [], []
         indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
@@ -253,10 +267,19 @@ class WENOFilter(NonSimulationEquations):
                 wall = self.wall_boundaries[direction][side]
                 if wall:
                     if side == 0:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= 5)]
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
                     else:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - 6)]
-        # No wall, default condition is the sensor is not turned off
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+        # Check for block interfaces
+        for direction in range(self.ndim):
+            for side in [0,1]:
+                interface = self.interface_boundaries[direction][side]
+                if interface:
+                    if side == 0:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
+                    else:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+        # No wall or interface, default condition is the sensor is not turned off
         wall_conditions += [ExprCondPair(1, True)]
         wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
         return wall_var, wall_equations
@@ -375,8 +398,9 @@ class WENOFilter(NonSimulationEquations):
             self.component_counter += 1
 
         self.add_kernel(reconstruction_kernels)
-        # Check if there any wall boundary conditions defined on the block.
+        # Check if there any wall boundary conditions or interfaces defined on the block.
         self.detect_wall_boundaries()
+        self.detect_interface_boundaries()
         # # Create the residual kernel
         self.filter_application(solution_vector, block)
         return
