@@ -7,25 +7,56 @@ from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
 from opensbli.code_generation.algorithm.common import *
 from opensbli.utilities.user_defined_kernels import UserDefinedEquations
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 class DRPFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, width=11, q=None, optimized=False, sigma=0.1):
+    def __init__(self, block, width=11, q=None, optimized=False, sigma=0.1, wall_control=False):
         self.width, self.optimized = width, optimized
         print("Using a DRP filter with stencil width %d for block %d." % (self.width, block.blocknumber))
         self.depth = int(width/2.0)
+        self.ndim = block.ndim
+        self.block = block
         # Arrays to filter
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
-        # Check for non-periodic boundaries
-        self.boundary_check(block)
+        self.freq = ConstantObject('filter_frequency')
+        self.freq.value = 25
+        CTD.add_constant(self.freq)
         # Width and weightings of the filter
         self.generate_weights()
         self.sigma = ConstantObject('sigma_filt')
         self.sigma.value = sigma
         # Create the filter equations
         self.create_filter(block)
+        return
+
+
+    def detect_wall_boundaries(self):
+        """ The shock-filter is turned off in the near-wall region. This function detects which directions, if any, have
+        wall boundary conditions."""
+        self.wall_boundaries = [[False, False] for _ in range(self.ndim)]
+        try:
+            for direction in range(self.ndim):
+                for side in [0,1]:
+                    if isinstance(self.block.boundary_types[direction][side], WallBC):
+                        self.wall_boundaries[direction][side] = True
+        except:
+            raise ValueError("Please set boundary conditions on the block before calling the shock filter.")
+        return
+
+    def detect_interface_boundaries(self):
+        """ The shock-filter is turned off close to block interfaces. This function detects which directions, if any, have
+        interface boundary conditions."""
+        self.interface_boundaries = [[False, False] for _ in range(self.ndim)]
+        try:
+            for direction in range(self.ndim):
+                for side in [0,1]:
+                    if isinstance(self.block.boundary_types[direction][side], InterfaceBC) or isinstance(self.block.boundary_types[direction][side], SharedInterfaceBC):
+                        self.interface_boundaries[direction][side] = True
+        except:
+            raise ValueError("Please set boundary conditions on the block before calling the shock filter.")
         return
 
     def boundary_check(self, block):
@@ -38,6 +69,36 @@ class DRPFilter(object):
                     self.non_periodic[i][side] = True
                     self.modify_directions[i] = True
         return
+
+    def wall_control(self):
+        """ Turns off the filter close to any of the walls or block interfaces in the problem."""
+        buffer = 5
+        wall_var = GridVariable('Wall')
+        wall_conditions, wall_equations = [], []
+        indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
+        wall_equations += indexes
+        # Disable the shock filter at any wall boundaries
+        for direction in range(self.ndim):
+            for side in [0,1]:
+                wall = self.wall_boundaries[direction][side]
+                if wall:
+                    if side == 0:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
+                    else:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+        # Check for block interfaces
+        for direction in range(self.ndim):
+            for side in [0,1]:
+                interface = self.interface_boundaries[direction][side]
+                if interface:
+                    if side == 0:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
+                    else:
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+        # No wall or interface, default condition is the sensor is not turned off
+        wall_conditions += [ExprCondPair(1, True)]
+        wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
+        return wall_var, wall_equations
 
     def generate_weights(self):
         """ Weights are symmetric about the central point."""
@@ -65,12 +126,6 @@ class DRPFilter(object):
         self.locations = [i for i in range(-int(self.width/2.0), int(self.width/2.0)+1)]        
         return
 
-    # def boundary_stencil(self, equations, direction, block):
-    #     output_equations = []
-    #     for i, eqn in enumerate(equations):
-
-    #     return
-
 
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
@@ -93,13 +148,11 @@ class DRPFilter(object):
         # Create the indexed equations to calculate the filter
         application = self.create_stencil(direction)
         direction += 1
-        # Modify for non-periodic boundaries
-        # if self.non_periodic[direction][0] or self.non_periodic[direction][1]:
-        #     application = self.boundary_stencil(application, direction, block)
         # Update the q vector
-        update = []
+        wall_var, wall_equations = self.wall_control()
+        update = wall_equations[:]
         for dset_id, dset in enumerate(self.q_vector):
-            update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+            update += [OpenSBLIEq(dset, dset - wall_var*self.sigma*self.temp_arrays[dset_id])]
         return application, update
 
     def create_UDF(self, block, equations, direction, order):
@@ -114,10 +167,10 @@ class DRPFilter(object):
         # Place the filter at the very end
         UDF.order = 10000 + direction + order
         UDF.add_equations(equations)
-        # Attribute to modify ranges for non-periodic boundaries
-        if order is not 0 and self.modify_directions[direction]:
-            UDF.modify_kernel_range = self.non_periodic
-            UDF.depth = self.depth
+        # # Attribute to modify ranges for non-periodic boundaries
+        # if order is not 0 and self.modify_directions[direction]:
+        #     UDF.modify_kernel_range = self.non_periodic
+        #     UDF.depth = self.depth
         return UDF
 
     def create_filter(self, block):
@@ -125,6 +178,10 @@ class DRPFilter(object):
         # Zero the arrays
         zeroed = self.zero_temp_arrays()
         self.equation_classes += [self.create_UDF(block, zeroed, 0, 0)]
+        # Check for non-periodic boundaries
+        if self.wall_control:
+            self.detect_wall_boundaries()
+            self.detect_interface_boundaries()
         # Create a kernel at the end of the time loop, every iteration (no frequency)
         for direction in range(block.ndim):
             # Create the equations
