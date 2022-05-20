@@ -16,7 +16,7 @@ def create_exchange_calls_codes(multiblock_descriptor, dsets):
         kernels += block.apply_interface_bc(arrays, multiblock_descriptor)
     return kernels
 
-ndim = 3
+ndim = 2
 nblocks = 3
 multi_block = MultiBlock(ndim, nblocks)
 SimulationDataType.set_datatype(Double)
@@ -25,13 +25,13 @@ def generate_sponge_kernel(conserve_vector, block):
     """ Applies a sponge boundary on the outflow of the domain to damp oscillations."""
     length_sponge, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
     gama, minf = symbols("gama Minf", **{'cls':ConstantObject})
-    residual = symbols("Residual0:5", **{'cls':DataObject})
+    residual = symbols("Residual0:3", **{'cls':DataObject})
     x0 = symbols("x0", **{'cls':DataObject})
     equations = []
     equations += [Eq(length_sponge, 0.85)]
     # Characteristic length
     equations += [Eq(lc, x0 - (5.0 -length_sponge)), Eq(sigma,  0.5*(1.0 + cos(pi* lc/length_sponge)))]
-    values = [1.0, 1.0, 0.0, 0.0, 1.0/(gama * minf**2.0 *(gama - 1.0)) + 0.5]
+    values = [1.0, 1.0, 0.0, 1.0/(gama * minf**2.0 *(gama - 1.0)) + 0.5]
     for b0, b1, b2 in zip(residual, conserve_vector, values):
         equations += [Eq(b0, b0 - sigma * (b1- b2))]
     eqns = block.dataobjects_to_datasets_on_block(equations)
@@ -50,12 +50,12 @@ def generate_sponge_kernel(conserve_vector, block):
 def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     """ Wake treatment at the block interface."""
     block = mulitblock.get_block(0)
-    wk = symbols("wk0:5", **{'cls':DataObject})
+    wk = symbols("wk0:4", **{'cls':DataObject})
     # Add the grid index if IDX ==0 then 
     # Also change the range of evaluation
     idx = block.grid_indexes[0]
     equations = [Eq(conserve_vector[0], 0.5 * (conserve_vector[0] + wk[0]))]
-    # for rhou,v,w
+    # for rhou,v
     for b0, b1 in zip(conserve_vector[1:-1], wk[1:-1]):
         pairs = [ExprCondPair(0.0, Eq(idx,0)), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
@@ -63,9 +63,9 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     equations += [Eq(conserve_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
+    pprint(equations)
     direction = 1
     side = 0
-    pprint(equations)
     # create it as a boundary condition, kernel, example we use DirichletBC
     bc = DirichletBC(direction, side, equations)
     ker = bc.apply([], block)
@@ -74,7 +74,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     ker.halo_ranges[1][0] = set()   
     # Wake exchanges from block2 wakeline (conserve_vector) to blokck0 work_arrays
     block2 = mulitblock.get_block(2)
-    bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
+    bc = InterfaceBC(direction, side,  match=(0, 1, False))
     arrays = [block2.work_array(str(a)) for a in flatten(conserve_vector)]
     other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
     wake_transfer1 = bc.apply_interface(arrays, block2, mulitblock, other_arrays=other_arrays)
@@ -83,7 +83,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     wake_transfer1.transfer_to[1] = 0
     wake_transfer1.computation_name = "waketransfer1"
     
-    bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
+    bc = InterfaceBC(direction, side,  match=(2, 1, False))
     arrays = [block.work_array(str(a)) for a in flatten(conserve_vector)]
     wake_transfer2 = bc.apply_interface(arrays, block, mulitblock)
     wake_transfer2.transfer_size[1] = 1
@@ -95,7 +95,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 
@@ -105,8 +105,8 @@ mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
 momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
 energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
 # Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
+stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
+heat_flux = "Eq(q_j, (1.0/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
 substitutions = [stress_tensor, heat_flux]
 # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
@@ -149,23 +149,26 @@ constituent.add_equations(eqns)
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
 
+
+### SET EQUATIONS HERE BEFORE
+
+
 # Specify the numerical schemes
 schemes = {}
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 # cent = Central(4)
-cent = StoreSome(4, 'u0 u1 u2 T')
+cent = StoreSome(4, 'u0 u1 T')
 schemes[cent.name] = cent
 multi_block.set_discretisation_schemes(schemes)
 
 # Initial conditions
-d, u0, u1,u2, p = symbols("d, u0:3, p", **{'cls':GridVariable})
+d, u0, u1, p = symbols("d, u0:2, p", **{'cls':GridVariable})
 gama, Minf = symbols("gama, Minf", **{'cls':ConstantObject})
 initial_equations = []
 initial_equations += [Eq(d, 1.0)]
 initial_equations += [Eq(u0, 1.0)]
 initial_equations += [Eq(u1, 0.0)]
-initial_equations += [Eq(u2, 0.0)]
 initial_equations += [Eq(p, 1.0/(gama*Minf**2.0))]
 
 # Set the conservative values
@@ -173,9 +176,8 @@ conserve_vector = flatten(simulation_eq.time_advance_arrays)
 initial_equations += [Eq(conserve_vector[0], d)]
 initial_equations += [Eq(conserve_vector[1], d*u0)]
 initial_equations += [Eq(conserve_vector[2], d*u1)]
-initial_equations += [Eq(conserve_vector[3], d*u2)]
-initial_equations += [Eq(conserve_vector[4], p/(gama-1.0) + 0.5* d *(u0**2+u1**2+ u2**2))]
-initial_equations += [Eq(GridVariable('temp'), DataObject('x2'))]
+initial_equations += [Eq(conserve_vector[3], p/(gama-1.0) + 0.5* d *(u0**2+u1**2))]
+# initial_equations += [Eq(GridVariable('temp'), DataObject('x2'))]
 initial = GridBasedInitialisation()
 initial.add_equations(copy.deepcopy(initial_equations))
 
@@ -189,49 +191,43 @@ mb_bcs = {0:None, 1:None, 2:None}
 block0_bc = []
 direction = 0
 side = 0
-block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 0, True)))
+block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, True)))
 block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, 0, True)))
+block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, True)))
 block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block0_bc.append(PeriodicBC(direction=2, side=0))
-block0_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[0] = block0_bc
 
 # Boundary conditions for block 1
 #The boundary conditions are [InterfaceBC, InterfaceBC] in x0 direction and [wall, Inflow]  in x1 direction 
 # Matching boundaries are located at are [0,0,0] and [2, 0, 0]
 block1_bc = []
-block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, 0, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
+block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, True)))
+block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, False)))
 # Wall temperature is required for halo points
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
 wall_energy = [Eq(conserve_vector[-1], Twall*conserve_vector[0]/((gama-1.0)*gama*Minf*Minf))]
 block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy))
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block1_bc.append(PeriodicBC(direction=2, side=0))
-block1_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[1] = block1_bc
 
 # Boundary conditions for block 2
 # The boundary conditions are [InterfaceBC, outflow] in x0 direction and  SharedInterfaceBC, Inflow]  in x1 direction 
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block2_bc = []
-block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, False)))
+block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, False)))
 block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, 0, True)))
+block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, True)))
 block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block2_bc.append(PeriodicBC(direction=2, side=0))
-block2_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
 
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
-for no, block in enumerate(multi_block.blocks):
-    if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF').equation_classes]
+# for no, block in enumerate(multi_block.blocks):
+#     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+#         filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
@@ -242,15 +238,15 @@ multi_block.set_equations([simulation_eq, constituent, metriceq])
 multi_block.set_filters(filters)
 
 # HDF5 input/output
-x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
+x,y= symbols("x0, x1", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=1000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z])
+h5 = iohdf5(save_every=10000, **kwargs)
+h5.add_arrays(simulation_eq.time_advance_arrays + [x, y])
 multi_block.setio([h5])
 # Read in the grid file
 kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
-h5_read.add_arrays([x, y, z])
+h5_read.add_arrays([x, y])
 multi_block.setio([h5_read])
 
 # Perform the discretization
@@ -277,19 +273,19 @@ for no, eq in enumerate(b.list_of_equation_classes):
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
-OPSC(alg, OPS_diagnostics=2)
+OPSC(alg)
 # NaN check and iteration counter
-print_iteration_ops(NaN_check='rho_B0', every=10)
+print_iteration_ops(NaN_check='rho_B0', every=1)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt']
-values = ['1.4', '0.75', '0.72', '50000.0', '0.0002', '100000', '0.01']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt'] # strength of the free-stream filtering
+values = ['1.4', '0.5', '0.72', '5000.0', '0.0001', '100000', '0.01']
 # Block 0
-constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values += ['801', '692', '5', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)', '0.12/block0np2']
+constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
+values += ['801', '692', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)']
 # Block 1
-constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
-values += ['1799', '692', '5', '7.29705965995/(block1np0 - 1.0)', '7.3/(block1np1 - 1.0)', '0.12/block1np2']
+constants += ['block1np0', 'block1np1', 'Delta0block1', 'Delta1block1']
+values += ['1799', '692', '7.29705965995/(block1np0 - 1.0)', '7.3/(block1np1 - 1.0)']
 # Block 2
-constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
-values += ['801', '692', '5', '5.0/(block2np0 - 1.0)', '7.3/(block2np1 - 1.0)', '0.12/block2np2']
+constants += ['block2np0', 'block2np1', 'Delta0block2', 'Delta1block2']
+values += ['801', '692', '5.0/(block2np0 - 1.0)', '7.3/(block2np1 - 1.0)']
 substitute_simulation_parameters(constants, values)

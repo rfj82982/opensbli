@@ -179,7 +179,7 @@ def print_iteration_ops(simulation_name='opensbli', every=250, NaN_check=None):
         check_string = "int iter=0;"
         if check_string in line:
             lines[no+1] = lines[no+1] + """if(fmod(iter+1, %d) == 0){
-        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.3f\\n", iter+1, dt, dt*(iter+1) + tstart); """ % every
+        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f\\n", iter+1, dt, dt*(iter+1) + tstart); """ % every
             if NaN_check is not None:
                 lines[no+1] = lines[no+1] + """
         ops_NaNcheck(%s);\n}\n""" % NaN_check
