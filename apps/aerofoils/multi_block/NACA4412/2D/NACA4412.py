@@ -63,7 +63,6 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     equations += [Eq(conserve_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
-    pprint(equations)
     direction = 1
     side = 0
     # create it as a boundary condition, kernel, example we use DirichletBC
@@ -74,7 +73,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     ker.halo_ranges[1][0] = set()   
     # Wake exchanges from block2 wakeline (conserve_vector) to blokck0 work_arrays
     block2 = mulitblock.get_block(2)
-    bc = InterfaceBC(direction, side,  match=(0, 1, False))
+    bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
     arrays = [block2.work_array(str(a)) for a in flatten(conserve_vector)]
     other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
     wake_transfer1 = bc.apply_interface(arrays, block2, mulitblock, other_arrays=other_arrays)
@@ -83,7 +82,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     wake_transfer1.transfer_to[1] = 0
     wake_transfer1.computation_name = "waketransfer1"
     
-    bc = InterfaceBC(direction, side,  match=(2, 1, False))
+    bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
     arrays = [block.work_array(str(a)) for a in flatten(conserve_vector)]
     wake_transfer2 = bc.apply_interface(arrays, block, mulitblock)
     wake_transfer2.transfer_size[1] = 1
@@ -149,10 +148,6 @@ constituent.add_equations(eqns)
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
 
-
-### SET EQUATIONS HERE BEFORE
-
-
 # Specify the numerical schemes
 schemes = {}
 rk = RungeKuttaLS(3)
@@ -191,9 +186,9 @@ mb_bcs = {0:None, 1:None, 2:None}
 block0_bc = []
 direction = 0
 side = 0
-block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, True)))
+block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 0, True)))
 block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, True)))
+block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, 0, True)))
 block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 mb_bcs[0] = block0_bc
 
@@ -201,8 +196,8 @@ mb_bcs[0] = block0_bc
 #The boundary conditions are [InterfaceBC, InterfaceBC] in x0 direction and [wall, Inflow]  in x1 direction 
 # Matching boundaries are located at are [0,0,0] and [2, 0, 0]
 block1_bc = []
-block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, False)))
+block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, 0, True)))
+block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
 # Wall temperature is required for halo points
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
@@ -215,9 +210,9 @@ mb_bcs[1] = block1_bc
 # The boundary conditions are [InterfaceBC, outflow] in x0 direction and  SharedInterfaceBC, Inflow]  in x1 direction 
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block2_bc = []
-block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, False)))
+block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, False)))
 block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, True)))
+block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, 0, True)))
 block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
