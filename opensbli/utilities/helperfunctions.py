@@ -169,7 +169,7 @@ def constant_attributes(const):
     return const
 
 
-def print_iteration_ops(simulation_name='opensbli', every=250, NaN_check=None):
+def print_iteration_ops(simulation_name='opensbli', every=250, NaN_check=None, nblocks=1):
     """ Prints the iteration number to standard output. If an array name is passed to NaNcheck
     then the OPS NaN_check is also called. Requires OPS versions since 01/03/2019."""
     file_path = "./%s.cpp" % simulation_name
@@ -178,13 +178,19 @@ def print_iteration_ops(simulation_name='opensbli', every=250, NaN_check=None):
     for no, line in enumerate(lines):
         check_string = "int iter=0;"
         if check_string in line:
-            lines[no+1] = lines[no+1] + """if(fmod(iter+1, %d) == 0){
+            lines[no+1] += """if(fmod(iter+1, %d) == 0){
         ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f\\n", iter+1, dt, dt*(iter+1) + tstart); """ % every
             if NaN_check is not None:
-                lines[no+1] = lines[no+1] + """
-        ops_NaNcheck(%s);\n}\n""" % NaN_check
+                for i in range(nblocks):
+                    if i == 0:
+                        lines[no+1] += """
+        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+                    else:
+                        lines[no+1] += """        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+
+                lines[no+1] += """}\n""" 
             else:
-                lines[no+1] = lines[no+1] + """\n}\n"""
+                lines[no+1] += """\n}\n"""
     with open(file_path, 'w') as f:
         f.write(''.join(lines))
     return
