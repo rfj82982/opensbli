@@ -155,40 +155,40 @@ def fill_halo_coordinates(block_data, block_number):
     # Aerofoil blocklock
     elif block_number == 1:
         # Negative x halos in block 1 are the first coordinate values in block 1
-        full_x[y_slice, 4] = block_data[0]['x'][:,1]
-        full_x[y_slice, 3] = block_data[0]['x'][:,2]
-        full_x[y_slice, 2] = block_data[0]['x'][:,3]
-        full_x[y_slice, 1] = block_data[0]['x'][:,4]
-        full_x[y_slice, 0] = block_data[0]['x'][:,5]
+        full_x[y_slice, 4] = block_data[0]['x'][:,0]
+        full_x[y_slice, 3] = block_data[0]['x'][:,1]
+        full_x[y_slice, 2] = block_data[0]['x'][:,2]
+        full_x[y_slice, 1] = block_data[0]['x'][:,3]
+        full_x[y_slice, 0] = block_data[0]['x'][:,4]
 
-        full_y[y_slice, 4] = block_data[0]['y'][:,1]
-        full_y[y_slice, 3] = block_data[0]['y'][:,2]
-        full_y[y_slice, 2] = block_data[0]['y'][:,3]
-        full_y[y_slice, 1] = block_data[0]['y'][:,4]
-        full_y[y_slice, 0] = block_data[0]['y'][:,5]
+        full_y[y_slice, 4] = block_data[0]['y'][:,0]
+        full_y[y_slice, 3] = block_data[0]['y'][:,1]
+        full_y[y_slice, 2] = block_data[0]['y'][:,2]
+        full_y[y_slice, 1] = block_data[0]['y'][:,3]
+        full_y[y_slice, 0] = block_data[0]['y'][:,4]
 
-    #   # Positive x halos in block 0 are the first coordinate values in block 2
-        full_x[y_slice, -5] = block_data[2]['x'][:,1]
-        full_x[y_slice, -4] = block_data[2]['x'][:,2]
-        full_x[y_slice, -3] = block_data[2]['x'][:,3]
-        full_x[y_slice, -2] = block_data[2]['x'][:,4]
-        full_x[y_slice, -1] = block_data[2]['x'][:,5]
+    #   # Positive x halos in block 1 are the first coordinate values in block 2
+        full_x[y_slice, -5] = block_data[2]['x'][:,0]
+        full_x[y_slice, -4] = block_data[2]['x'][:,1]
+        full_x[y_slice, -3] = block_data[2]['x'][:,2]
+        full_x[y_slice, -2] = block_data[2]['x'][:,3]
+        full_x[y_slice, -1] = block_data[2]['x'][:,4]
 
-        full_y[y_slice, -5] = block_data[2]['y'][:,1]
-        full_y[y_slice, -4] = block_data[2]['y'][:,2]
-        full_y[y_slice, -3] = block_data[2]['y'][:,3]
-        full_y[y_slice, -2] = block_data[2]['y'][:,4]
-        full_y[y_slice, -1] = block_data[2]['y'][:,5]
+        full_y[y_slice, -5] = block_data[2]['y'][:,0]
+        full_y[y_slice, -4] = block_data[2]['y'][:,1]
+        full_y[y_slice, -3] = block_data[2]['y'][:,2]
+        full_y[y_slice, -2] = block_data[2]['y'][:,3]
+        full_y[y_slice, -1] = block_data[2]['y'][:,4]
 
     #     # TODO: add the extended positive/negative y (farfield/wall)
 
     elif block_number == 2:
         # Negative x halos in block 2 are the last coordinate values in block 1
-        full_x[y_slice, 4] = block_data[1]['x'][:,-5]
-        full_x[y_slice, 3] = block_data[1]['x'][:,-4]
+        full_x[y_slice, 4] = block_data[1]['x'][:,-1]
+        full_x[y_slice, 3] = block_data[1]['x'][:,-2]
         full_x[y_slice, 2] = block_data[1]['x'][:,-3]
-        full_x[y_slice, 1] = block_data[1]['x'][:,-2]
-        full_x[y_slice, 0] = block_data[1]['x'][:,-1]
+        full_x[y_slice, 1] = block_data[1]['x'][:,-4]
+        full_x[y_slice, 0] = block_data[1]['x'][:,-5]
 
         full_y[y_slice, 4] = block_data[1]['y'][:,-5]
         full_y[y_slice, 3] = block_data[1]['y'][:,-4]
