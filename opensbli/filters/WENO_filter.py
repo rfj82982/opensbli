@@ -45,6 +45,7 @@ class WENOFilter(NonSimulationEquations):
         # Scheme used to form the non-linear filter
         self.scheme_type = "**{\'scheme\':\'Weno\'}"
         # Check if the problem needs a metric transformation of the equations
+        self.metrics = metrics
         self.process_metrics(metrics)
         self.constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Ensure gama has been added to the constants to define
@@ -113,13 +114,28 @@ class WENOFilter(NonSimulationEquations):
             # Full curvilinear
             if self.curvilinear:
                 coordinate_symbol = "xi"
+                optional_subs_dict = self.metric_class.metric_subs
+                self.EE.optional_subs_dict = optional_subs_dict
                 a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
                 mass = "Eq(Der(rho,t), - %s/detJ)" % (a)
                 a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
                 momentum = "Eq(Der(rhou_i,t) , -  %s/detJ)" % (a)
                 a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
                 energy = "Eq(Der(rhoE,t), - %s/detJ)" % (a)
-                output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+
+                base_eqns = [mass, momentum, energy]
+                for i, base in enumerate(base_eqns):
+                    base_eqns[i] = self.EE.expand(base, self.ndim, coordinate_symbol, [], self.constants)
+                    pprint(base_eqns)
+                    if base==momentum:
+                        for no, b in enumerate(base_eqns[i]):
+                            base_eqns[i][no] = OpenSBLIEq(base_eqns[i][no].lhs, base_eqns[i][no].rhs)
+                    else:
+                        if base==energy:
+                            base_eqns[i] = OpenSBLIEq(base_eqns[i].lhs, base_eqns[i].rhs)
+                # exit()
+                # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten(base_eqns)
             # Only stretching is applied
             else: ### Only added non-conservative for this stretched case
                 coordinate_symbol = "x"
@@ -130,8 +146,8 @@ class WENOFilter(NonSimulationEquations):
                 else:
                     momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
                     energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
-                governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
-                output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])                          
+                # governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+                # output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])                          
         return output_equations
 
     def create_kernel(self, name, equations, halo_type, block):
@@ -205,10 +221,10 @@ class WENOFilter(NonSimulationEquations):
         # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(self.gama*p*inv_rho))]
 
-        # Projected velocities if full curvilinear coordinates are being used
-        if self.curvilinear:
-            metric_vel = "Eq(U_i, D_i_j*u_j)"
-            CR_eqns += flatten([self.EE.expand(metric_vel, self.ndim, "x", [], self.constants)])
+        # # Projected velocities if full curvilinear coordinates are being used
+        # if self.curvilinear:
+        #     metric_vel = "Eq(U_i, D_i_j*u_j)"
+        #     CR_eqns += flatten([self.EE.expand(metric_vel, self.ndim, "x", [], self.constants)])
 
         # Optiional Low Mach number correction
         if self.Mach_correction:
@@ -300,7 +316,7 @@ class WENOFilter(NonSimulationEquations):
         modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
         # Global parameter to control the dissipation to give extra control of the dissipation in the C code
         FC = ConstantObject('shock_filter_control')
-        FC.value = 0.25 # Default condition has no scaling
+        FC.value = 1.0 # Default condition has no scaling
         CTD.add_constant(FC)
         # The amount of dissipation to apply, using a local flow sensor
         if self.dissipation_sensor == 'Ducros':
@@ -373,7 +389,7 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=self.conservative)
+        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=self.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
