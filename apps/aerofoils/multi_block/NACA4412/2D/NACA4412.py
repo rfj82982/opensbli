@@ -187,9 +187,9 @@ block0_bc = []
 direction = 0
 side = 0
 block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 0, True)))
-block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
+block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0, scheme=ReducedAccess()))
 block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, 0, True)))
-block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
+block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations, scheme=ReducedAccess()))
 mb_bcs[0] = block0_bc
 
 # Boundary conditions for block 1
@@ -202,8 +202,8 @@ block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
 wall_energy = [Eq(conserve_vector[-1], Twall*conserve_vector[0]/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy))
-block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
+block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy, scheme=ReducedAccess()))
+block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations, scheme=ReducedAccess()))
 mb_bcs[1] = block1_bc
 
 # Boundary conditions for block 2
@@ -211,9 +211,9 @@ mb_bcs[1] = block1_bc
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block2_bc = []
 block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, False)))
-block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
+block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0, scheme=ReducedAccess()))
 block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, 0, True)))
-block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
+block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations, scheme=ReducedAccess()))
 mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
@@ -246,8 +246,6 @@ multi_block.setio([h5_read])
 
 # Perform the discretization
 multi_block.discretise()
-# Add the coordinate excahnges for the multi-block-treatment to the solution of block 2
-kernels = create_exchange_calls_codes(multi_block, [x,y])
 # Add the wake treatment kernels
 wake_ker = generate_wake_kernel(conserve_vector, multi_block, wall_energy[0])
 # Sponge kernel for block 0
@@ -258,11 +256,8 @@ sponge_ker_block2 = generate_sponge_kernel(conserve_vector, multi_block.get_bloc
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
 for no, eq in enumerate(b.list_of_equation_classes):
-    # Add coordinate exchanges to the Block2 GridBasedInitialisation
-    if isinstance(eq, GridBasedInitialisation):
-        eq.Kernels += kernels
     # Add sponge kernels to block2 spatial solution i.e after evaluating the residuals
-    elif isinstance(eq, SimulationEquations):
+    if isinstance(eq, SimulationEquations):
         eq.Kernels += [sponge_ker_block0, sponge_ker_block2]
         eq.boundary_kernels += wake_ker
 
@@ -270,10 +265,10 @@ for no, eq in enumerate(b.list_of_equation_classes):
 alg = TraditionalAlgorithmRKMB(multi_block)
 OPSC(alg)
 # NaN check and iteration counter
-print_iteration_ops(NaN_check='rho_B0', every=1)
+print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt'] # strength of the free-stream filtering
-values = ['1.4', '0.5', '0.72', '5000.0', '0.0001', '100000', '0.01']
+values = ['1.4', '0.5', '0.72', '50000.0', '0.00005', '500000', '0.01']
 # Block 0
 constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
 values += ['801', '692', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)']

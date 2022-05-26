@@ -118,7 +118,6 @@ def fill_halo_coordinates(block_data, block_number):
     print(full_x.shape)
     print("Block 1")
     print(block_data[1]['x'].shape)
-    # exit()
     # Bottom right wake block
     if block_number == 0:
         # Negative x halos in block 0 are the first coordinate values in block 1 (Nz, Ny, Nx)
@@ -135,11 +134,34 @@ def fill_halo_coordinates(block_data, block_number):
         full_y[y_slice, 1] = block_data[1]['y'][:,3]
         full_y[y_slice, 0] = block_data[1]['y'][:,4]
 
-        # TODO: add the extended positive x (farfield)
+        # Positive x (farfield) add with constant spacing
+        dx = np.abs((full_x[y_slice, -7] - full_x[y_slice, -6]))
+        full_x[y_slice, -5] = full_x[y_slice, -6] + dx
+        full_x[y_slice, -4] = full_x[y_slice, -5] + dx
+        full_x[y_slice, -3] = full_x[y_slice, -4] + dx
+        full_x[y_slice, -2] = full_x[y_slice, -3] + dx
+        full_x[y_slice, -1] = full_x[y_slice, -2] + dx
+        # Copy the y coordinates into the halos
+        full_y[y_slice, -5] = full_y[y_slice, -6]
+        full_y[y_slice, -4] = full_y[y_slice, -6]
+        full_y[y_slice, -3] = full_y[y_slice, -6]
+        full_y[y_slice, -2] = full_y[y_slice, -6]
+        full_y[y_slice, -1] = full_y[y_slice, -6]
+        # Add the extended positive y (farfield)
+        full_x[-5, x_slice] = full_x[-6, x_slice]
+        full_x[-4, x_slice] = full_x[-6, x_slice]
+        full_x[-3, x_slice] = full_x[-6, x_slice]
+        full_x[-2, x_slice] = full_x[-6, x_slice]
+        full_x[-1, x_slice] = full_x[-6, x_slice]
 
-        # TODO: add the extended positive y (farfield)
+        dy = np.abs((full_y[-7, x_slice] - full_y[-6, x_slice]))
+        full_y[-5, x_slice] = full_y[-6, x_slice] + dy
+        full_y[-4, x_slice] = full_y[-5, x_slice] + dy
+        full_y[-3, x_slice] = full_y[-4, x_slice] + dy
+        full_y[-2, x_slice] = full_y[-3, x_slice] + dy
+        full_y[-1, x_slice] = full_y[-2, x_slice] + dy
 
-        # # negative y halos in block 0 are the first coordinate values in block 2
+        # Negative y halos in block 0 are the first coordinate values in block 2
         full_x[4, x_slice] = block_data[2]['x'][1,:]
         full_x[3, x_slice] = block_data[2]['x'][2,:]
         full_x[2, x_slice] = block_data[2]['x'][3,:]
@@ -152,7 +174,7 @@ def fill_halo_coordinates(block_data, block_number):
         full_y[1, x_slice] = block_data[2]['y'][4,:]
         full_y[0, x_slice] = block_data[2]['y'][5,:]
 
-    # Aerofoil blocklock
+    # Aerofoil block
     elif block_number == 1:
         # Negative x halos in block 1 are the first coordinate values in block 1
         full_x[y_slice, 4] = block_data[0]['x'][:,0]
@@ -180,7 +202,32 @@ def fill_halo_coordinates(block_data, block_number):
         full_y[y_slice, -2] = block_data[2]['y'][:,3]
         full_y[y_slice, -1] = block_data[2]['y'][:,4]
 
-    #     # TODO: add the extended positive/negative y (farfield/wall)
+        # Below the wall coordinates ## CHECK again later
+        full_x[4, x_slice] = full_x[5, x_slice] 
+        full_x[3, x_slice] = full_x[5, x_slice] 
+        full_x[2, x_slice] = full_x[5, x_slice] 
+        full_x[1, x_slice] = full_x[5, x_slice] 
+        full_x[0, x_slice] = full_x[5, x_slice] 
+        dy = np.abs((full_y[6, x_slice] - full_y[5, x_slice])) 
+        full_y[4, x_slice] = full_y[1, x_slice] + full_y[6, x_slice]*dy
+        full_y[3, x_slice] = full_y[2, x_slice] + full_y[6, x_slice]*dy
+        full_y[2, x_slice] = full_y[3, x_slice] + full_y[6, x_slice]*dy
+        full_y[1, x_slice] = full_y[4, x_slice] + full_y[6, x_slice]*dy
+        full_y[0, x_slice] = full_y[5, x_slice] + full_y[6, x_slice]*dy
+
+        # Farfield, positive y
+        dx = np.abs((full_x[y_slice, -7] - full_x[y_slice, -6]))
+        full_x[-5, x_slice] = full_x[-6, x_slice] 
+        full_x[-4, x_slice] = full_x[-6, x_slice] 
+        full_x[-3, x_slice] = full_x[-6, x_slice] 
+        full_x[-2, x_slice] = full_x[-6, x_slice] 
+        full_x[-1, x_slice] = full_x[-6, x_slice] 
+        dy = np.abs((full_y[-7, x_slice] - full_y[-6, x_slice])) 
+        full_y[-5, x_slice] = full_y[-6, x_slice] + full_y[6, x_slice]*dy
+        full_y[-4, x_slice] = full_y[-5, x_slice] + full_y[6, x_slice]*dy
+        full_y[-3, x_slice] = full_y[-4, x_slice] + full_y[6, x_slice]*dy
+        full_y[-2, x_slice] = full_y[-3, x_slice] + full_y[6, x_slice]*dy
+        full_y[-1, x_slice] = full_y[-2, x_slice] + full_y[6, x_slice]*dy
 
     elif block_number == 2:
         # Negative x halos in block 2 are the last coordinate values in block 1
@@ -197,7 +244,18 @@ def fill_halo_coordinates(block_data, block_number):
         full_y[y_slice, 0] = block_data[1]['y'][:,-1]
 
         # Add x farfield outlet halos
-
+        dx = np.abs((full_x[y_slice, -7] - full_x[y_slice, -6]))
+        full_x[y_slice, -5] = full_x[y_slice, -6] + dx
+        full_x[y_slice, -4] = full_x[y_slice, -5] + dx
+        full_x[y_slice, -3] = full_x[y_slice, -4] + dx
+        full_x[y_slice, -2] = full_x[y_slice, -3] + dx
+        full_x[y_slice, -1] = full_x[y_slice, -2] + dx
+        # Copy the y coordinates into the halos
+        full_y[y_slice, -5] = full_y[y_slice, -6]
+        full_y[y_slice, -4] = full_y[y_slice, -6]
+        full_y[y_slice, -3] = full_y[y_slice, -6]
+        full_y[y_slice, -2] = full_y[y_slice, -6]
+        full_y[y_slice, -1] = full_y[y_slice, -6]
 
         # Negative y halos in block 2 are the first coordinate values in block 0
         full_x[4, x_slice] = block_data[0]['x'][1,:]
@@ -212,10 +270,20 @@ def fill_halo_coordinates(block_data, block_number):
         full_y[1, x_slice] = block_data[0]['y'][4,:]
         full_y[0, x_slice] = block_data[0]['y'][5,:]
 
-
-
         # Add y farfield outlet halos
+        # Add the extended positive y (farfield)
+        full_x[-5, x_slice] = full_x[-6, x_slice]
+        full_x[-4, x_slice] = full_x[-6, x_slice]
+        full_x[-3, x_slice] = full_x[-6, x_slice]
+        full_x[-2, x_slice] = full_x[-6, x_slice]
+        full_x[-1, x_slice] = full_x[-6, x_slice]
 
+        dy = np.abs((full_y[-7, x_slice] - full_y[-6, x_slice]))
+        full_y[-5, x_slice] = full_y[-6, x_slice] + dy
+        full_y[-4, x_slice] = full_y[-5, x_slice] + dy
+        full_y[-3, x_slice] = full_y[-4, x_slice] + dy
+        full_y[-2, x_slice] = full_y[-3, x_slice] + dy
+        full_y[-1, x_slice] = full_y[-2, x_slice] + dy
 
     return full_x, full_y
 
