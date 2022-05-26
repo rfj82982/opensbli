@@ -18,6 +18,7 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         ret.computation_name = None
         # Optional halo type
         ret.halos = None
+        ret.full_swap = False
         return ret
 
     @property

@@ -12,8 +12,8 @@ import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
     kernels = []
     for block in multiblock_descriptor.blocks:
-        arrays = [block.location_dataset(a) for a in dsets]
-        kernels += block.apply_interface_bc(arrays, multiblock_descriptor)
+        arrays = [block.location_dataset(a) for a in flatten(dsets)]
+        kernels += block.apply_interface_bc(arrays, multiblock_descriptor, full_halo_swap=True)
     return kernels
 
 ndim = 2
@@ -57,9 +57,9 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     equations = [Eq(conserve_vector[0], 0.5 * (conserve_vector[0] + wk[0]))]
     # for rhou,v
     for b0, b1 in zip(conserve_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, Eq(idx,0)), ExprCondPair(0.5* (b0 + b1), True)]
+        pairs = [ExprCondPair(0.0, Eq(idx,100000)), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,0)), ExprCondPair(0.5* (conserve_vector[-1] + wk[-1]), True)]
+    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,100000)), ExprCondPair(0.5* (conserve_vector[-1] + wk[-1]), True)]
     equations += [Eq(conserve_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
@@ -150,7 +150,8 @@ simulation_eq.apply_metrics(metriceq)
 
 # Specify the numerical schemes
 schemes = {}
-rk = RungeKuttaLS(3)
+# rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
 cent = StoreSome(4, 'u0 u1 T')
@@ -220,13 +221,13 @@ multi_block.set_block_boundaries(mb_bcs)
 
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
-# for no, block in enumerate(multi_block.blocks):
-#     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-#         filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF').equation_classes]
+for no, block in enumerate(multi_block.blocks):
+    if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Constant', Mach_correction=False, flux_type='GLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [DRPFilter(block, [0,1], width=9, q=simulation_eq.time_advance_arrays, optimized=False, sigma=0.1, wall_control=True).equation_classes]
+    filters[no] += [DRPFilter(block, [0,1], width=11, q=simulation_eq.time_advance_arrays, optimized=False, sigma=0.1, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
@@ -261,9 +262,18 @@ for no, eq in enumerate(b.list_of_equation_classes):
         eq.Kernels += [sponge_ker_block0, sponge_ker_block2]
         eq.boundary_kernels += wake_ker
 
+# Make some full swaps for interfaces before filtering
+filter_swaps = create_exchange_calls_codes(multi_block, simulation_eq.time_advance_arrays)
+for block in multi_block.blocks:
+    for no, eq in enumerate(block.list_of_equation_classes):
+        if isinstance(eq, UserDefinedEquations):
+            if eq.full_swap:
+                print("full swap")
+                eq.Kernels += filter_swaps
+
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
-OPSC(alg)
+OPSC(alg, OPS_diagnostics=2)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values

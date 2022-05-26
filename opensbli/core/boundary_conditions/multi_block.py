@@ -41,8 +41,8 @@ class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
         kernel.ranges[direction] = [block.ranges[direction][side]+left, block.ranges[direction][side]+right]
         return kernel
 
-    def apply_interface(self, arrays, block, multiblock_descriptor, other_arrays=None):
-        # halos, kernel = self.generate_boundary_kernel(block, self.bc_name)
+    def apply_interface(self, arrays, block, multiblock_descriptor, other_arrays=None, full_halo_swap=False):
+        arrays = flatten(arrays)
         other_block = multiblock_descriptor.get_block(self.match[0])
         if other_arrays:
             other_block_arrays = other_arrays[:]
@@ -52,6 +52,10 @@ class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
         # From corresponds to the block
         halos_block1 = self.get_halo_values(block)
         halos_block2 = self.get_halo_values(other_block)
+        # Swap all 5 halos if required, for wide stencil filters
+        if full_halo_swap:
+            halos_block1 = [[-5, 5] for _ in range(block.ndim)]
+            halos_block2 = [[-5, 5] for _ in range(block.ndim)]
 
         # Get the number of halos requred for block 2
         from_location = [d[0] for d in halos_block2]
@@ -97,8 +101,8 @@ class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
 
 class SharedInterfaceBC(InterfaceBC, BoundaryConditionBase, MultiBlockBoundary):
 
-    def apply_interface(self, arrays, block, multiblock_descriptor, other_arrays=None):
-        # halos, kernel = self.generate_boundary_kernel(block, self.bc_name)
+    def apply_interface(self, arrays, block, multiblock_descriptor, other_arrays=None, full_halo_swap=False):
+        arrays = flatten(arrays)
         other_block = multiblock_descriptor.get_block(self.match[0])
         if other_arrays:
             other_block_arrays = other_arrays[:]
@@ -108,6 +112,10 @@ class SharedInterfaceBC(InterfaceBC, BoundaryConditionBase, MultiBlockBoundary):
         # From corresponds to the block
         halos_block1 = self.get_halo_values(block)
         halos_block2 = self.get_halo_values(other_block)
+        # Swap all 5 halos if required, for wide stencil filters
+        if full_halo_swap:
+            halos_block1 = [[-5, 5] for _ in range(block.ndim)]
+            halos_block2 = [[-5, 5] for _ in range(block.ndim)]
 
         # Get the number of halos requred for block 2
         from_location = [d[0] for d in halos_block2]

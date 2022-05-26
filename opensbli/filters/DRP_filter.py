@@ -9,10 +9,11 @@ from opensbli.code_generation.algorithm.common import *
 from opensbli.utilities.user_defined_kernels import UserDefinedEquations
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 
+
 class DRPFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, width=11, q=None, optimized=False, sigma=0.1, wall_control=False):
+    def __init__(self, block, filter_directions, width=11, q=None, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a DRP filter with stencil width %d for block %d, in directions: %s." % (self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -22,11 +23,14 @@ class DRPFilter(object):
         self.filter_directions = filter_directions
         for x in filter_directions:
             assert isinstance(x, int)
+
+        # Interface swaps for multi-block
+        self.multi_block = multi_block
         # Arrays to filter
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
         self.freq = ConstantObject('filter_frequency')
-        self.freq.value = 25
+        self.freq.value = 10
         CTD.add_constant(self.freq)
         # Width and weightings of the filter
         self.generate_weights()
@@ -35,7 +39,6 @@ class DRPFilter(object):
         # Create the filter equations
         self.create_filter(block)
         return
-
 
     def detect_wall_boundaries(self):
         """ The shock-filter is turned off in the near-wall region. This function detects which directions, if any, have
@@ -91,14 +94,14 @@ class DRPFilter(object):
                     else:
                         wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
         # Check for block interfaces
-        for direction in range(self.ndim):
-            for side in [0,1]:
-                interface = self.interface_boundaries[direction][side]
-                if interface:
-                    if side == 0:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
-                    else:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+        # for direction in range(self.ndim):
+        #     for side in [0,1]:
+        #         interface = self.interface_boundaries[direction][side]
+        #         if interface:
+        #             if side == 0:
+        #                 wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
+        #             else:
+        #                 wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
         # No wall or interface, default condition is the sensor is not turned off
         wall_conditions += [ExprCondPair(1, True)]
         wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
@@ -162,6 +165,9 @@ class DRPFilter(object):
     def create_UDF(self, block, equations, direction, order):
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=False)
+        if order == 0 and block.blocknumber == 0:
+            # Mark as an explicit filter, to be used for full halo swaps
+            UDF.full_swap = True
         if order == 0:
             UDF.computation_name = 'Block %d: Zero the filter array' % block.blocknumber
         elif order == 1:
@@ -169,7 +175,7 @@ class DRPFilter(object):
         else:
             UDF.computation_name = 'Block %d: DRP filter update direction %s' % (block.blocknumber, block.direction_labels[direction])
         # Place the filter at the very end
-        UDF.order = 10000 + direction + order
+        UDF.order = order
         UDF.add_equations(equations)
         # # Attribute to modify ranges for non-periodic boundaries
         # if order is not 0 and self.modify_directions[direction]:
@@ -185,7 +191,6 @@ class DRPFilter(object):
         # Check for non-periodic boundaries
         if self.wall_control:
             self.detect_wall_boundaries()
-            self.detect_interface_boundaries()
         # Create a kernel at the end of the time loop, every iteration (no frequency)
         for direction in self.filter_directions:
             # Create the equations

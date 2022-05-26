@@ -15,16 +15,17 @@ def get_interface_bc(self):
                 interface_bcs += [bc]
     return interface_bcs
 
-def apply_interface_bc(self, arrays, multiblock_description):
+def apply_interface_bc(self, arrays, multiblock_description, full_halo_swap=False):
     kernels = []
     interface_bcs = self.get_interface_bc
     for bc in interface_bcs:
-        k = bc.apply_interface(arrays, self, multiblock_description)
+        k = bc.apply_interface(arrays, self, multiblock_description, full_halo_swap=full_halo_swap)
         if isinstance(k, list):
             kernels += k
         else:
             kernels += [k]
     return kernels
+
 # MBCHANGE
 SimulationBlock.get_interface_bc = get_interface_bc
 SimulationBlock.apply_interface_bc = apply_interface_bc
@@ -76,8 +77,7 @@ class MultiBlock():
     def discretise(self):
         for b in self.blocks:
             b.discretise()
-        # After discretisation apply the interface boundary conditions as this requires halos required to be populated
-        # for the other blocks
+        # After discretisation apply the interface boundary conditions as this requires halos required to be populated on the other blocks
         self.apply_interface_bc()
         return
     def apply_interface_bc(self):
