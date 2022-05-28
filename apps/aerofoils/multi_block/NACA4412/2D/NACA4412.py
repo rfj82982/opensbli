@@ -150,7 +150,6 @@ simulation_eq.apply_metrics(metriceq)
 
 # Specify the numerical schemes
 schemes = {}
-# rk = RungeKuttaLS(3, formulation='SSP')
 rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
@@ -229,6 +228,11 @@ for no, block in enumerate(multi_block.blocks):
 for no, block in enumerate(multi_block.blocks):
     filters[no] += [ExplicitFilter(block, [0,1], width=11, q=simulation_eq.time_advance_arrays, filter_type='Visbal', optimized=False, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
 
+# Add a binomial filter on the outlet boundary to kill reflections
+for no, block in enumerate(multi_block.blocks):
+    if no is not 1:
+        grid_condition = block.grid_indexes[0] >= 790
+        filters[no] += [BinomialFilter(block, order=8, grid_condition=grid_condition).equation_classes]
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
 multi_block.set_filters(filters)
@@ -278,7 +282,7 @@ OPSC(alg, OPS_diagnostics=2)
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt'] # strength of the free-stream filtering
-values = ['1.4', '0.72', '0.72', '50000.0', '0.0002', '500000', '0.1']
+values = ['1.4', '0.68', '0.72', '50000.0', '0.0002', '500000', '0.1']
 # Block 0
 constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
 values += ['801', '692', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)']
