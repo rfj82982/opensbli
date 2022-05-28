@@ -4,6 +4,9 @@
    @details
 """
 from opensbli.code_generation.algorithm.common import InTheSimulation, AfterSimulationEnds, BeforeSimulationStarts
+from opensbli.core.opensbliobjects import Globalvariable, ConstantObject
+from opensbli.core.datatypes import Int
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 from sympy import flatten
 
 
@@ -31,15 +34,23 @@ class iohdf5(opensbliIO):
             # Default IO type is write to hdf5
             ret.kwargs = {'iotype': "write"}
         ret.algorithm_place = []
-        ret.get_algorithm_location(save_every=save_every)
+        # Constant for file write frequency
+        if save_every:
+            cls.save_every = ConstantObject('write_output_file', integer=True)
+            cls.save_every._value = save_every
+            cls.save_every.datatype = Int()
+            CTD.add_constant(cls.save_every)
+        else:
+            cls.save_every = None
+        ret.get_algorithm_location()
         ret.arrays = []
         if arrays:
             ret.add_arrays(arrays)
         return ret
 
-    def get_algorithm_location(cls, save_every):
-        if save_every:
-            cls.algorithm_place += [InTheSimulation(save_every)]
+    def get_algorithm_location(cls):
+        if cls.save_every:
+            cls.algorithm_place += [InTheSimulation(cls.save_every)]
         if cls.kwargs['iotype'] == "write":
             cls.algorithm_place += [AfterSimulationEnds()]
         elif cls.kwargs['iotype'] == "read":
