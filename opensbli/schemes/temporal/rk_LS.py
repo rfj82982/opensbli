@@ -11,6 +11,7 @@ from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel
 from opensbli.core.datatypes import Int
 from opensbli.schemes.spatial.scheme import Scheme, TemporalSolution
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 
 class RungeKuttaLS(Scheme):
@@ -28,11 +29,15 @@ class RungeKuttaLS(Scheme):
 
     def __init__(cls, order, formulation=None, conservative=True):
         Scheme.__init__(cls, "RungeKutta", order)
-        if order == 3:  # 3rd order schemes are 3-stage
-            n_stages = order
-        elif order == 4:  # 4th order scheme is 5-stage
-            n_stages = order + 1
+        cls.solution = {}
+        cls.schemetype = "Temporal"
         cls.formulation = formulation
+        cls.conservative = conservative
+        # Create constants
+        cls.create_constants(order)
+        cls.add_constants()
+        # Update the RK coefficients
+        cls.get_coefficients
         if formulation == 'SSP':
             if order != 3:
                 raise ValueError("RK-SSP is only available for the 3rd order scheme.")
@@ -40,29 +45,41 @@ class RungeKuttaLS(Scheme):
                 print("An SSP Runge-Kutta scheme of order %d is being used for time-stepping." % order)
         else:
             print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
-        cls.schemetype = "Temporal"
+        return
+
+    def create_constants(cls, order):
+        if order == 3:  # 3rd order schemes are 3-stage
+            n_stages = order
+        elif order == 4:  # 4th order scheme is 5-stage
+            n_stages = order + 1
         cls.stage = Idx('stage', n_stages)
         cls.solution_coeffs = ConstantIndexed('rkB', cls.stage)
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
-        from opensbli.core.kernel import ConstantsToDeclare as CTD
-        # Update coefficient values
-        cls.get_coefficients
-        niter_symbol = ConstantObject('niter', integer=True)
-        niter_symbol.datatype = Int()
+        cls.niter_symbol = ConstantObject('niter', integer=True)
+        cls.niter_symbol.datatype = Int()
         cls.iteration_number = Globalvariable("iter", integer=True)
         cls.iteration_number._value = None
         cls.iteration_number.datatype = Int()
-        # Whether the variables are in conservative form or not
-        cls.conservative = conservative
         # As iteration number is used in a for loop we dont add them to constants to declare
-        cls.temporal_iteration = Idx(cls.iteration_number, niter_symbol)
-        CTD.add_constant(niter_symbol)
-        CTD.add_constant(cls.solution_coeffs)
-        CTD.add_constant(cls.stage_coeffs)
-        cls.solution = {}
+        cls.temporal_iteration = Idx(cls.iteration_number, cls.niter_symbol)
         cls.constant_time_step = True
         cls.time_step = ConstantObject("dt")
+        # Variable to control restarting
+        cls.restart = ConstantObject('restart', integer=True)
+        cls.restart.datatype = Int()
+        cls.restart.value = 0
+        # Variable to hold the simulation time
+        cls.start_time = ConstantObject('tstart')
+        cls.start_time.value = 0.0
+        return
+
+    def add_constants(cls):
+        CTD.add_constant(cls.niter_symbol)
+        CTD.add_constant(cls.solution_coeffs)
+        CTD.add_constant(cls.stage_coeffs)
         CTD.add_constant(cls.time_step)
+        CTD.add_constant(cls.restart)
+        CTD.add_constant(cls.start_time)
         return
 
     @property
@@ -94,6 +111,8 @@ class RungeKuttaLS(Scheme):
             A1, A2, A3, A4, A5 = 0, -0.4178904745, -1.192151694643, -1.697784692471, -1.514183444257
             B1, B2, B3, B4, B5 = 0.1496590219993, 0.3792103129999, 0.8229550293869, 0.6994504559488, 0.1530572479681
             cls.solution_coeffs.value = [B1, B2, B3, B4, B5]
+            # print(cls.solution_coeffs.value)
+            # exit()
             cls.stage_coeffs.value = [A1, A2, A3, A4, A5]
         else:
             raise NotImplementedError("Only 3rd and 4th order RK schemes are currently implemented.")

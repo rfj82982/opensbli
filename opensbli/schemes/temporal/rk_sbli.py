@@ -19,32 +19,48 @@ class RungeKutta(Scheme):
         :arg int order: The order of accuracy of the scheme."""
     def __init__(cls, order, constant_dt=None):
         Scheme.__init__(cls, "RungeKutta", order)
-        if order is not 3:
-            raise NotImplementedError("This Runge-Kutta scheme is only defined for 3rd order. For 4th order please use the RungeKuttaLS class instead.")
+        cls.solution = {}
         cls.schemetype = "Temporal"
-        cls.nloops = 2
-        cls.stage = Idx('stage', order)
-        cls.solution_coeffs = ConstantIndexed('rkold', cls.stage)
-        cls.stage_coeffs = ConstantIndexed('rknew', cls.stage)
+        # Create constants
+        cls.create_constants(order)
         # Update coefficient values
         cls.get_coefficients
-        niter_symbol = ConstantObject('niter', integer=True)
-        niter_symbol.datatype = Int()
+        cls.add_constants()
+        if order is not 3:
+            raise NotImplementedError("This Runge-Kutta scheme is only defined for 3rd order. For 4th order please use the RungeKuttaLS class instead.")
+        print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
+        return
+
+    def create_constants(cls, order):
+        n_stages = 3
+        cls.stage = Idx('stage', n_stages)
+        cls.solution_coeffs = ConstantIndexed('rkold', cls.stage)
+        cls.stage_coeffs = ConstantIndexed('rknew', cls.stage)
+        cls.niter_symbol = ConstantObject('niter', integer=True)
+        cls.niter_symbol.datatype = Int()
         cls.iteration_number = Globalvariable("iter", integer=True)
         cls.iteration_number._value = None
         cls.iteration_number.datatype = Int()
         # As iteration number is used in a for loop we dont add them to constants to declare
-        cls.temporal_iteration = Idx(cls.iteration_number, niter_symbol)
-        CTD.add_constant(niter_symbol)
+        cls.temporal_iteration = Idx(cls.iteration_number, cls.niter_symbol)
+        cls.constant_time_step = True
+        cls.time_step = ConstantObject("dt")
+        # Variable to control restarting
+        cls.restart = ConstantObject('restart', integer=True)
+        cls.restart.datatype = Int()
+        cls.restart.value = 0
+        # Variable to hold the simulation time
+        cls.start_time = ConstantObject('tstart')
+        cls.start_time.value = 0.0
+        return
+
+    def add_constants(cls):
+        CTD.add_constant(cls.niter_symbol)
         CTD.add_constant(cls.solution_coeffs)
         CTD.add_constant(cls.stage_coeffs)
-        cls.solution = {}
-        if constant_dt:
-            raise NotImplementedError("")
-        else:
-            cls.constant_time_step = True
-        cls.time_step = ConstantObject("dt")
         CTD.add_constant(cls.time_step)
+        CTD.add_constant(cls.restart)
+        CTD.add_constant(cls.start_time)
         return
 
     @property
