@@ -104,8 +104,8 @@ mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
 momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
 energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
 # Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (1.0/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
+stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
+heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
 substitutions = [stress_tensor, heat_flux]
 # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
@@ -223,11 +223,11 @@ multi_block.set_block_boundaries(mb_bcs)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Constant', Mach_correction=False, flux_type='GLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='GLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [DRPFilter(block, [0,1], width=11, q=simulation_eq.time_advance_arrays, optimized=False, sigma=0.1, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1], width=11, q=simulation_eq.time_advance_arrays, filter_type='Visbal', optimized=False, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
@@ -236,7 +236,7 @@ multi_block.set_filters(filters)
 # HDF5 input/output
 x,y= symbols("x0, x1", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=10000, **kwargs)
+h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays + [x, y])
 multi_block.setio([h5])
 # Read in the grid file
@@ -278,7 +278,7 @@ OPSC(alg, OPS_diagnostics=2)
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt'] # strength of the free-stream filtering
-values = ['1.4', '0.5', '0.72', '50000.0', '0.00005', '500000', '0.01']
+values = ['1.4', '0.72', '0.72', '50000.0', '0.0002', '500000', '0.1']
 # Block 0
 constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
 values += ['801', '692', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)']

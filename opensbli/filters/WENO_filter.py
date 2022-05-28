@@ -333,7 +333,7 @@ class WENOFilter(NonSimulationEquations):
         if self.dissipation_sensor == 'Ducros': 
             formula = kappa
             for direction in range(self.ndim):
-                for location in [-2, -1, 0, 1, 2]:
+                for location in [-3, -2, -1, 0, 1, 2, 3]:
                     formula = Max(formula, increment_dataset(kappa, direction, location))
             kappa_max = GridVariable('kappa_max')
             modified_equations += [OpenSBLIEq(kappa_max, formula)]
@@ -383,7 +383,8 @@ class WENOFilter(NonSimulationEquations):
 
     def main(self, scheme_order, block):
         # Counter to order the kernels
-        self.component_counter = block.blocknumber*10
+        # Put the WENO filtering kernels at the very end of the time loop
+        self.component_counter = block.blocknumber*1000
         # Create the equations for WENO
         eqn = self.create_weno_equations()
         # Convert the equations to datasets on this block

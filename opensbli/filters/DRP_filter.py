@@ -1,7 +1,7 @@
 """ David J. Lusher 09/21. Dispersion Relation Preserving (DRP) explicit filters."""
 
 from opensbli import *
-from sympy import pprint, Piecewise
+from sympy import pprint, Piecewise, factor
 from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
@@ -10,32 +10,39 @@ from opensbli.utilities.user_defined_kernels import UserDefinedEquations
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 
-class DRPFilter(object):
+class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, width=11, q=None, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='Visbal', width=11, q=None, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
-        print("Using a DRP filter with stencil width %d for block %d, in directions: %s." % (self.width, block.blocknumber, [directions[x] for x in filter_directions]))
+        print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
+        if multi_block:
+            self.nblocks = multi_block.nblocks
+        else:
+            self.nblocks = 1
         for x in filter_directions:
             assert isinstance(x, int)
-
-        # Interface swaps for multi-block
-        self.multi_block = multi_block
+        self.filter_type = filter_type
         # Arrays to filter
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
         self.freq = ConstantObject('filter_frequency')
         self.freq.value = 10
         CTD.add_constant(self.freq)
-        # Width and weightings of the filter
-        self.generate_weights()
         self.sigma = ConstantObject('sigma_filt')
         self.sigma.value = sigma
+        # Generate the filter offset grid locations
+        self.locations = [i for i in range(-int(self.width/2.0), int(self.width/2.0)+1)]
+        # Generate the coefficients
+        if self.filter_type is 'DRP':
+            self.generate_DRP_weights()
+        else:
+            self.generate_Visbal_weights()
         # Create the filter equations
         self.create_filter(block)
         return
@@ -107,7 +114,7 @@ class DRPFilter(object):
         wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
         return wall_var, wall_equations
 
-    def generate_weights(self):
+    def generate_DRP_weights(self):
         """ Weights are symmetric about the central point."""
         if self.width == 9:
             if self.optimized:
@@ -129,19 +136,39 @@ class DRPFilter(object):
                 self.weights += [0.190899511506] + self.weights[::-1]
             else:
                 self.weights = [Rational(1,4096),Rational(-3,1024),Rational(33,2048),Rational(-55,1024),Rational(495,4096),Rational(-99,512)]
-                self.weights += [Rational(231,1024)] + self.weights[::-1]
-        self.locations = [i for i in range(-int(self.width/2.0), int(self.width/2.0)+1)]        
+                self.weights += [Rational(231,1024)] + self.weights[::-1]        
+        return
+
+    def generate_Visbal_weights(self):
+        """ Weights are symmetric about the central point. Taken from M. Visbal, D. Gaitonde,
+        On the use of higher-order finite-difference schemes on curvilinear and deforming meshes. JoCP 181, 155-185 (2002)."""
+        if self.width == 3:
+            self.weights = [Rational(1,2)]
+            self.weights += [Rational(1,2)] + self.weights[::-1]
+        elif self.width == 5:
+            self.weights = [Rational(-1,8), Rational(1,2)]
+            self.weights += [Rational(5,8)] + self.weights[::-1]
+        elif self.width == 7:
+            self.weights = [Rational(1,32), Rational(-3,16), Rational(15,32)]
+            self.weights += [Rational(11,16)] + self.weights[::-1]
+        elif self.width == 9:
+            self.weights = [Rational(-1,128), Rational(1,16), Rational(-7,32), Rational(7,16)]
+            self.weights += [Rational(93,128)] + self.weights[::-1]
+        elif self.width == 11:
+            self.weights = [Rational(1,512), Rational(-5,256), Rational(45,512), Rational(-15,64), Rational(105,256)]
+            self.weights += [Rational(193,256)] + self.weights[::-1]        
         return
 
 
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
+        self.generate_DRP_weights()
         output = []
         for dset_id, dset in enumerate(self.q_vector):
             stencil = []
             for i, location in enumerate(self.locations):
                 stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
-            output += [OpenSBLIEq(self.temp_arrays[dset_id], sum(stencil))]
+            output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(sum(stencil)))]
         return output
 
     def zero_temp_arrays(self):
@@ -162,40 +189,42 @@ class DRPFilter(object):
             update += [OpenSBLIEq(dset, dset - wall_var*self.sigma*self.temp_arrays[dset_id])]
         return application, update
 
-    def create_UDF(self, block, equations, direction, order):
+    def create_UDF(self, block, equations, direction, order, UDF_type):
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=False)
         if order == 0 and block.blocknumber == 0:
             # Mark as an explicit filter, to be used for full halo swaps
             UDF.full_swap = True
-        if order == 0:
+        if UDF_type is 'Zeroing':
             UDF.computation_name = 'Block %d: Zero the filter array' % block.blocknumber
-        elif order == 1:
-            UDF.computation_name = 'Block %d: DRP filter calculation direction %s' % (block.blocknumber, block.direction_labels[direction])
+        elif UDF_type is 'Calculation':
+            UDF.computation_name = 'Block %d: %s filter calculation direction %s' % (block.blocknumber, self.filter_type, block.direction_labels[direction])
+        elif UDF_type is 'Update':
+            UDF.computation_name = 'Block %d: %s filter update direction %s' % (block.blocknumber, self.filter_type, block.direction_labels[direction])
         else:
-            UDF.computation_name = 'Block %d: DRP filter update direction %s' % (block.blocknumber, block.direction_labels[direction])
-        # Place the filter at the very end
+            raise ValueError("The UDF should be one of the above actions.")
+        # Ordering of the filter operations to fix the order of the kernel calls in the code
         UDF.order = order
         UDF.add_equations(equations)
-        # # Attribute to modify ranges for non-periodic boundaries
-        # if order is not 0 and self.modify_directions[direction]:
-        #     UDF.modify_kernel_range = self.non_periodic
-        #     UDF.depth = self.depth
         return UDF
 
     def create_filter(self, block):
         self.equation_classes = []
         # Zero the arrays
         zeroed = self.zero_temp_arrays()
-        self.equation_classes += [self.create_UDF(block, zeroed, 0, 0)]
+        self.equation_classes += [self.create_UDF(block, zeroed, 0, 0+block.blocknumber, 'Zeroing')]
         # Check for non-periodic boundaries
         if self.wall_control:
             self.detect_wall_boundaries()
         # Create a kernel at the end of the time loop, every iteration (no frequency)
+        start_number = block.blocknumber*10 + self.nblocks
         for direction in self.filter_directions:
             # Create the equations
             application, update = self.create_equations(block, direction)
-            filter1 = self.create_UDF(block, application, direction, 1)
-            filter2 = self.create_UDF(block, update, direction, 2)
+            filter1 = self.create_UDF(block, application, direction, start_number, 'Calculation')
+            start_number += 1
+            filter2 = self.create_UDF(block, update, direction, start_number, 'Update')
+            start_number += 1
             self.equation_classes += [filter1, filter2]
+            
         return
