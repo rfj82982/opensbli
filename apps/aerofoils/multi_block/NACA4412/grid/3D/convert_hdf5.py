@@ -53,11 +53,260 @@ def output_hdf5(array, array_name, halos, npoints, block):
                 set_hdf5_metadata(dset, halos, npoints, b)
     return
 
+def create_z_coordinates(full_z):
+    full_shape = full_z.shape
+    x_slice = np.s_[nhalo[1]:full_shape[2] -nhalo[1]]
+    y_slice = np.s_[nhalo[0]:full_shape[1] -nhalo[0]]
+
+    # Uniform spacing in the span
+    dz = Lz / (float(nz))
+    print("Grid spacing in z is: {:.5f}".format(dz))
+    z_coordinates = [k*dz for k in range(full_z.shape[0] - 2*nhalo[2])]
+    zm = [z_coordinates[0] - k*dz for k in reversed(range(1, nhalo[2]+1))]
+    zp = [z_coordinates[-1] + k*dz for k in range(1, nhalo[2]+1)]
+    z_coordinates = np.around(np.array(zm + z_coordinates + zp), decimals=10)
+    print("Z coordinates including halo points are:", z_coordinates)
+    for k in range(full_z.shape[0]):
+        full_z[k, :, :] = np.full((full_shape[1], full_shape[2]), z_coordinates[k])
+    return full_z
+
+
+def fill_halo_coordinates(block_data, block_number):
+    x, y = block_data[block_number]['x'], block_data[block_number]['y']
+    # Create an array with zeros padded around the data
+    shape = [nz] + list(x.shape) 
+    print(shape)
+    new_shape = tuple([shape[i]+ 2*nhalo[i] for i in range(ndim)])
+    print("Reversed shape for C-style indexing", new_shape)
+    # Full arrays with halo points on the outside
+    full_x = np.zeros(new_shape)
+    full_y = np.zeros(new_shape)
+    full_z = np.zeros(new_shape) 
+
+    # Fill out the interior data
+    # Create slices of the interior points to reuse (Nz, Ny, Nz) (they have been transposed into C style)
+    x_slice = np.s_[nhalo[1]:new_shape[2] -nhalo[1]]
+    y_slice = np.s_[nhalo[0]:new_shape[1] -nhalo[0]]
+    z_slice = np.s_[nhalo[2]:new_shape[0] -nhalo[2]]
+
+    # Filling out the full data
+    for k in range(new_shape[0]):        
+        full_x[k, y_slice, x_slice] = x
+        full_y[k, y_slice, x_slice] = y
+
+    full_z = create_z_coordinates(full_z)
+
+    for k in range(new_shape[0]):
+        # Bottom right wake block
+        if block_number == 0:
+            # Negative x halos in block 0 are the first coordinate values in block 1 (Nz, Ny, Nx)
+            ## Starting from index 0 because we have already taken off one line of coordinates from block 1
+            full_x[k, y_slice, 4] = block_data[1]['x'][:,0]
+            full_x[k, y_slice, 3] = block_data[1]['x'][:,1]
+            full_x[k, y_slice, 2] = block_data[1]['x'][:,2]
+            full_x[k, y_slice, 1] = block_data[1]['x'][:,3]
+            full_x[k, y_slice, 0] = block_data[1]['x'][:,4]
+
+            full_y[k, y_slice, 4] = block_data[1]['y'][:,0]
+            full_y[k, y_slice, 3] = block_data[1]['y'][:,1]
+            full_y[k, y_slice, 2] = block_data[1]['y'][:,2]
+            full_y[k, y_slice, 1] = block_data[1]['y'][:,3]
+            full_y[k, y_slice, 0] = block_data[1]['y'][:,4]
+
+            # Positive x (farfield) add with constant spacing
+            dx = np.abs((full_x[k, y_slice, -7] - full_x[k, y_slice, -6]))
+            full_x[k, y_slice, -5] = full_x[k, y_slice, -6] + dx
+            full_x[k, y_slice, -4] = full_x[k, y_slice, -5] + dx
+            full_x[k, y_slice, -3] = full_x[k, y_slice, -4] + dx
+            full_x[k, y_slice, -2] = full_x[k, y_slice, -3] + dx
+            full_x[k, y_slice, -1] = full_x[k, y_slice, -2] + dx
+            # Copy the y coordinates into the halos
+            full_y[k, y_slice, -5] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -4] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -3] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -2] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -1] = full_y[k, y_slice, -6]
+            # Add the extended positive y (farfield)
+            full_x[k, -5, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -4, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -3, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -2, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -1, x_slice] = full_x[k, -6, x_slice]
+
+            dy = np.abs((full_y[k, -7, x_slice] - full_y[k, -6, x_slice]))
+            full_y[k, -5, x_slice] = full_y[k, -6, x_slice] + dy
+            full_y[k, -4, x_slice] = full_y[k, -5, x_slice] + dy
+            full_y[k, -3, x_slice] = full_y[k, -4, x_slice] + dy
+            full_y[k, -2, x_slice] = full_y[k, -3, x_slice] + dy
+            full_y[k, -1, x_slice] = full_y[k, -2, x_slice] + dy
+
+            # Negative y halos in block 0 are the first coordinate values in block 2
+            full_x[k, 4, x_slice] = block_data[2]['x'][1,:]
+            full_x[k, 3, x_slice] = block_data[2]['x'][2,:]
+            full_x[k, 2, x_slice] = block_data[2]['x'][3,:]
+            full_x[k, 1, x_slice] = block_data[2]['x'][4,:]
+            full_x[k, 0, x_slice] = block_data[2]['x'][5,:]
+
+            full_y[k, 4, x_slice] = block_data[2]['y'][1,:]
+            full_y[k, 3, x_slice] = block_data[2]['y'][2,:]
+            full_y[k, 2, x_slice] = block_data[2]['y'][3,:]
+            full_y[k, 1, x_slice] = block_data[2]['y'][4,:]
+            full_y[k, 0, x_slice] = block_data[2]['y'][5,:]
+
+        # Aerofoil block
+        elif block_number == 1:
+            # Negative x halos in block 1 are the first coordinate values in block 1
+            full_x[k, y_slice, 4] = block_data[0]['x'][:,0]
+            full_x[k, y_slice, 3] = block_data[0]['x'][:,1]
+            full_x[k, y_slice, 2] = block_data[0]['x'][:,2]
+            full_x[k, y_slice, 1] = block_data[0]['x'][:,3]
+            full_x[k, y_slice, 0] = block_data[0]['x'][:,4]
+
+            full_y[k, y_slice, 4] = block_data[0]['y'][:,0]
+            full_y[k, y_slice, 3] = block_data[0]['y'][:,1]
+            full_y[k, y_slice, 2] = block_data[0]['y'][:,2]
+            full_y[k, y_slice, 1] = block_data[0]['y'][:,3]
+            full_y[k, y_slice, 0] = block_data[0]['y'][:,4]
+
+        #   # Positive x halos in block 1 are the first coordinate values in block 2
+            full_x[k, y_slice, -5] = block_data[2]['x'][:,0]
+            full_x[k, y_slice, -4] = block_data[2]['x'][:,1]
+            full_x[k, y_slice, -3] = block_data[2]['x'][:,2]
+            full_x[k, y_slice, -2] = block_data[2]['x'][:,3]
+            full_x[k, y_slice, -1] = block_data[2]['x'][:,4]
+
+            full_y[k, y_slice, -5] = block_data[2]['y'][:,0]
+            full_y[k, y_slice, -4] = block_data[2]['y'][:,1]
+            full_y[k, y_slice, -3] = block_data[2]['y'][:,2]
+            full_y[k, y_slice, -2] = block_data[2]['y'][:,3]
+            full_y[k, y_slice, -1] = block_data[2]['y'][:,4]
+
+            # Below the wall coordinates ## CHECK again later
+            full_x[k, 4, x_slice] = full_x[k, 5, x_slice] 
+            full_x[k, 3, x_slice] = full_x[k, 5, x_slice] 
+            full_x[k, 2, x_slice] = full_x[k, 5, x_slice] 
+            full_x[k, 1, x_slice] = full_x[k, 5, x_slice] 
+            full_x[k, 0, x_slice] = full_x[k, 5, x_slice] 
+            dy = np.abs((full_y[k, 6, x_slice] - full_y[k, 5, x_slice])) 
+            full_y[k, 4, x_slice] = full_y[k, 1, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, 3, x_slice] = full_y[k, 2, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, 2, x_slice] = full_y[k, 3, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, 1, x_slice] = full_y[k, 4, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, 0, x_slice] = full_y[k, 5, x_slice] + full_y[k, 6, x_slice]*dy
+
+            # Farfield, positive y
+            dx = np.abs((full_x[k, y_slice, -7] - full_x[k, y_slice, -6]))
+            full_x[k, -5, x_slice] = full_x[k, -6, x_slice] 
+            full_x[k, -4, x_slice] = full_x[k, -6, x_slice] 
+            full_x[k, -3, x_slice] = full_x[k, -6, x_slice] 
+            full_x[k, -2, x_slice] = full_x[k, -6, x_slice] 
+            full_x[k, -1, x_slice] = full_x[k, -6, x_slice] 
+            dy = np.abs((full_y[k, -7, x_slice] - full_y[k, -6, x_slice])) 
+            full_y[k, -5, x_slice] = full_y[k, -6, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, -4, x_slice] = full_y[k, -5, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, -3, x_slice] = full_y[k, -4, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, -2, x_slice] = full_y[k, -3, x_slice] + full_y[k, 6, x_slice]*dy
+            full_y[k, -1, x_slice] = full_y[k, -2, x_slice] + full_y[k, 6, x_slice]*dy
+
+        elif block_number == 2:
+            # Negative x halos in block 2 are the last coordinate values in block 1
+            full_x[k, y_slice, 4] = block_data[1]['x'][:,-1]
+            full_x[k, y_slice, 3] = block_data[1]['x'][:,-2]
+            full_x[k, y_slice, 2] = block_data[1]['x'][:,-3]
+            full_x[k, y_slice, 1] = block_data[1]['x'][:,-4]
+            full_x[k, y_slice, 0] = block_data[1]['x'][:,-5]
+
+            full_y[k, y_slice, 4] = block_data[1]['y'][:,-5]
+            full_y[k, y_slice, 3] = block_data[1]['y'][:,-4]
+            full_y[k, y_slice, 2] = block_data[1]['y'][:,-3]
+            full_y[k, y_slice, 1] = block_data[1]['y'][:,-2]
+            full_y[k, y_slice, 0] = block_data[1]['y'][:,-1]
+
+            # Add x farfield outlet halos
+            dx = np.abs((full_x[k, y_slice, -7] - full_x[k, y_slice, -6]))
+            full_x[k, y_slice, -5] = full_x[k, y_slice, -6] + dx
+            full_x[k, y_slice, -4] = full_x[k, y_slice, -5] + dx
+            full_x[k, y_slice, -3] = full_x[k, y_slice, -4] + dx
+            full_x[k, y_slice, -2] = full_x[k, y_slice, -3] + dx
+            full_x[k, y_slice, -1] = full_x[k, y_slice, -2] + dx
+            # Copy the y coordinates into the halos
+            full_y[k, y_slice, -5] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -4] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -3] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -2] = full_y[k, y_slice, -6]
+            full_y[k, y_slice, -1] = full_y[k, y_slice, -6]
+
+            # Negative y halos in block 2 are the first coordinate values in block 0
+            full_x[k, 4, x_slice] = block_data[0]['x'][1,:]
+            full_x[k, 3, x_slice] = block_data[0]['x'][2,:]
+            full_x[k, 2, x_slice] = block_data[0]['x'][3,:]
+            full_x[k, 1, x_slice] = block_data[0]['x'][4,:]
+            full_x[k, 0, x_slice] = block_data[0]['x'][5,:]
+
+            full_y[k, 4, x_slice] = block_data[0]['y'][1,:]
+            full_y[k, 3, x_slice] = block_data[0]['y'][2,:]
+            full_y[k, 2, x_slice] = block_data[0]['y'][3,:]
+            full_y[k, 1, x_slice] = block_data[0]['y'][4,:]
+            full_y[k, 0, x_slice] = block_data[0]['y'][5,:]
+
+            # Add y farfield outlet halos
+            # Add the extended positive y (farfield)
+            full_x[k, -5, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -4, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -3, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -2, x_slice] = full_x[k, -6, x_slice]
+            full_x[k, -1, x_slice] = full_x[k, -6, x_slice]
+
+            dy = np.abs((full_y[k, -7, x_slice] - full_y[k, -6, x_slice]))
+            full_y[k, -5, x_slice] = full_y[k, -6, x_slice] + dy
+            full_y[k, -4, x_slice] = full_y[k, -5, x_slice] + dy
+            full_y[k, -3, x_slice] = full_y[k, -4, x_slice] + dy
+            full_y[k, -2, x_slice] = full_y[k, -3, x_slice] + dy
+            full_y[k, -1, x_slice] = full_y[k, -2, x_slice] + dy
+
+    return full_x,  full_y, full_z
+
+def read_blocks(block_data):
+    total_grid_points = 0
+    for block_number, block in enumerate(input_files):
+        print("\n\nReading from %s." % block)
+        f = open(block)
+        nx,ny = map(int, f.readlines()[0].split())
+        print("Nx, Ny from the input file for block %d" % block_number, nx, ny)
+        f.close()
+        # Read the data
+        x,y,z = np.loadtxt(block, skiprows =1, unpack=True)
+        x = x.reshape(nx, ny)
+        y = y.reshape(nx, ny)
+    # Sharp trailing edge -> take away one point at the start and end of the grid in x, from block 2
+        if block_number == 1:
+            if sharp_TE:
+                print("Taking off 2 columns in x direction for the sharp trailing edge.")
+                x = x[1:-1,:]
+                y = y[1:-1,:]
+        shape = list(x.shape)
+        total = shape[0]*shape[1]
+        print("Block %d has %e grid points." % (block_number, int(total)))
+        total_grid_points +=  total
+        print("Original 2D shape: %s" % shape)
+        # Transpose into OPS format
+        x, y = np.transpose(x), np.transpose(y)
+        # Save this block data to the dictionary
+        block_data[block_number] = {'x': x, 'y': y}
+    # Finish
+    print("Total grid points: %g" % total_grid_points)
+    return
+
+
+block_data = {}
+
 
 # Specify the input grid files
 input_files = ["../Bl1.dat", "../Bl2.dat","../Bl3.dat"]
 # Number of halo points to add on each side of each direction (default 5)
-nhalo = [5, 5, 5] # was 5, 5, 2
+nhalo = [5, 5, 5]
+ndim = 3
+nblocks = len(input_files)
 # Output grid file name
 fname = "data.h5"
 h5f = h5py.File(fname, 'w')
@@ -65,7 +314,8 @@ h5f = h5py.File(fname, 'w')
 # Number of points in the periodic span.
 nz = 5
 # Grid spacing
-dz = 0.02
+# Span width
+Lz = 0.01
 
 sharp_TE = True
 
@@ -73,65 +323,105 @@ total_grid_points = 0
 
 # Loop over all of the grid points
 for block_number, block in enumerate(input_files):
-    print("\n\n\nReading from %s." % block)
-    f = open(block)
-    nx,ny = map(int, f.readlines()[0].split())
-    print("Nx, Ny from the input file for block %d" % block_number, nx, ny)
-    f.close()
-    # Read the data
-    x,y,z = np.loadtxt(block, skiprows =1, unpack=True)
-    x = x.reshape(nx, ny)
-    y = y.reshape(nx, ny)
-    
-    # Sharp trailing edge -> take away one point at the start and end of the grid in x, from block 2
-    if block_number == 1:
-        if sharp_TE:
-            print("Taking off 2 columns in x direction for the sharp trailing edge.")
-            x = x[1:-1,:]
-            y = y[1:-1,:]
-    shape = list(x.shape) +[nz]
-    total = shape[0]*shape[1]*shape[2]
-    print("Block %d has %e grid points." % (block_number, int(total)))
-    total_grid_points +=  total
-    print("Original 3D shape: %s" % shape)
-    new_shape = tuple(reversed([shape[i]+ 2*nhalo[i] for i in range(3)]))
-    print("Reversed shape for C-style indexing", new_shape)
-    #exit()
-    newx = np.zeros(new_shape)
-    newy = np.zeros(new_shape)
-    newz = np.zeros(new_shape)
-    for k in range(nz + 2*nhalo[2]):
-        zloc = dz * float(k - nhalo[2])
-        # print(zloc)
-        z = np.full(x.shape, zloc)
-        #print z.shape
-        newx[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(x)
-        newy[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(y)
-        newz[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(z)
+    # Read all of the blocks at once
+    if block_number == 0:
+        print("Reading all of the x,y data for the %d blocks" % nblocks)
+        read_blocks(block_data)
 
+    x, y = block_data[block_number]['x'], block_data[block_number]['y']
+    # Extend the coordinates into the halo points to avoid issues with the metric calculations
+    full_x, full_y, full_z = fill_halo_coordinates(block_data, block_number)
+
+    # Shape without halo points (Nx, Ny, Nz) required for OPS attribute, without halos
+    OPS_shape = list(x.shape)[::-1] + [nz]
     # Make an OpenSBLI block
     b = SimulationBlock(3, block_number=block_number)
     g1 = h5f.create_group(b.blockname)
     halo = [[-i for i in nhalo], nhalo]
     apply_group_attributes(g1, b)
     block_dset_name = b.location_dataset("x0").base
-    print("OpenSBLI block shape without halo points: %s" % shape)
-
+    print("OpenSBLI block shape without halo points: %s" % OPS_shape)
     # Create x coordinates
-    dset = g1.create_dataset('%s' % (block_dset_name), data=newx)
-    set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+    dset = g1.create_dataset('%s' % (block_dset_name), data=full_x)
+    set_hdf5_metadata(dset, halos=halo, npoints=[OPS_shape[0], OPS_shape[1], OPS_shape[2]], block=b)
     # Create y coordinates
     block_dset_name = b.location_dataset("x1").base
-    dset = g1.create_dataset('%s' % (block_dset_name), data=newy)
-    set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+    dset = g1.create_dataset('%s' % (block_dset_name), data=full_y)
+    set_hdf5_metadata(dset, halos=halo, npoints=[OPS_shape[0], OPS_shape[1], OPS_shape[2]], block=b)
     # Create z coordinates
     block_dset_name = b.location_dataset("x2").base
-    dset = g1.create_dataset('%s' % (block_dset_name), data=newz)
-    set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+    dset = g1.create_dataset('%s' % (block_dset_name), data=full_z)
+    set_hdf5_metadata(dset, halos=halo, npoints=[OPS_shape[0], OPS_shape[1], OPS_shape[2]], block=b)
     
     print("Length in x for block %d:" % block_number, abs(np.amin(x) - np.amax(x)))
     print("Length in y for block %d:" % block_number, abs(np.amin(y) - np.amax(y)))
-    print("Length in z for block %d:" % block_number, zloc)
-print("Total grid points: %g" % total_grid_points)
-
+    # print("Length in z for block %d:" % block_number, abs(np.amin(z) - np.amax(z)))
 h5f.close()
+
+
+
+
+# # Loop over all of the grid points
+# for block_number, block in enumerate(input_files):
+#     print("\n\n\nReading from %s." % block)
+#     f = open(block)
+#     nx,ny = map(int, f.readlines()[0].split())
+#     print("Nx, Ny from the input file for block %d" % block_number, nx, ny)
+#     f.close()
+#     # Read the data
+#     x,y,z = np.loadtxt(block, skiprows =1, unpack=True)
+#     x = x.reshape(nx, ny)
+#     y = y.reshape(nx, ny)
+    
+#     # Sharp trailing edge -> take away one point at the start and end of the grid in x, from block 2
+#     if block_number == 1:
+#         if sharp_TE:
+#             print("Taking off 2 columns in x direction for the sharp trailing edge.")
+#             x = x[1:-1,:]
+#             y = y[1:-1,:]
+#     shape = list(x.shape) +[nz]
+#     total = shape[0]*shape[1]*shape[2]
+#     print("Block %d has %e grid points." % (block_number, int(total)))
+#     total_grid_points +=  total
+#     print("Original 3D shape: %s" % shape)
+#     new_shape = tuple(reversed([shape[i]+ 2*nhalo[i] for i in range(3)]))
+#     print("Reversed shape for C-style indexing", new_shape)
+#     #exit()
+#     newx = np.zeros(new_shape)
+#     newy = np.zeros(new_shape)
+#     newz = np.zeros(new_shape)
+#     for k in range(nz + 2*nhalo[2]):
+#         zloc = dz * float(k - nhalo[2])
+#         # print(zloc)
+#         z = np.full(x.shape, zloc)
+#         #print z.shape
+#         newx[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(x)
+#         newy[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(y)
+#         newz[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(z)
+
+#     # Make an OpenSBLI block
+#     b = SimulationBlock(3, block_number=block_number)
+#     g1 = h5f.create_group(b.blockname)
+#     halo = [[-i for i in nhalo], nhalo]
+#     apply_group_attributes(g1, b)
+#     block_dset_name = b.location_dataset("x0").base
+#     print("OpenSBLI block shape without halo points: %s" % shape)
+
+#     # Create x coordinates
+#     dset = g1.create_dataset('%s' % (block_dset_name), data=newx)
+#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+#     # Create y coordinates
+#     block_dset_name = b.location_dataset("x1").base
+#     dset = g1.create_dataset('%s' % (block_dset_name), data=newy)
+#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+#     # Create z coordinates
+#     block_dset_name = b.location_dataset("x2").base
+#     dset = g1.create_dataset('%s' % (block_dset_name), data=newz)
+#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
+    
+#     print("Length in x for block %d:" % block_number, abs(np.amin(x) - np.amax(x)))
+#     print("Length in y for block %d:" % block_number, abs(np.amin(y) - np.amax(y)))
+#     print("Length in z for block %d:" % block_number, zloc)
+# print("Total grid points: %g" % total_grid_points)
+
+# h5f.close()
