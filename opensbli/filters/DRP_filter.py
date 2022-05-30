@@ -162,14 +162,32 @@ class ExplicitFilter(object):
 
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
-        self.generate_DRP_weights()
         output = []
         for dset_id, dset in enumerate(self.q_vector):
             stencil = []
             for i, location in enumerate(self.locations):
                 stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
             output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(sum(stencil)))]
-        return output
+        # Restrict the filter if close to the wall, in the wall normal direction
+        eqns = []
+        buffer = 5
+        print(self.block.blocknumber, direction)
+        if self.wall_boundaries[direction][0] or self.wall_boundaries[direction][1]:
+            if self.wall_boundaries[direction][0]:
+                check = self.block.grid_indexes[direction] <= buffer
+            if self.wall_boundaries[direction][1]:
+                check = self.block.grid_indexes[direction] >= self.block.ranges[direction][1] - (buffer+1)
+            if self.wall_boundaries[direction][0] and self.wall_boundaries[direction][1]:
+                check = Or(self.block.grid_indexes[direction] <= buffer, self.block.grid_indexes[direction] >= self.block.ranges[direction][1] - (buffer+1))
+            cond1 = ExprCondPair(OpenSBLIEq(GridVariable('temp'), 0.0), check)
+            cond2 = ExprCondPair(output, True)
+            eqns = [GroupedPiecewise(cond1, cond2)]
+            pprint(eqns)
+        else:
+            eqns = output[:]
+        # pprint(eqns)
+        # exit()
+        return eqns
 
     def zero_temp_arrays(self):
         """ Ensure the temp arrays are zero everywhere."""
@@ -183,10 +201,11 @@ class ExplicitFilter(object):
         application = self.create_stencil(direction)
         direction += 1
         # Update the q vector
-        wall_var, wall_equations = self.wall_control()
-        update = wall_equations[:]
+        # wall_var, wall_equations = self.wall_control()
+        # update = wall_equations[:]
+        update = []
         for dset_id, dset in enumerate(self.q_vector):
-            update += [OpenSBLIEq(dset, dset - wall_var*self.sigma*self.temp_arrays[dset_id])]
+            update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
         return application, update
 
     def create_UDF(self, block, equations, direction, order, UDF_type):

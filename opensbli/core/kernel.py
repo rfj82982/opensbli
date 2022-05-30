@@ -153,7 +153,7 @@ class Kernel(object):
     def rhs_reduction_variables(self):
         reduction_vars = set()
         for eq in self.equations:
-            if isinstance(eq, _known_equation_types):
+            if isinstance(eq, OpenSBLIEq):
                 reduction_vars = reduction_vars.union(eq.rhs.atoms(ReductionVariable))
             elif isinstance(eq, Equality):
                 raise TypeError("Equality should be of types %s" % _known_equation_types)
@@ -163,7 +163,7 @@ class Kernel(object):
     def lhs_reduction_variables(self):
         reduction_vars = set()
         for eq in self.equations:
-            if isinstance(eq, _known_equation_types):
+            if isinstance(eq, OpenSBLIEq):
                 reduction_vars = reduction_vars.union(eq.lhs.atoms(ReductionVariable))
             elif isinstance(eq, Equality):
                 raise TypeError("Equality should be of types %s" % _known_equation_types)

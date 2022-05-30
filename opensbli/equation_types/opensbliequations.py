@@ -4,7 +4,7 @@
    @details base classes for different type of equations used in opensbli
 """
 
-from opensbli.core.opensbliobjects import DataSet, ConstantObject, DataSetBase, DataObject
+from opensbli.core.opensbliobjects import DataSet, ConstantObject, DataSetBase, DataObject, GroupedPiecewise
 from opensbli.core.opensblifunctions import TemporalDerivative
 from sympy import flatten, preorder_traversal
 from sympy import Equality, Function, pprint, srepr
@@ -132,9 +132,12 @@ class Discretisation(object):
         if isinstance(equation, list):
             local = []
             for no, eq in enumerate(equation):
-                eq = OpenSBLIEquation(eq.lhs, eq.rhs)
-                eq.set_vector(no)
-                local += [eq]
+                if isinstance(eq, GroupedPiecewise):
+                    local += [eq]
+                else:
+                    eq = OpenSBLIEquation(eq.lhs, eq.rhs)
+                    eq.set_vector(no)
+                    local += [eq]
             self.equations += [local]
         else:
             equation = OpenSBLIEquation(equation.lhs, equation.rhs)
