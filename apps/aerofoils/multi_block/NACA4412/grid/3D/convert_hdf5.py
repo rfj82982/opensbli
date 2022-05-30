@@ -53,21 +53,20 @@ def output_hdf5(array, array_name, halos, npoints, block):
                 set_hdf5_metadata(dset, halos, npoints, b)
     return
 
-def create_z_coordinates(full_z):
-    full_shape = full_z.shape
-    x_slice = np.s_[nhalo[1]:full_shape[2] -nhalo[1]]
-    y_slice = np.s_[nhalo[0]:full_shape[1] -nhalo[0]]
-
+def create_z_coordinates(block_data, full_z):
+    inner_shape = block_data[block_number]['x'].shape[::-1]
+    full_shape = full_z.shape[::-1]
     # Uniform spacing in the span
     dz = Lz / (float(nz))
     print("Grid spacing in z is: {:.5f}".format(dz))
-    z_coordinates = [k*dz for k in range(full_z.shape[0] - 2*nhalo[2])]
-    zm = [z_coordinates[0] - k*dz for k in reversed(range(1, nhalo[2]+1))]
-    zp = [z_coordinates[-1] + k*dz for k in range(1, nhalo[2]+1)]
+    z_coordinates = [k*dz for k in range(full_z.shape[0] - 2*nhalo)]
+    zm = [z_coordinates[0] - k*dz for k in reversed(range(1, nhalo+1))]
+    zp = [z_coordinates[-1] + k*dz for k in range(1, nhalo+1)]
     z_coordinates = np.around(np.array(zm + z_coordinates + zp), decimals=10)
     print("Z coordinates including halo points are:", z_coordinates)
     for k in range(full_z.shape[0]):
-        full_z[k, :, :] = np.full((full_shape[1], full_shape[2]), z_coordinates[k])
+        z = np.full((full_shape[0], full_shape[1]), z_coordinates[k])
+        full_z[k, :, :] = np.transpose(z)
     return full_z
 
 
@@ -76,7 +75,7 @@ def fill_halo_coordinates(block_data, block_number):
     # Create an array with zeros padded around the data
     shape = [nz] + list(x.shape) 
     print(shape)
-    new_shape = tuple([shape[i]+ 2*nhalo[i] for i in range(ndim)])
+    new_shape = tuple([shape[i]+ 2*nhalo for i in range(ndim)])
     print("Reversed shape for C-style indexing", new_shape)
     # Full arrays with halo points on the outside
     full_x = np.zeros(new_shape)
@@ -85,16 +84,16 @@ def fill_halo_coordinates(block_data, block_number):
 
     # Fill out the interior data
     # Create slices of the interior points to reuse (Nz, Ny, Nz) (they have been transposed into C style)
-    x_slice = np.s_[nhalo[1]:new_shape[2] -nhalo[1]]
-    y_slice = np.s_[nhalo[0]:new_shape[1] -nhalo[0]]
-    z_slice = np.s_[nhalo[2]:new_shape[0] -nhalo[2]]
+    x_slice = np.s_[nhalo:new_shape[2] -nhalo]
+    y_slice = np.s_[nhalo:new_shape[1] -nhalo]
+    # z_slice = np.s_[nhalo:new_shape[0] -nhalo]
 
     # Filling out the full data
     for k in range(new_shape[0]):        
         full_x[k, y_slice, x_slice] = x
         full_y[k, y_slice, x_slice] = y
 
-    full_z = create_z_coordinates(full_z)
+    full_z = create_z_coordinates(block_data, full_z)
 
     for k in range(new_shape[0]):
         # Bottom right wake block
@@ -304,7 +303,7 @@ block_data = {}
 # Specify the input grid files
 input_files = ["../Bl1.dat", "../Bl2.dat","../Bl3.dat"]
 # Number of halo points to add on each side of each direction (default 5)
-nhalo = [5, 5, 5]
+nhalo = 5
 ndim = 3
 nblocks = len(input_files)
 # Output grid file name
@@ -312,10 +311,10 @@ fname = "data.h5"
 h5f = h5py.File(fname, 'w')
 
 # Number of points in the periodic span.
-nz = 5
+nz = 20
 # Grid spacing
 # Span width
-Lz = 0.01
+Lz = 0.02
 
 sharp_TE = True
 
@@ -337,7 +336,7 @@ for block_number, block in enumerate(input_files):
     # Make an OpenSBLI block
     b = SimulationBlock(3, block_number=block_number)
     g1 = h5f.create_group(b.blockname)
-    halo = [[-i for i in nhalo], nhalo]
+    halo = [[-nhalo, -nhalo, -nhalo], [nhalo, nhalo, nhalo]]  
     apply_group_attributes(g1, b)
     block_dset_name = b.location_dataset("x0").base
     print("OpenSBLI block shape without halo points: %s" % OPS_shape)
@@ -384,26 +383,26 @@ h5f.close()
 #     print("Block %d has %e grid points." % (block_number, int(total)))
 #     total_grid_points +=  total
 #     print("Original 3D shape: %s" % shape)
-#     new_shape = tuple(reversed([shape[i]+ 2*nhalo[i] for i in range(3)]))
+#     new_shape = tuple(reversed([shape[i]+ 2*nhalo for i in range(3)]))
 #     print("Reversed shape for C-style indexing", new_shape)
 #     #exit()
 #     newx = np.zeros(new_shape)
 #     newy = np.zeros(new_shape)
 #     newz = np.zeros(new_shape)
-#     for k in range(nz + 2*nhalo[2]):
-#         zloc = dz * float(k - nhalo[2])
+#     for k in range(nz + 2*nhalo):
+#         zloc = dz * float(k - nhalo)
 #         # print(zloc)
 #         z = np.full(x.shape, zloc)
 #         #print z.shape
-#         newx[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(x)
-#         newy[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(y)
-#         newz[k,nhalo[1]:new_shape[1] -nhalo[1], nhalo[0]:new_shape[2] -nhalo[0]] = np.transpose(z)
+#         newx[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(x)
+#         newy[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(y)
+#         newz[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(z)
 
 #     # Make an OpenSBLI block
 #     b = SimulationBlock(3, block_number=block_number)
 #     g1 = h5f.create_group(b.blockname)
-#     halo = [[-i for i in nhalo], nhalo]
-#     apply_group_attributes(g1, b)
+#     halo = [[-i for i in nhalonhalo     
+    # apply_group_attributes(g1, b)
 #     block_dset_name = b.location_dataset("x0").base
 #     print("OpenSBLI block shape without halo points: %s" % shape)
 
