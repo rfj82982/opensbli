@@ -395,10 +395,11 @@ class OPSC(object):
             # Get the grid variables
             gridvariables = gridvariables.union(eq.atoms(GridVariable))
             # Get the reduction variables and detect whether they are input or output
-            for rv in eq.lhs.atoms(ReductionVariable):
-                rv.usage = 'lhs'
-            for rv in eq.rhs.atoms(ReductionVariable):
-                rv.usage = 'rhs'
+            if isinstance(eq, Equality):
+                for rv in eq.lhs.atoms(ReductionVariable):
+                    rv.usage = 'lhs'
+                for rv in eq.rhs.atoms(ReductionVariable):
+                    rv.usage = 'rhs'
 
             if isinstance(eq, Equality):
                 out += [ccode(eq, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']

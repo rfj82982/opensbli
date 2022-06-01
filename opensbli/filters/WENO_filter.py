@@ -406,7 +406,7 @@ class WENOFilter(NonSimulationEquations):
         if len(reductions) > 0:
             self.reduction_operations(reductions)
         # Zero the work arrays
-        # self.zero_work_arrays(block)
+        self.zero_work_arrays(block)
         # Create the WENO reconstruction kernels
         reconstruction_kernels = []
         for code_gen_order, ker in enumerate(self.reconstruction_kernels):

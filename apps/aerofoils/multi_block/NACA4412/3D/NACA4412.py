@@ -12,8 +12,8 @@ import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
     kernels = []
     for block in multiblock_descriptor.blocks:
-        arrays = [block.location_dataset(a) for a in dsets]
-        kernels += block.apply_interface_bc(arrays, multiblock_descriptor)
+        arrays = [block.location_dataset(a) for a in flatten(dsets)]
+        kernels += block.apply_interface_bc(arrays, multiblock_descriptor, full_halo_swap=True)
     return kernels
 
 ndim = 3
@@ -190,9 +190,9 @@ block0_bc = []
 direction = 0
 side = 0
 block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 0, True)))
-block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0), scheme=ReducedAccess())
+block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
 block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, 0, True)))
-block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations), scheme=ReducedAccess())
+block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block0_bc.append(PeriodicBC(direction=2, side=0))
 block0_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[0] = block0_bc
@@ -207,8 +207,8 @@ block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
 wall_energy = [Eq(conserve_vector[-1], Twall*conserve_vector[0]/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy), scheme=ReducedAccess())
-block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations), scheme=ReducedAccess())
+block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy))
+block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block1_bc.append(PeriodicBC(direction=2, side=0))
 block1_bc.append(PeriodicBC(direction=2, side=1))
 mb_bcs[1] = block1_bc
@@ -275,6 +275,15 @@ for no, eq in enumerate(b.list_of_equation_classes):
         eq.Kernels += [sponge_ker_block0, sponge_ker_block2]
         eq.boundary_kernels += wake_ker
 
+# Make some full swaps for interfaces before filtering
+filter_swaps = create_exchange_calls_codes(multi_block, simulation_eq.time_advance_arrays)
+for block in multi_block.blocks:
+    for no, eq in enumerate(block.list_of_equation_classes):
+        if isinstance(eq, UserDefinedEquations):
+            if eq.full_swap:
+                print("full swap")
+                eq.Kernels += filter_swaps
+
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
 OPSC(alg, OPS_diagnostics=2)
@@ -282,14 +291,14 @@ OPSC(alg, OPS_diagnostics=2)
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt']
-values = ['1.4', '0.68', '0.72', '50000.0', '0.0002', '100000', '0.01']
+values = ['1.4', '0.68', '0.72', '500000.0', '0.0001', '100000', '0.01']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values += ['801', '692', '5', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)', '0.01/block0np2']
+values += ['801', '692', '50', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)', '0.05/block0np2']
 # Block 1
 constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
-values += ['1799', '692', '5', '7.29705965995/(block1np0 - 1.0)', '7.3/(block1np1 - 1.0)', '0.01/block1np2']
+values += ['1799', '692', '50', '7.29705965995/(block1np0 - 1.0)', '7.3/(block1np1 - 1.0)', '0.05/block1np2']
 # Block 2
 constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
-values += ['801', '692', '5', '5.0/(block2np0 - 1.0)', '7.3/(block2np1 - 1.0)', '0.01/block2np2']
+values += ['801', '692', '50', '5.0/(block2np0 - 1.0)', '7.3/(block2np1 - 1.0)', '0.05/block2np2']
 substitute_simulation_parameters(constants, values)

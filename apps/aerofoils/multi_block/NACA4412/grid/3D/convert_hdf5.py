@@ -311,10 +311,10 @@ fname = "data.h5"
 h5f = h5py.File(fname, 'w')
 
 # Number of points in the periodic span.
-nz = 20
+nz = 50
 # Grid spacing
 # Span width
-Lz = 0.02
+Lz = 0.05
 
 sharp_TE = True
 
