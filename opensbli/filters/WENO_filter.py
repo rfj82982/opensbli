@@ -10,6 +10,7 @@ from opensbli.utilities.user_defined_kernels import UserDefinedEquations
 from opensbli.schemes.spatial.weno import *
 from opensbli.core.boundary_conditions.bc_core import WallBC
 from sympy.functions.elementary.piecewise import ExprCondPair
+from opensbli.equation_types.metric import MetricsEquation
 
 
 class WENOFilter(NonSimulationEquations):
@@ -46,6 +47,11 @@ class WENOFilter(NonSimulationEquations):
         self.scheme_type = "**{\'scheme\':\'Weno\'}"
         # Check if the problem needs a metric transformation of the equations
         self.metrics = metrics
+        if metrics is not None:
+            try:
+                assert isinstance(block.get_metric_class, MetricsEquation)
+            except:
+                raise ValueError("Please set the metric class on the block before calling the WENO filter in the problem script.")
         self.process_metrics(metrics)
         self.constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Ensure gama has been added to the constants to define

@@ -93,8 +93,8 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 T'
-cent = StoreSome(4, fns)
-# cent = Central(4)
+# cent = StoreSome(4, fns)
+cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(3, formulation='SSP')
@@ -137,10 +137,12 @@ j = block.grid_indexes[1]
 grid_condition = j >= 169
 BF = BinomialFilter(block, order=10, grid_condition=grid_condition, sigma=0.01)
 
+# Set the equations to be solved on the block
+block.set_equations([constituent, simulation_eq, initial, metriceq])
 ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF')
 
-# Set the equations to be solved on the block
-block.set_equations([constituent, simulation_eq, initial, metriceq] + ShockFilter.equation_classes + BF.equation_classes)
+block.set_equations(ShockFilter.equation_classes + BF.equation_classes)
+
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 

@@ -78,9 +78,9 @@ block = SimulationBlock(ndim, block_number=0)
 # Select the numerical schemes
 weno_order = 5
 Avg = RoeAverage([0, 1])
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 schemes = {}
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 # cent = Central(4)
 fns = 'u0 u1 T'
 cent = StoreSome(4, fns)

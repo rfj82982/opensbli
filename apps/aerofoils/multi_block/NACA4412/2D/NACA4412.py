@@ -218,6 +218,8 @@ mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
 
+# Set the equations on the blocks
+multi_block.set_equations([simulation_eq, constituent, metriceq])
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
@@ -233,8 +235,7 @@ for no, block in enumerate(multi_block.blocks):
     if no is not 1:
         grid_condition = block.grid_indexes[0] >= 790
         filters[no] += [BinomialFilter(block, order=8, grid_condition=grid_condition).equation_classes]
-# Set the equations on the blocks
-multi_block.set_equations([simulation_eq, constituent, metriceq])
+
 multi_block.set_filters(filters)
 
 # HDF5 input/output
