@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='Visbal', width=11, q=None, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -29,12 +29,17 @@ class ExplicitFilter(object):
             assert isinstance(x, int)
         self.filter_type = filter_type
         # Arrays to filter
+        # Conservative variables
+        if self.ndim == 2:
+            q = ['rho', 'rhou0', 'rhou1', 'rhoE']
+        elif self.ndim == 3:
+            q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
         self.freq = ConstantObject('filter_frequency')
         self.freq.value = 10
         CTD.add_constant(self.freq)
-        self.sigma = ConstantObject('sigma_filt')
+        self.sigma = ConstantObject('DRP_filt')
         self.sigma.value = sigma
         # Generate the filter offset grid locations
         self.locations = [i for i in range(-int(self.width/2.0), int(self.width/2.0)+1)]
@@ -171,7 +176,6 @@ class ExplicitFilter(object):
         # Restrict the filter if close to the wall, in the wall normal direction
         eqns = []
         buffer = 5
-        print(self.block.blocknumber, direction)
         if self.wall_boundaries[direction][0] or self.wall_boundaries[direction][1]:
             if self.wall_boundaries[direction][0]:
                 check = self.block.grid_indexes[direction] <= buffer
@@ -230,7 +234,7 @@ class ExplicitFilter(object):
     def create_filter(self, block):
         self.equation_classes = []
         # Zero the arrays
-        zeroed = self.zero_temp_arrays()
+        zeroed = self.zero_temp_arrays() #### TODO: zero before each direction one by one
         self.equation_classes += [self.create_UDF(block, zeroed, 0, 0+block.blocknumber, 'Zeroing')]
         # Check for non-periodic boundaries
         if self.wall_control:

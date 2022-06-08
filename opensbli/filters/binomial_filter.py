@@ -13,7 +13,7 @@ from opensbli.core.block import SimulationBlock
 from opensbli.multiblock.blockcollection import MultiBlock
 
 class BinomialFilter(object):
-    def __init__(self, block, order, grid_condition=None, sigma=0.05):
+    def __init__(self, block, order, grid_condition=None, sigma=0.1):
         self.filter_no = block.blocknumber
         if (order % 2) != 0:
             raise ValueError("The filter is only defined for even orders n.")
@@ -25,7 +25,7 @@ class BinomialFilter(object):
         self.grid_condition = grid_condition
         # Width and weightings of the filter
         self.generate_weights()
-        sigma_symbol = ConstantObject('sigma_filt')
+        sigma_symbol = ConstantObject('BF_filt')
         sigma_symbol.value = sigma
         self.sigma = sigma_symbol
         self.equation_classes = []
