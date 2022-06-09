@@ -11,7 +11,7 @@ coordinate_symbol = "x"
 metriceq = MetricsEquation()
 metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
-# optional_subs_dict = metriceq.metric_subs
+optional_subs_dict = metriceq.metric_subs
 
 #Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
 #Specify the schemes
@@ -23,12 +23,12 @@ stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_
 heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
 substitutions = [stress_tensor, heat_flux]
 # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "mu"]
+constants = ["Re", "Pr", "gama", "Minf"]
 # Formulas for the variables used in the equations
 velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-# viscosity = "Eq(mu, T**0.7)"
+viscosity = "Eq(mu, T**0.7)"
 
 einstein_eq = EinsteinEquation()
 # einstein_eq.optional_subs_dict = optional_subs_dict
@@ -56,8 +56,8 @@ eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, cons
 constituent.add_equations(eqns)
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
 constituent.add_equations(eqns)
-# eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
-# constituent.add_equations(eqns)
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+constituent.add_equations(eqns)
 
 
 # Expand the simulation equations, for this create a simulation equations class
@@ -85,8 +85,8 @@ constituent.add_equations(eqns)
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
 constituent.add_equations(eqns)
 # # Expand viscosity and add the expanded equations to the constituent relations
-# eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
-# constituent.add_equations(eqns)
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+constituent.add_equations(eqns)
 
 
 # Create a simulation block
@@ -121,11 +121,11 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 u2 T'
-cent = StoreSome(6, fns)
+cent = StoreSome(4, fns)
 # cent = Central(6)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(4)
+rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension
@@ -138,7 +138,7 @@ boundaries += [PeriodicBC(direction, 1, full_swap=True)]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
-wall_energy = [Eq(q_vector[3], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
+wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
 direction = 1
 lower_wall_eq = wall_energy[:]
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
@@ -189,9 +189,9 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
-OPSC(alg)
+OPSC(alg, OPS_diagnostics=2)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu']
-values = ['2.1e6', '1.4', '0.2', '0.71', '0.000002', '500000000', '1129', '161', '100', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '0.005/(block0np2-1)', '1.0', '1.0']
+values = ['2.1e6', '1.4', '0.2', '0.71', '0.000002', '500000000', '1129', '161', '50', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

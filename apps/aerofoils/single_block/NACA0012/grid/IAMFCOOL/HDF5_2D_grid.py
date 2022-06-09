@@ -115,37 +115,38 @@ print("Full 2D slice size with halos is (Nx, Ny):", full_x.shape)
 # full_y[y_slice, -2] = initial_y[:, 4]
 # full_y[y_slice, -1] = initial_y[:, 5]
 
-dx = np.abs(full_x[y_slice,6] - full_x[y_slice,5])
-print(dx)
-full_x[y_slice, 4] = initial_x[:, 5] + dx
-full_x[y_slice, 3] = initial_x[:, 5] + 2*dx
-full_x[y_slice, 2] = initial_x[:, 5] + 3*dx
-full_x[y_slice, 1] = initial_x[:, 5] + 4*dx
-full_x[y_slice, 0] = initial_x[:, 5] + 5*dx
+dx = full_x[y_slice,6] - full_x[y_slice,5]
+# print(dx)
+full_x[y_slice, 4] = initial_x[:, 0] - dx
+full_x[y_slice, 3] = initial_x[:, 0] - 2*dx
+full_x[y_slice, 2] = initial_x[:, 0] - 3*dx
+full_x[y_slice, 1] = initial_x[:, 0] - 4*dx
+full_x[y_slice, 0] = initial_x[:, 0] - 5*dx
+
+# x positive halos, increasing x, copy from the other side over the periodic interface
+dx = full_x[y_slice,-7] - full_x[y_slice,-6]
+full_x[y_slice, -5] = initial_x[:, -1] -1*dx
+full_x[y_slice, -4] = initial_x[:, -1] -2*dx
+full_x[y_slice, -3] = initial_x[:, -1] -3*dx
+full_x[y_slice, -2] = initial_x[:, -1] -4*dx
+full_x[y_slice, -1] = initial_x[:, -1] -5*dx
+
 
 # # y negative halos, copy from the other side over the periodic interface
-# full_y[y_slice, 4] = initial_y[:, -2]
-# full_y[y_slice, 3] = initial_y[:, -3]
-# full_y[y_slice, 2] = initial_y[:, -4]
-# full_y[y_slice, 1] = initial_y[:, -5]
-# full_y[y_slice, 0] = initial_y[:, -6]
-
-
-
-# # x positive halos, increasing x, copy from the other side over the periodic interface
-# dx = np.abs(full_x[y_slice,-6] - full_x[y_slice,-5])
-# full_x[y_slice, -5] = initial_x[:, -5] - dx
-# full_x[y_slice, -4] = initial_x[:, 2] - dx
-# full_x[y_slice, -3] = initial_x[:, 3] - dx
-# full_x[y_slice, -2] = initial_x[:, 4] - dx
-# full_x[y_slice, -1] = initial_x[:, 5] - dx
+dy = full_y[y_slice,6] - full_y[y_slice,5]
+full_y[y_slice, 4] = initial_y[:, 0] - 1*dy
+full_y[y_slice, 3] = initial_y[:, 0] - 2*dy
+full_y[y_slice, 2] = initial_y[:, 0] - 3*dy
+full_y[y_slice, 1] = initial_y[:, 0] - 4*dy
+full_y[y_slice, 0] = initial_y[:, 0] - 5*dy
 
 # # y positive halos, increasing x, copy from the other side over the periodic interface
-# full_y[y_slice, -5] = initial_y[:, 1]
-# full_y[y_slice, -4] = initial_y[:, 2]
-# full_y[y_slice, -3] = initial_y[:, 3]
-# full_y[y_slice, -2] = initial_y[:, 4]
-# full_y[y_slice, -1] = initial_y[:, 5]
+dy = full_y[y_slice,-7] - full_y[y_slice,-6]
+full_y[y_slice, -5] = initial_y[:, -1] - 1*dy
+full_y[y_slice, -4] = initial_y[:, -1] - 2*dy
+full_y[y_slice, -3] = initial_y[:, -1] - 3*dy
+full_y[y_slice, -2] = initial_y[:, -1] - 4*dy
+full_y[y_slice, -1] = initial_y[:, -1] - 5*dy
 
 
 ### CYLINDER
