@@ -132,7 +132,7 @@ block.setio([h5, h5_read])
 
 # Boundary filtering
 j = block.grid_indexes[1]
-grid_condition = j >= 157
+grid_condition = j >= 185
 BF = BinomialFilter(block, order=6, grid_condition=grid_condition, sigma=0.1)
 
 # Set the equations to be solved on the block
@@ -141,7 +141,7 @@ block.set_equations(BF.equation_classes)
 DRP = ExplicitFilter(block, [0,1], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
+WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
 block.set_equations(WF.equation_classes)
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)

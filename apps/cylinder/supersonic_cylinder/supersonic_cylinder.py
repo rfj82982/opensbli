@@ -7,60 +7,48 @@ from sympy import pi, sin, cos, Abs, sqrt
 
 # Problem dimension
 ndim = 2
-# Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
-mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
-momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
-energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-
-# Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-
-substitutions = [stress_tensor, heat_flux]
-# Constants that are used
+# # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
-
-# symbol for the coordinate system in the equations
+# # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
+# symbol for the coordinate system in the equations
+conservative = True
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative)
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
 
 # Constituent relations used in the system
 velocity = "Eq(u_i, rhou_i/rho)"
-pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
+if conservative:
+    pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+    velocity = "Eq(u_i, rhou_i/rho)"
+else:
+    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, T**0.7)"
 
-
-# Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
-einstein_eq = EinsteinEquation()
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-
-# Expand mass and add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand momentum add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand energy equation add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
-# Expand momentum and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-# Expand pressure and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-# Expand temperature and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-# Expand viscosity and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
+einstein_eq = EinsteinEquation()
 
-
+# Expand momentum add the expanded equations to the constituent relations
+if conservative:
+    eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+    constituent.add_equations(eqns)
+# Expand pressure add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
+# Expand temperature add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
+# Expand viscosity add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
 # Create a simulation block
 block = SimulationBlock(ndim, block_number=0)
 
@@ -93,8 +81,8 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 T'
-# cent = StoreSome(4, fns)
-cent = Central(4)
+cent = StoreSome(4, fns)
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(3, formulation='SSP')
@@ -110,7 +98,7 @@ boundaries += [PeriodicBC(direction, 1)]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
-wall_energy = [Eq(q_vector[3], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
+wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
 direction = 1
 lower_wall_eq = wall_energy[:]
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
@@ -135,25 +123,21 @@ block.setio([h5, h5_read])
 
 j = block.grid_indexes[1]
 grid_condition = j >= 169
-BF = BinomialFilter(block, order=10, grid_condition=grid_condition, sigma=0.01)
+BF = BinomialFilter(block, order=10, grid_condition=grid_condition, sigma=0.1)
 
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq])
-ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='GLF')
+ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='LLF')
 
 block.set_equations(ShockFilter.equation_classes + BF.equation_classes)
 
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
-
 # Discretise the equations on the block
 block.discretise()
-
 alg = TraditionalAlgorithmRK(block)
-
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
-
 # Write the code for the algorithm
 OPSC(alg)
 # Simulation parameters

@@ -123,11 +123,11 @@ class WENOFilter(NonSimulationEquations):
                 optional_subs_dict = self.metric_class.metric_subs
                 self.EE.optional_subs_dict = optional_subs_dict
                 a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
-                mass = "Eq(Der(rho,t), - %s/detJ)" % (a)
+                mass = "Eq(Der(rho,t), - %s)" % (a)
                 a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
-                momentum = "Eq(Der(rhou_i,t) , -  %s/detJ)" % (a)
+                momentum = "Eq(Der(rhou_i,t) , -  %s)" % (a)
                 a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
-                energy = "Eq(Der(rhoE,t), - %s/detJ)" % (a)
+                energy = "Eq(Der(rhoE,t), - %s)" % (a)
 
                 base_eqns = [mass, momentum, energy]
                 for i, base in enumerate(base_eqns):
@@ -138,7 +138,6 @@ class WENOFilter(NonSimulationEquations):
                     else:
                         if base==energy:
                             base_eqns[i] = OpenSBLIEq(base_eqns[i].lhs, base_eqns[i].rhs)
-                # exit()
                 # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten(base_eqns)
             # Only stretching is applied
@@ -226,11 +225,6 @@ class WENOFilter(NonSimulationEquations):
         # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(self.gama*p*inv_rho))]
 
-        # # Projected velocities if full curvilinear coordinates are being used
-        # if self.curvilinear:
-        #     metric_vel = "Eq(U_i, D_i_j*u_j)"
-        #     CR_eqns += flatten([self.EE.expand(metric_vel, self.ndim, "x", [], self.constants)])
-
         # Optiional Low Mach number correction
         if self.Mach_correction:
             M_var, M_eqns = self.evaluate_Yee_Mach_sensor(velocity_components, p, a, block)
@@ -275,17 +269,12 @@ class WENOFilter(NonSimulationEquations):
         Ducros_condition += [ExprCondPair(0, True)]
         temp_var = GridVariable('temp')
         output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
-
-        for eqn in output_eqns:
-            pprint(eqn)
-        # exit()
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
             sensor_halos.append([self.halo_type, self.halo_type])
         sensor_kernel = self.create_kernel('Shock sensor', flatten(output_eqns), sensor_halos, block)
         # Add the kernel
-        print("In ducros")
         self.add_kernel(sensor_kernel)
         self.component_counter += 1
         return kappa
@@ -327,13 +316,14 @@ class WENOFilter(NonSimulationEquations):
         # Previous in conservative form
         q_grid = [GridVariable('q%d' % i) for i in range(nvars)]
         rho = self.solution_vector[0]
+        modified_equations = []
         if not self.conservative:
+            inv_rho = GridVariable('inv_rho')
+            modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
             q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
         else:
             q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
-        modified_equations = q_vars[:]
-        inv_rho = GridVariable('inv_rho')
-        modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
+        modified_equations += q_vars[:]
         # Global parameter to control the dissipation to give extra control of the dissipation in the C code
         FC = ConstantObject('shock_filter_control')
         FC.value = 1.0 # Default condition has no scaling
@@ -410,7 +400,6 @@ class WENOFilter(NonSimulationEquations):
         CR, solution_vector, reductions = WS.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
-        # exit()
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
         # Compute initial Ducros sensor

@@ -224,11 +224,11 @@ multi_block.set_equations([simulation_eq, constituent, metriceq])
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='GLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1], width=11, q=simulation_eq.time_advance_arrays, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):

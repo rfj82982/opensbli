@@ -589,10 +589,10 @@ class LFCharacteristic(Characteristic):
     def create_max_characteristic_wave_speed(self, pre_process_equations, direction, block):
         """ Creates the equations for local Lax-Friedrich wave speeds, maximum eigenvalues over the local
         WENO/TENO stencils are found."""
-        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
+        # stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
         ev = self.eigen_value[direction]
         out = zeros(*ev.shape)
-        # stencil_points = [0,1]
+        stencil_points = [0,1]
         for p in stencil_points:
             location_ev = self.convert_symbolic_to_dataset(ev, p, direction, block)
             for no, val in enumerate(location_ev):

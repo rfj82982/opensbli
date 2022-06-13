@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # Import all the functions from opensbli
 from opensbli import *
 import copy
@@ -41,11 +40,9 @@ einstein_eq = EinsteinEquation()
 if conservative:
     eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
     constituent.add_equations(eqns)
-
 # Expand pressure add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-
 # Expand temperature add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
@@ -114,8 +111,8 @@ schemes[rk.name] = rk
 boundaries = []
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
 for direction in range(ndim):
-    boundaries += [PeriodicBC(direction, 0)]
-    boundaries += [PeriodicBC(direction, 1)]
+    boundaries += [PeriodicBC(direction, 0, full_swap=True)]
+    boundaries += [PeriodicBC(direction, 1, full_swap=True)]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
@@ -128,9 +125,10 @@ block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
 
 # Dispersion relation preserving filters
-DRP_filt = DRPFilter(block, q=simulation_eq.time_advance_arrays, optimized=True)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
+block.set_equations(DRP.equation_classes)
 
-block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial] + DRP_filt.equation_classes)
+block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 
@@ -151,11 +149,9 @@ SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100)
 alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
 
 # Write the code for the algorithm
-OPSC(alg, OPS_diagnostics=5, OPS_V2=True)
+OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
 
 # NaN check and iteration counter
-# print_iteration_ops(NaN_check='rho_B0', every=250)
-
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '5000', '64', '64', '64', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
+values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '5000', '128', '128', '128', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
 substitute_simulation_parameters(constants, values)
