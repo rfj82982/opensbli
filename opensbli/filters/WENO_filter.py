@@ -38,13 +38,7 @@ class WENOFilter(NonSimulationEquations):
         self.Mach_correction = Mach_correction
         self.block = block
         self.ndim = block.ndim
-        self.order = order
         self.equation_classes = []
-        self.nhalos = 5
-        # Store the value of the dissipation control sensor for debugging
-        self.store_kappa = True
-        # Scheme used to form the non-linear filter
-        self.scheme_type = "**{\'scheme\':\'Weno\'}"
         # Check if the problem needs a metric transformation of the equations
         self.metrics = metrics
         if metrics is not None:
@@ -53,10 +47,6 @@ class WENOFilter(NonSimulationEquations):
             except:
                 raise ValueError("Please set the metric class on the block before calling the WENO filter in the problem script.")
         self.process_metrics(metrics)
-        self.constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
-        # Ensure gama has been added to the constants to define
-        self.gama = ConstantObject('gama')
-        CTD.add_constant(self.gama)
         # Einstein class to expand equations
         self.EE = EinsteinEquation()
         # Main class to generate the filter
@@ -108,14 +98,15 @@ class WENOFilter(NonSimulationEquations):
 
     def create_weno_equations(self):
         # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
-        scheme_type = self.scheme_type
+        scheme_type = "**{\'scheme\':\'Weno\'}"
+        constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Uniform mesh, no stretching or curvilinear terms
         if self.metric_class is None:
             coordinate_symbol = "x"
             mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
             momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
             energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
-            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
         else:
             # Full curvilinear
             if self.curvilinear:
@@ -131,14 +122,14 @@ class WENOFilter(NonSimulationEquations):
 
                 base_eqns = [mass, momentum, energy]
                 for i, base in enumerate(base_eqns):
-                    base_eqns[i] = self.EE.expand(base, self.ndim, coordinate_symbol, [], self.constants)
+                    base_eqns[i] = self.EE.expand(base, self.ndim, coordinate_symbol, [], constants)
                     if base==momentum:
                         for no, b in enumerate(base_eqns[i]):
                             base_eqns[i][no] = OpenSBLIEq(base_eqns[i][no].lhs, base_eqns[i][no].rhs)
                     else:
                         if base==energy:
                             base_eqns[i] = OpenSBLIEq(base_eqns[i].lhs, base_eqns[i].rhs)
-                # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+                # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten(base_eqns)
             # Only stretching is applied
             else: ### Only added non-conservative for this stretched case
@@ -150,7 +141,7 @@ class WENOFilter(NonSimulationEquations):
                 else:
                     momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
                     energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
-                # governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], self.constants) for eq in flatten([mass, momentum, energy])])
+                # governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
                 # output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])                          
         return output_equations
 
@@ -173,23 +164,6 @@ class WENOFilter(NonSimulationEquations):
             self.equation_classes.append(kernel)
         return
 
-    def group_by_direction(self, eqs):
-        """ Groups the input equations by the direction (x0, x1, ...) they depend upon.
-
-        :arg list eqs: List of equations to group by direction.
-        :returns: dict: grouped: Dictionary of {direction: equations} key, value pairs for equations grouped by direction."""
-        all_WDS = []
-        for eq in eqs:
-            all_WDS += list(eq.atoms(WenoDerivative))
-        grouped = {}
-        for cd in all_WDS:
-            direction = cd.get_direction[0]
-            if direction in grouped.keys():
-                grouped[direction] += [cd]
-            else:
-                grouped[direction] = [cd]
-        return grouped
-
     def reduction_operations(self, reduction_equations):
         reduction_halos = []
         for _ in range(self.ndim):
@@ -203,6 +177,9 @@ class WENOFilter(NonSimulationEquations):
         """ Evalutes the constiteunt relations on the state at the end of a full step
         of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
         CR_eqns = []
+        # Ensure gama has been added to the constants to define
+        gamma = ConstantObject('gama')
+        CTD.add_constant(gamma)
         # Conservative Q array entries from the current state
         rho, energy = self.solution_vector[0], self.solution_vector[-1]
         # Pressure and speed of sound
@@ -212,18 +189,16 @@ class WENOFilter(NonSimulationEquations):
         velocity_components = [block.location_dataset('u%d' % i ) for i in range(self.ndim)]
 
         if self.conservative:
-            
             momentum_components = [self.solution_vector[i+1] for i in range(self.ndim)]
             # Primitive components and speed of sound
-            
             CR_eqns += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
             # rhoE = p/(gama-1) + 0.5*(rhou**2)/rho
-            CR_eqns += [OpenSBLIEq(p, (self.gama-1)*(energy - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
+            CR_eqns += [OpenSBLIEq(p, (gamma-1)*(energy - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
         else:
             # Et = p/((gamma-1)*rho) + 0.5*u**2
-            CR_eqns += [OpenSBLIEq(p, rho*(self.gama-1)*(energy - 0.5*sum([dset**2 for dset in velocity_components])))]
+            CR_eqns += [OpenSBLIEq(p, rho*(gamma-1)*(energy - 0.5*sum([dset**2 for dset in velocity_components])))]
         # Ideal gas, speed of sound
-        CR_eqns += [OpenSBLIEq(a, sqrt(self.gama*p*inv_rho))]
+        CR_eqns += [OpenSBLIEq(a, sqrt(gamma*p*inv_rho))]
 
         # Optiional Low Mach number correction
         if self.Mach_correction:
@@ -286,19 +261,16 @@ class WENOFilter(NonSimulationEquations):
         wall_conditions, wall_equations = [], []
         indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
         wall_equations += indexes
-        # Disable the shock filter at any wall boundaries
+        # Disable the shock filter at any wall boundaries or block interfaces
         for direction in range(self.ndim):
             for side in [0,1]:
                 wall = self.wall_boundaries[direction][side]
+                interface = self.interface_boundaries[direction][side]
                 if wall:
                     if side == 0:
                         wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
                     else:
                         wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
-        # Check for block interfaces
-        for direction in range(self.ndim):
-            for side in [0,1]:
-                interface = self.interface_boundaries[direction][side]
                 if interface:
                     if side == 0:
                         wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
@@ -309,10 +281,10 @@ class WENOFilter(NonSimulationEquations):
         wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
         return wall_var, wall_equations
 
-    def filter_application(self, solution_vector, block):
+    def filter_application(self, block):
         """ Applies the non-linear filter by subtracting from the q vector after a full RK time-step."""
         resid_kernel = self.residual_kernels[0]
-        nvars = len(solution_vector)
+        nvars = len(self.solution_vector)
         # Previous in conservative form
         q_grid = [GridVariable('q%d' % i) for i in range(nvars)]
         rho = self.solution_vector[0]
@@ -371,8 +343,8 @@ class WENOFilter(NonSimulationEquations):
         return output_equations
 
     def hybrid_condition(self, kernel, block, direction):
-        from sympy import Or
         """ Checks the Ducros sensor, if it is a shock we perform the WENO reconstruction, else do nothing."""
+        from sympy import Or
         input_equations = flatten(kernel.equations)
         kernel.equations = []
         locations = [increment_dataset(self.kappa, direction, location) for location in [-1, 0, 1]]
@@ -383,8 +355,7 @@ class WENOFilter(NonSimulationEquations):
         return kernel
 
     def main(self, scheme_order, block):
-        # Counter to order the kernels
-        # Put the WENO filtering kernels at the very end of the time loop
+        # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
         eqn = self.create_weno_equations()
@@ -403,7 +374,6 @@ class WENOFilter(NonSimulationEquations):
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
         # Compute initial Ducros sensor
-        # The amount of dissipation to apply, using a local flow sensor
         if self.dissipation_sensor == 'Ducros':
             self.kappa = self.evaluate_Ducros_sensor(block)
         elif self.dissipation_sensor == 'Constant': # No flow sensor for the dissipation control, only a global parameter
@@ -432,5 +402,5 @@ class WENOFilter(NonSimulationEquations):
         self.detect_wall_boundaries()
         self.detect_interface_boundaries()
         # # Create the residual kernel
-        self.filter_application(solution_vector, block)
+        self.filter_application(block)
         return
