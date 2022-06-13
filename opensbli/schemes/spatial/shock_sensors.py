@@ -3,7 +3,7 @@ from opensbli.core.opensblifunctions import CentralDerivative as CD
 from opensbli.core.parsing import EinsteinEquation as EE
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
-
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 class ShockSensor(object):
     def __init__(self):
@@ -43,7 +43,9 @@ class ShockSensor(object):
             vorticity_sq = metrics.apply_transformation(vorticity_sq)
             divergence = metrics.apply_transformation(divergence)
 
-        a = 100.0
+        a = ConstantObject('Ducros_sensitivity')
+        a.value = 10.0
+        CTD.add_constant(a)
         tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + a*divergence.rhs)))
         output_eqns += [OpenSBLIEq(sensor_array, tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + epsilon))]
         return output_eqns, sensor_array

@@ -69,7 +69,7 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives):
+    def interpolate_reconstruction_variables(self, derivatives, single_wave=False):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
@@ -85,14 +85,27 @@ class ShockCapturing(object):
                     raise ValueError("Reconstruction must be left or right")
                 rv.update_quantities(original_rv)
                 rv.evaluate_quantities()
-                # Add all of the current equations
-                output_eqns += [rv.final_equations]
                 # Apply a sensor to each characteristic wave if using filtering methods
                 if self.sensor_evaluation is not None:
-                    if isinstance(rv, type(self.reconstruction_classes[0])):
-                        output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), self.sensor_evaluation[0].rhs)]
-                    elif isinstance(rv, type(self.reconstruction_classes[1])):
-                        output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), Max(GridVariable('rj%d' % no),self.sensor_evaluation[1].rhs))] 
+                    output_eqns += [rv.final_equations[0:-1]]
+                    if single_wave:
+                        if no == 0:
+                            if isinstance(rv, type(self.reconstruction_classes[0])):
+                                output_eqns += [OpenSBLIEq(GridVariable('rj_right'), self.sensor_evaluation[0].rhs)]
+                            elif isinstance(rv, type(self.reconstruction_classes[1])):
+                                output_eqns += [OpenSBLIEq(GridVariable('rj_left'), self.sensor_evaluation[0].rhs)]
+                        # else:
+                        #     output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), GridVariable('rj0'))]
+                        output_eqns += [rv.final_equations[-1]]
+                    else:
+                        # Add all of the current equations
+                        output_eqns += [rv.final_equations]
+                        if isinstance(rv, type(self.reconstruction_classes[0])):
+                            output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), self.sensor_evaluation[0].rhs)]
+                        elif isinstance(rv, type(self.reconstruction_classes[1])):
+                            output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), Max(GridVariable('rj%d' % no),self.sensor_evaluation[1].rhs))]
+                else:
+                    output_eqns += [rv.final_equations]
         return output_eqns
 
     def update_constituent_relation_symbols(self, sym, direction):
@@ -254,13 +267,13 @@ class Characteristic(EigenSystem):
         EigenSystem.__init__(self, physics)
         return
 
-    def get_characteristic_equations(self, direction, derivatives, solution_vector, block):
+    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, single_wave=False):
         """ Performs the three stages required for a characteristic based reconstruction."""
-        settings = {"combine_reconstructions": True}
+        settings = {"combine_reconstructions": True, "shock_filter": shock_filter, "single_wave": single_wave}
         for i in range(len(derivatives)):
             derivatives[i].update_settings(**settings)
         pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
-        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives)
+        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, single_wave)
         post_process_eqns = self.post_process(direction, derivatives, block)
         return [pre_process_eqns, reduction_eqns, interpolated_eqns, post_process_eqns]
 
@@ -475,7 +488,7 @@ class LFCharacteristic(Characteristic):
         # Take a central difference of the characteristic fluxes
         terms = [GridVariable('CF_%d%d' % (component, j)) for j in range(len(weights))]
         formula = factor(sum([x*y for (x,y) in zip(weights, terms)]))
-        output_equation = [OpenSBLIEq(reconstruction_variable, GridVariable('rj%d' % component)*(reconstruction_variable - formula))]
+        output_equation = [OpenSBLIEq(reconstruction_variable, (reconstruction_variable - formula))]
         return output_equation
 
     def post_process(self, direction, derivatives, block):
@@ -502,6 +515,7 @@ class LFCharacteristic(Characteristic):
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i, recon in enumerate(reconstructed_characteristics):
+                # pass
                 post_process_equations += flatten([self.central_diff_formula(i, recon)])
 
         reconstructed_flux = avg_REV_values*reconstructed_characteristics

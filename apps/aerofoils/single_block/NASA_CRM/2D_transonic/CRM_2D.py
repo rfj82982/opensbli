@@ -93,8 +93,8 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 T'
-# cent = StoreSome(6, fns)
-cent = Central(4)
+cent = StoreSome(4, fns)
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(4)
@@ -124,7 +124,7 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa')])
+h5.add_arrays([DataObject('kappa')])
 kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
@@ -141,7 +141,7 @@ block.set_equations(BF.equation_classes)
 DRP = ExplicitFilter(block, [0,1], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='GLF')
+WF = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
 block.set_equations(WF.equation_classes)
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
@@ -157,6 +157,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall']
-values = ['2.1e6', '1.4', '0.2', '0.71', '0.000002', '500000000', '1129', '161', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '1.0']
+values = ['2.1e5', '1.4', '0.2', '0.71', '0.00002', '500000000', '2301', '192', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

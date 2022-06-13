@@ -211,8 +211,9 @@ class WenoReconstructionVariable(object):
 
     :arg str name: Name of the reconstruction, either left or right."""
 
-    def __init__(self, name):
+    def __init__(self, name, side):
         self.name = name
+        self.side = side
         self.smoothness_indicators = []
         self.smoothness_symbols = []
         self.alpha_evaluated = []
@@ -254,10 +255,16 @@ class WenoReconstructionVariable(object):
             final_equations += [OpenSBLIEq(value, all_evaluations[no])]
         self.final_equations = final_equations
         rv = self.reconstructed_symbol
-        if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
-            self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
-        else:
-            self.final_equations += [OpenSBLIEq(rv, self.reconstructed_expression)]
+        if self.settings["shock_filter"]: # Apply WENO once at the end of a full time-step as a filter
+            if self.settings['single_wave']:
+                self.final_equations += [OpenSBLIEq(rv, rv + GridVariable('rj_%s' % self.side)*self.reconstructed_expression)]
+            else:
+                pass
+        else: # Regular WENO application
+            if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
+                self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
+            else:
+                self.final_equations += [OpenSBLIEq(rv, self.reconstructed_expression)]
         return
 
 
@@ -267,7 +274,7 @@ class LeftWenoReconstructionVariable(WenoReconstructionVariable):
     :arg str name: 'left' """
 
     def __init__(self, name):
-        WenoReconstructionVariable.__init__(self, name)
+        WenoReconstructionVariable.__init__(self, name, side='left')
         return
 
 
@@ -277,7 +284,7 @@ class RightWenoReconstructionVariable(WenoReconstructionVariable):
     :arg str name: 'right' """
 
     def __init__(self, name):
-        WenoReconstructionVariable.__init__(self, name)
+        WenoReconstructionVariable.__init__(self, name, side='right')
         return
 
 
@@ -555,7 +562,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, single_wave=True)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations

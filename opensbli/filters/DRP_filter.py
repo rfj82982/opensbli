@@ -37,7 +37,7 @@ class ExplicitFilter(object):
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
         self.freq = ConstantObject('filter_frequency')
-        self.freq.value = 10
+        self.freq.value = 25
         CTD.add_constant(self.freq)
         self.sigma = ConstantObject('DRP_filt')
         self.sigma.value = sigma
@@ -186,7 +186,6 @@ class ExplicitFilter(object):
             cond1 = ExprCondPair(OpenSBLIEq(GridVariable('temp'), 0.0), check)
             cond2 = ExprCondPair(output, True)
             eqns = [GroupedPiecewise(cond1, cond2)]
-            pprint(eqns)
         else:
             eqns = output[:]
         # pprint(eqns)
