@@ -157,6 +157,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall']
-values = ['2.1e5', '1.4', '0.2', '0.71', '0.00002', '500000000', '2301', '192', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '1.0']
+values = ['2.1e5', '1.4', '0.7', '0.71', '0.00002', '500000000', '2301', '192', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
