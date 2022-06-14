@@ -140,11 +140,11 @@ class ReductionVariable(EinsteinTerm, Constant):
         ret = super(ReductionVariable, cls).__new__(cls, label, **kwargs)
         ret.is_constant = True
         ret.is_input = True
-        if intent is 'max':
+        if intent == 'max':
             ret.intent = 'OPS_MAX'
-        elif intent is 'min':
+        elif intent == 'min':
             ret.intent = 'OPS_MIN'
-        elif intent is 'sum':
+        elif intent == 'sum':
             ret.intent = 'OPS_INC'
         else:
             raise ValueError("Reduction variables require an intent: min, max, or sum.")

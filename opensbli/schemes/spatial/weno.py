@@ -481,9 +481,9 @@ class LFWeno(LFCharacteristic, Weno):
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging. """
 
     def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='LLF'):
-        if flux_type is 'LLF':
+        if flux_type == 'LLF':
             print("Local Lax-Friedrich flux splitting.")
-        elif flux_type is 'GLF':
+        elif flux_type == 'GLF':
             print("Global Lax-Friedrich flux splitting.")
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")
@@ -510,7 +510,7 @@ class LFWeno(LFCharacteristic, Weno):
 
 
         if isinstance(type_of_eq, SimulationEquations):
-            if self.flux_type is 'GLF':
+            if self.flux_type == 'GLF':
                 EV_kernel = Kernel(block, computation_name="Global wave-speed reductions")
                 EV_kernel.set_grid_range(block)
             eqs = flatten(type_of_eq.equations)
@@ -537,7 +537,7 @@ class LFWeno(LFCharacteristic, Weno):
                 kernel.add_equation(pre_process + interpolated + post_process)
 
                 type_of_eq.Kernels += [kernel]
-            if self.flux_type is 'GLF':
+            if self.flux_type == 'GLF':
                 type_of_eq.Kernels = [EV_kernel] + type_of_eq.Kernels
             # Generate kernels for the constituent relations
             if grouped:

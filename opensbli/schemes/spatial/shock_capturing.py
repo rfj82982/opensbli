@@ -431,7 +431,7 @@ class LFCharacteristic(Characteristic):
         evaluations, CS_matrix, CF_matrix = self.create_characteristic_matrices(direction, derivatives, solution_vector, avg_name)
         pre_process_equations += evaluations
         # Get max wavespeeds and their evaluations, eigenvalues evaluated either local or globally
-        if self.flux_type is 'LLF':
+        if self.flux_type == 'LLF':
             grid_EV, pre_process_equations = self.create_max_characteristic_wave_speed(pre_process_equations, direction, block)
             reduction_equations = []
         else:

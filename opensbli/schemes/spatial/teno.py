@@ -478,9 +478,9 @@ class LFTeno(LFCharacteristic, Teno):
             raise ValueError("Storage array for the shock sensor is required.")
         else:
             self.sensor_array = sensor
-        if flux_type is 'LLF':
+        if flux_type == 'LLF':
             print("Local Lax-Friedrich flux splitting.")
-        elif flux_type is 'GLF':
+        elif flux_type == 'GLF':
             print("Global Lax-Friedrich flux splitting.")
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")

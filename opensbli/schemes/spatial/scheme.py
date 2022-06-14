@@ -288,7 +288,7 @@ class Central(Scheme):
         residue_kernel = Kernel(block)
         for no, array in enumerate(residual_arrays):
             # First time writing to the residual arrays
-            if residual_type is 'Convective':
+            if residual_type == 'Convective':
                 expr = OpenSBLIEq(array, discretised_eq[no])
             else:
                 expr = OpenSBLIEq(array, array+discretised_eq[no])

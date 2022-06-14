@@ -61,9 +61,9 @@ class OPSCCodePrinter(C99CodePrinter):
         C99CodePrinter.__init__(self, settings={})
 
     def _print_ReductionVariable(self, expr):
-        if expr.usage is 'lhs':
+        if expr.usage == 'lhs':
             return '*%s' % str(expr)
-        elif expr.usage is 'rhs':
+        elif expr.usage == 'rhs':
             return '*%s' % str(expr)
         else:
             raise ValueError("The reduction variable does not have a status in the equation.")

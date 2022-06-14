@@ -44,7 +44,7 @@ class ExplicitFilter(object):
         # Generate the filter offset grid locations
         self.locations = [i for i in range(-int(self.width/2.0), int(self.width/2.0)+1)]
         # Generate the coefficients
-        if self.filter_type is 'DRP':
+        if self.filter_type == 'DRP':
             self.generate_DRP_weights()
         else:
             self.generate_Visbal_weights()
@@ -217,11 +217,11 @@ class ExplicitFilter(object):
         if order == 0 and block.blocknumber == 0:
             # Mark as an explicit filter, to be used for full halo swaps
             UDF.full_swap = True
-        if UDF_type is 'Zeroing':
+        if UDF_type == 'Zeroing':
             UDF.computation_name = 'Block %d: Zero the filter array' % block.blocknumber
-        elif UDF_type is 'Calculation':
+        elif UDF_type == 'Calculation':
             UDF.computation_name = 'Block %d: %s filter calculation direction %s' % (block.blocknumber, self.filter_type, block.direction_labels[direction])
-        elif UDF_type is 'Update':
+        elif UDF_type == 'Update':
             UDF.computation_name = 'Block %d: %s filter update direction %s' % (block.blocknumber, self.filter_type, block.direction_labels[direction])
         else:
             raise ValueError("The UDF should be one of the above actions.")

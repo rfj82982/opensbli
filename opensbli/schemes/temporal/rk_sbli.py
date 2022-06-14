@@ -26,7 +26,7 @@ class RungeKutta(Scheme):
         # Update coefficient values
         cls.get_coefficients
         cls.add_constants()
-        if order is not 3:
+        if order != 3:
             raise NotImplementedError("This Runge-Kutta scheme is only defined for 3rd order. For 4th order please use the RungeKuttaLS class instead.")
         print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
         return

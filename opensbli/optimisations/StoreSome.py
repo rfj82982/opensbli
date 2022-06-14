@@ -155,9 +155,9 @@ class StoreSome(Central):
             gridvars = [GridVariable('localeval_%d' % i) for i in range(len(cds))]
             # Sort by grouping variables
             if group:
-                if equation_type is 'Convective':
+                if equation_type == 'Convective':
                     cds = sorted(cds, key=lambda x: x.args[1].direction)
-                elif equation_type is 'Viscous':
+                elif equation_type == 'Viscous':
                     cds = sorted(cds, key=lambda x: str(x.args[0]))
             for der in cds:
                 self.update_range_of_constituent_relations(der, block)

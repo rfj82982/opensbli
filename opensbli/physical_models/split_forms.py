@@ -28,7 +28,7 @@ class NS_Split(object):
             self.mom_lhs = 'u'
             self.energy_lhs = 'Et'
         # Kennedy_Gruber coefficients
-        if split_type is 'Kennedy_Gruber':
+        if split_type == 'Kennedy_Gruber':
             self.Aq, self.Bq = Rational(1,2), Rational(1,2)
             full = False
             if full:
@@ -75,7 +75,7 @@ class NS_Split(object):
         return OpenSBLIEq(lhs, rhs)
 
     def diffusive_terms(self):
-        if self.viscosity is 'constant':
+        if self.viscosity == 'constant':
             stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
             heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
         else:
