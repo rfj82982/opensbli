@@ -95,46 +95,82 @@ def fill_halo_coordinates(x, y):
     full_z = create_z_coordinates(x, y, full_z)
 
     for k in range(new_shape[0]):
-        # xm, x halos
-        full_x[k, y_slice, 4] = x[:,0]
-        full_x[k, y_slice, 3] = x[:,1]
-        full_x[k, y_slice, 2] = x[:,2]
-        full_x[k, y_slice, 1] = x[:,3]
-        full_x[k, y_slice, 0] = x[:,4]
-        # xm, y halos
-        full_y[k, y_slice, 4] = y[:,0]
-        full_y[k, y_slice, 3] = y[:,1]
-        full_y[k, y_slice, 2] = y[:,2]
-        full_y[k, y_slice, 1] = y[:,3]
-        full_y[k, y_slice, 0] = y[:,4]
-        # xp, x halos
-        full_x[k, y_slice, -5] = initial_x[:, 1]
-        full_x[k, y_slice, -4] = initial_x[:, 2]
-        full_x[k, y_slice, -3] = initial_x[:, 3]
-        full_x[k, y_slice, -2] = initial_x[:, 4]
-        full_x[k, y_slice, -1] = initial_x[:, 5]
-        # xp, y halos
-        full_y[k, y_slice, -5] = initial_y[:, 1]
-        full_y[k, y_slice, -4] = initial_y[:, 2]
-        full_y[k, y_slice, -3] = initial_y[:, 3]
-        full_y[k, y_slice, -2] = initial_y[:, 4]
-        full_y[k, y_slice, -1] = initial_y[:, 5]
 
-        #ym x halos
-        dx = full_x[k, 6, :] - full_x[k, 5, :]
-        full_x[k, 4, :] = full_x[k, 5, :] - dx
-        full_x[k, 3, :] = full_x[k, 4, :] - dx
-        full_x[k, 2, :] = full_x[k, 3, :] - dx
-        full_x[k, 1, :] = full_x[k, 2, :] - dx
-        full_x[k, 0, :] = full_x[k, 1, :] - dx
+        dx = full_x[k, y_slice,6] - full_x[k, y_slice,5]
+        # print(dx)
+        full_x[k, y_slice, 4] = initial_x[:, 0] - dx
+        full_x[k, y_slice, 3] = initial_x[:, 0] - 2*dx
+        full_x[k, y_slice, 2] = initial_x[:, 0] - 3*dx
+        full_x[k, y_slice, 1] = initial_x[:, 0] - 4*dx
+        full_x[k, y_slice, 0] = initial_x[:, 0] - 5*dx
 
-        #ym, y halos
-        dy = full_y[k, 6, :] - full_y[k, 5, :]
-        full_y[k, 4, :] = full_y[k, 5, :] - dy
-        full_y[k, 3, :] = full_y[k, 4, :] - dy
-        full_y[k, 2, :] = full_y[k, 3, :] - dy
-        full_y[k, 1, :] = full_y[k, 2, :] - dy
-        full_y[k, 0, :] = full_y[k, 1, :] - dy
+        # x positive halos, increasing x, copy from the other side over the periodic interface
+        dx = full_x[k, y_slice,-7] - full_x[k, y_slice,-6]
+        full_x[k, y_slice, -5] = initial_x[:, -1] -1*dx
+        full_x[k, y_slice, -4] = initial_x[:, -1] -2*dx
+        full_x[k, y_slice, -3] = initial_x[:, -1] -3*dx
+        full_x[k, y_slice, -2] = initial_x[:, -1] -4*dx
+        full_x[k, y_slice, -1] = initial_x[:, -1] -5*dx
+
+
+        # # y negative halos, copy from the other side over the periodic interface
+        dy = full_y[k, y_slice,6] - full_y[k, y_slice,5]
+        full_y[k, y_slice, 4] = initial_y[:, 0] - 1*dy
+        full_y[k, y_slice, 3] = initial_y[:, 0] - 2*dy
+        full_y[k, y_slice, 2] = initial_y[:, 0] - 3*dy
+        full_y[k, y_slice, 1] = initial_y[:, 0] - 4*dy
+        full_y[k, y_slice, 0] = initial_y[:, 0] - 5*dy
+
+        # # y positive halos, increasing x, copy from the other side over the periodic interface
+        dy = full_y[k, y_slice,-7] - full_y[k, y_slice,-6]
+        full_y[k, y_slice, -5] = initial_y[:, -1] - 1*dy
+        full_y[k, y_slice, -4] = initial_y[:, -1] - 2*dy
+        full_y[k, y_slice, -3] = initial_y[:, -1] - 3*dy
+        full_y[k, y_slice, -2] = initial_y[:, -1] - 4*dy
+        full_y[k, y_slice, -1] = initial_y[:, -1] - 5*dy
+
+
+#### OLD
+        # # xm, x halos
+        # full_x[k, y_slice, 4] = x[:,0]
+        # full_x[k, y_slice, 3] = x[:,1]
+        # full_x[k, y_slice, 2] = x[:,2]
+        # full_x[k, y_slice, 1] = x[:,3]
+        # full_x[k, y_slice, 0] = x[:,4]
+        # # xm, y halos
+        # full_y[k, y_slice, 4] = y[:,0]
+        # full_y[k, y_slice, 3] = y[:,1]
+        # full_y[k, y_slice, 2] = y[:,2]
+        # full_y[k, y_slice, 1] = y[:,3]
+        # full_y[k, y_slice, 0] = y[:,4]
+        # # xp, x halos
+        # full_x[k, y_slice, -5] = initial_x[:, 1]
+        # full_x[k, y_slice, -4] = initial_x[:, 2]
+        # full_x[k, y_slice, -3] = initial_x[:, 3]
+        # full_x[k, y_slice, -2] = initial_x[:, 4]
+        # full_x[k, y_slice, -1] = initial_x[:, 5]
+        # # xp, y halos
+        # full_y[k, y_slice, -5] = initial_y[:, 1]
+        # full_y[k, y_slice, -4] = initial_y[:, 2]
+        # full_y[k, y_slice, -3] = initial_y[:, 3]
+        # full_y[k, y_slice, -2] = initial_y[:, 4]
+        # full_y[k, y_slice, -1] = initial_y[:, 5]
+
+        # #ym x halos
+        # dx = full_x[k, 6, :] - full_x[k, 5, :]
+        # full_x[k, 4, :] = full_x[k, 5, :] - dx
+        # full_x[k, 3, :] = full_x[k, 4, :] - dx
+        # full_x[k, 2, :] = full_x[k, 3, :] - dx
+        # full_x[k, 1, :] = full_x[k, 2, :] - dx
+        # full_x[k, 0, :] = full_x[k, 1, :] - dx
+
+        # #ym, y halos
+        # dy = full_y[k, 6, :] - full_y[k, 5, :]
+        # full_y[k, 4, :] = full_y[k, 5, :] - dy
+        # full_y[k, 3, :] = full_y[k, 4, :] - dy
+        # full_y[k, 2, :] = full_y[k, 3, :] - dy
+        # full_y[k, 1, :] = full_y[k, 2, :] - dy
+        # full_y[k, 0, :] = full_y[k, 1, :] - dy
 
 
 
@@ -166,42 +202,6 @@ Lz = 0.05
 full_x, full_y, full_z = fill_halo_coordinates(initial_x, initial_y)
 
 print("Full 2D slice size with halos is (Nx, Ny):", full_x.shape)
-
-
-
-# # Fill coordinates in the halos over the interace
-# # x negative halos, increasing x, copy from the other side over the periodic interface
-# full_x[y_slice, 4] = initial_x[:, -2]
-# full_x[y_slice, 3] = initial_x[:, -3]
-# full_x[y_slice, 2] = initial_x[:, -4]
-# full_x[y_slice, 1] = initial_x[:, -5]
-# full_x[y_slice, 0] = initial_x[:, -6]
-
-# # y negative halos, copy from the other side over the periodic interface
-# full_y[y_slice, 4] = initial_y[:, -2]
-# full_y[y_slice, 3] = initial_y[:, -3]
-# full_y[y_slice, 2] = initial_y[:, -4]
-# full_y[y_slice, 1] = initial_y[:, -5]
-# full_y[y_slice, 0] = initial_y[:, -6]
-
-
-
-# # x positive halos, increasing x, copy from the other side over the periodic interface
-# full_x[y_slice, -5] = initial_x[:, 1]
-# full_x[y_slice, -4] = initial_x[:, 2]
-# full_x[y_slice, -3] = initial_x[:, 3]
-# full_x[y_slice, -2] = initial_x[:, 4]
-# full_x[y_slice, -1] = initial_x[:, 5]
-
-# # y positive halos, increasing x, copy from the other side over the periodic interface
-# full_y[y_slice, -5] = initial_y[:, 1]
-# full_y[y_slice, -4] = initial_y[:, 2]
-# full_y[y_slice, -3] = initial_y[:, 3]
-# full_y[y_slice, -2] = initial_y[:, 4]
-# full_y[y_slice, -1] = initial_y[:, 5]
-
-# Add the z direction
-
 
 ### FINISHED, write the file
 # Create the HDF5 file for reading into OpenSBLI
