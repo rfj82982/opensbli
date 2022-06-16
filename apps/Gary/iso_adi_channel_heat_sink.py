@@ -122,7 +122,7 @@ boundaries += [PeriodicBC(direction, side=1)]
 # Isothermal wall in x1 direction
 # Energy on the wall is set
 Twall = ConstantObject("Twall")
-wall_energy = [Eq(q_vector[4], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
+wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
 
 lower_wall_eq = wall_energy[:]
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
@@ -147,9 +147,6 @@ stretch = ConstantObject('stretch')
 Ly = 2
 stretched_eqn =  0.5*Ly*(1.0-((tanh(stretch*(1.0-2.0*(j/(ny-1.0)))))/(tanh(stretch))))-1.0
 grid_equations += [Eq(x, i * dx), Eq(y, stretched_eqn), Eq(z, k * dz)]
-#for eqn in grid_equations:
-    #pprint(eqn)
-#exit()
 # Initial condition
 initial_equations = []
 
@@ -206,7 +203,6 @@ block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equat
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.1, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
-
 # STEP 3
 # Create the dictionary of schemes
 schemes = {}
@@ -223,7 +219,7 @@ block.set_discretisation_schemes(schemes)
 # STEP 4 add io for the block
 kwargs = {'iotype': "Write"}
 output_arrays = simulation_eq.time_advance_arrays + [x, y, z, DataObject('D11')]
-output_hdf5 = iohdf5(save_every=10000, arrays=output_arrays, **kwargs)
+output_hdf5 = iohdf5(arrays=output_arrays, **kwargs)
 block.setio([output_hdf5])
 
 # Add statistics calculations
@@ -242,6 +238,23 @@ if stats:
 # STEP 6
 # Perform the symbolic discretisation of the equations
 block.discretise()
+
+# Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
+def create_exchange_calls_codes(block, dsets):
+    kernels = []
+    arrays = [block.location_dataset(a) for a in flatten(dsets)]
+    for direction in [0,2]:
+        for side in [0,1]:
+            BC = PeriodicBC(direction, side, full_swap=True)
+            kernels += [BC.apply(arrays, block)]
+    return kernels
+
+# Make some full swaps for interfaces before filtering
+filter_swaps = create_exchange_calls_codes(block, simulation_eq.time_advance_arrays)
+for no, eq in enumerate(block.list_of_equation_classes):
+    if isinstance(eq, UserDefinedEquations):
+        if eq.full_swap:
+            eq.Kernels += filter_swaps
 
 # Simulation monitors
 # Density at entrance plane, lower wall, midspan
