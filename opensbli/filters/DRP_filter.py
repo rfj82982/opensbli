@@ -18,6 +18,7 @@ class ExplicitFilter(object):
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
+        self.wall_control = wall_control
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
@@ -89,35 +90,33 @@ class ExplicitFilter(object):
                     self.modify_directions[i] = True
         return
 
-    def wall_control(self):
-        """ Turns off the filter close to any of the walls or block interfaces in the problem."""
-        buffer = 5
-        wall_var = GridVariable('Wall')
-        wall_conditions, wall_equations = [], []
-        indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
-        wall_equations += indexes
-        # Disable the shock filter at any wall boundaries
-        for direction in range(self.ndim):
-            for side in [0,1]:
-                wall = self.wall_boundaries[direction][side]
-                if wall:
-                    if side == 0:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
-                    else:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
-        # Check for block interfaces
-        # for direction in range(self.ndim):
-        #     for side in [0,1]:
-        #         interface = self.interface_boundaries[direction][side]
-        #         if interface:
-        #             if side == 0:
-        #                 wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
-        #             else:
-        #                 wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
-        # No wall or interface, default condition is the sensor is not turned off
-        wall_conditions += [ExprCondPair(1, True)]
-        wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
-        return wall_var, wall_equations
+    # def apply_wall_control(self):
+    #     """ Turns off the filter close to any of the walls or block interfaces in the problem."""
+    #     buffer = self.depth
+    #     wall_var = GridVariable('Wall')
+    #     wall_conditions, wall_equations = [], []
+    #     indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
+    #     wall_equations += indexes
+    #     # Disable the shock filter at any wall boundaries
+    #     for direction in range(self.ndim):
+    #         for side in [0,1]:
+    #             wall = self.wall_boundaries[direction][side]
+    #             interface = self.interface_boundaries[direction][side]
+    #             if wall:
+    #                 if side == 0:
+    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs < buffer)]
+    #                 else:
+    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs > self.block.ranges[direction][side] - (buffer+1))]
+    #             if interface:
+    #                 if side == 0:
+    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs < buffer)]
+    #                 else:
+    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs > self.block.ranges[direction][side] - (buffer+1))]
+
+    #     # No wall or interface, default condition is the sensor is not turned off
+    #     wall_conditions += [ExprCondPair(1, True)]
+    #     wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
+    #     return wall_var, wall_equations
 
     def generate_DRP_weights(self):
         """ Weights are symmetric about the central point."""
@@ -175,15 +174,16 @@ class ExplicitFilter(object):
             output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(sum(stencil)))]
         # Restrict the filter if close to the wall, in the wall normal direction
         eqns = []
-        buffer = 5
+        buffer = self.depth
         if self.wall_boundaries[direction][0] or self.wall_boundaries[direction][1]:
             if self.wall_boundaries[direction][0]:
-                check = self.block.grid_indexes[direction] <= buffer
+                check = self.block.grid_indexes[direction] < buffer
             if self.wall_boundaries[direction][1]:
-                check = self.block.grid_indexes[direction] >= self.block.ranges[direction][1] - (buffer+1)
+                check = self.block.grid_indexes[direction] > self.block.ranges[direction][1] - (buffer+1)
             if self.wall_boundaries[direction][0] and self.wall_boundaries[direction][1]:
-                check = Or(self.block.grid_indexes[direction] <= buffer, self.block.grid_indexes[direction] >= self.block.ranges[direction][1] - (buffer+1))
-            cond1 = ExprCondPair(OpenSBLIEq(GridVariable('temp'), 0.0), check)
+                check = Or(self.block.grid_indexes[direction] < buffer, self.block.grid_indexes[direction] > self.block.ranges[direction][1] - (buffer+1))
+            zeroing = [OpenSBLIEq(self.temp_arrays[dset_id], 0.0) for dset_id, dset in enumerate(self.q_vector)]
+            cond1 = ExprCondPair(zeroing, check)
             cond2 = ExprCondPair(output, True)
             eqns = [GroupedPiecewise(cond1, cond2)]
         else:
@@ -204,7 +204,7 @@ class ExplicitFilter(object):
         application = self.create_stencil(direction)
         direction += 1
         # Update the q vector
-        # wall_var, wall_equations = self.wall_control()
+        # wall_var, wall_equations = self.apply_wall_control()
         # update = wall_equations[:]
         update = []
         for dset_id, dset in enumerate(self.q_vector):
