@@ -14,7 +14,7 @@ class Monitor(object):
 
 
 class SimulationMonitor(object):
-    def __init__(self, arrays, probe_locations, block, print_frequency=250, fp_precision=10, NaNcheck=True, output_file=None):
+    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=10, NaNcheck=True, output_file=None):
         """ Class to enable access of dataset values during the simulation.
         :arg list arrays: A list of DataSets to monitor during the simulation.
         :arg list probe_locations: A list of tuples giving the (i,j,k) grid index location of the probe.
@@ -28,6 +28,11 @@ class SimulationMonitor(object):
         if len(arrays) != len(probe_locations):
             raise ValueError("The number of arrays must equal the number of probe locations.")
         self.monitors = [Monitor(var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations))]
+        if OPS_V2:
+            self.ops_headers = {'input': "const ACC<%s> &%s", 'output': 'ACC<%s> &%s', 'inout': 'ACC<%s> &%s'}
+        else:
+            self.ops_headers = {'input': "const %s *%s", 'output': '%s *%s', 'inout': '%s *%s'}
+        self.OPS_V2 = OPS_V2
         self.components = []
         self.frequency = print_frequency
         self.fp_precision = fp_precision
@@ -103,9 +108,13 @@ class SimulationMonitor(object):
     def generate_kernel_code(self, M):
         """ Generates the kernel definitions to be added to the reductions header file."""
         name, number = str(M.flow_var), M.probe_no
-        code = ["void monitor_%d_%s(const %s *%s, %s *reduce_%d_%s){\n" % (number, name, self.dtype, name, self.dtype, number, name)]
         indices = ','.join(['0' for _ in range(self.ndim)])
-        code += ["*reduce_%d_%s = %s[OPS_ACC0(%s)];\n}" % (number, name, name, indices)] + ["\n\n"]
+        if self.OPS_V2:
+            code = ["void monitor_%d_%s(const ACC<%s> &%s, %s *reduce_%d_%s){\n" % (number, name, self.dtype, name, self.dtype, number, name)]
+            code += ["*reduce_%d_%s = %s(%s);\n}" % (number, name, name, indices)] + ["\n\n"]
+        else:
+            code = ["void monitor_%d_%s(const %s *%s, %s *reduce_%d_%s){\n" % (number, name, self.dtype, name, self.dtype, number, name)]
+            code += ["*reduce_%d_%s = %s[OPS_ACC0(%s)];\n}" % (number, name, name, indices)] + ["\n\n"]
         return code
 
     @property
