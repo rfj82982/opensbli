@@ -1,7 +1,7 @@
 """ David J. Lusher 09/21. Dispersion Relation Preserving (DRP) explicit filters."""
 
 from opensbli import *
-from sympy import pprint, Piecewise, factor
+from sympy import pprint, Piecewise, factor, Or
 from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
