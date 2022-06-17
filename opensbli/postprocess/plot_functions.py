@@ -8,12 +8,14 @@ class OpenSBLIPreProcess(object):
     def __init__(self):
         # self.file_name = file_name
         self.open_files = []
+        self.gamma = 1.4
+        self.pick_block = 0
         return
 
     def read_file(self, file_name, remove_halos=True):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[0]
+        block_name = list(f.keys())[self.pick_block]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.f, self.block_name, self.dsets = f, block_name, dsets
@@ -22,11 +24,27 @@ class OpenSBLIPreProcess(object):
         self.shape = tuple([x-10 for x in self.shape])
         return
 
+    def read_grid(self, file_name='./data.h5', remove_halos=True):
+        print("Reading from file: %s" % file_name)
+        f = h5py.File(file_name, 'r')
+        block_name = list(f.keys())[self.pick_block]
+        dsets = list(f[block_name].keys())
+        print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
+        self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
+        self.shape = list(f[block_name][dsets[0]].shape)
+        self.shape = tuple([x-10 for x in self.shape])
+        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % self.pick_block])
+        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % self.pick_block])
+        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % self.pick_block])
+        return
+
     def find_files(self, directory):
         """ Finds a list of OpenSBLI HDF5 files from a specified directory."""
         file_list = sorted(glob.glob(directory + '/opensbli_output_*.h5'))
         iteration_numbers = [re.findall("\d+", s)[0].lstrip('0') for s in file_list]
-        print("Found {:} OpenSBLI output files.\n".format(len(file_list)))
+        print("Found {:} OpenSBLI output files:".format(len(file_list)))
+        for f in file_list:
+            print(f)
         return file_list, iteration_numbers
 
     def NaN_check(self, dset):
@@ -90,7 +108,32 @@ class OpenSBLIPreProcess(object):
         return
 
 
+    def kinetic_energy(self, conservative=True):
+        gamma = 1.4
+        if conservative:
+            rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+            u, v, w = rhou/rho, rhov/rho, rhow/rho
+            KE = np.sum(0.5*rho*(u**2 + v**2 + w**2)) / (self.shape[0]*self.shape[1]*self.shape[2])
+        return KE
 
+    def pressure(self, conservative=True):
+        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+        u, v, w = rhou/rho, rhov/rho, rhow/rho
+        p = (self.gamma-1)*(rhoE - 0.5*rho*(u**2 + v**2 + w**2))
+        return p
+
+    def GlobalMach(self, output='Max', conservative=True):
+        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+        u, v, w = rhou/rho, rhov/rho, rhow/rho
+        p = (self.gamma-1)*(rhoE - 0.5*rho*(u**2 + v**2 + w**2))
+        c = np.sqrt(self.gamma*p/rho)
+        Mach = np.sqrt(u**2 + v**2 + w**2) / c
+        if output == 'Max':
+            argmax = np.argmax(Mach)
+            Mach = np.max(Mach)
+            print("Maximum Mach number is: ", Mach)
+            print("Maximum is located at (x,y,z):", np.ravel(self.x)[argmax], np.ravel(self.y)[argmax], np.ravel(self.z)[argmax])
+        return Mach
 
 
 class OpenSBLIPlot(object):
@@ -140,10 +183,28 @@ class OpenSBLIPlot(object):
             dset_im = self.ax.contourf(x, y, dset.T, self.nlevels, cmap=cmap)
         return dset_im
 
+    def line_plot(self, xvar, yvar):
+        self.ax.plot(xvar, yvar)
+        return
+
     def save_figure(self, fname, dpi=300):
         plt.savefig('%s.png' % fname, dpi=dpi, bbox_inches='tight')
         return
 
 
 
+# class OpenSBLIProcessNS(object):
+#     """ Post processing calculations from an OpenSBLI output file, using NumPy."""
+#     def __init__(self):
+#         # self.file_name = file_name
+#         self.open_files = []
+#         self.nlevels = 30
+#         return
 
+#     def 
+
+#     def kinetic_energy(self, conservative=True):
+#         if conservative:
+
+
+#         return KE
