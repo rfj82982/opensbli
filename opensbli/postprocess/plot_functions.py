@@ -9,13 +9,12 @@ class OpenSBLIPreProcess(object):
         # self.file_name = file_name
         self.open_files = []
         self.gamma = 1.4
-        self.pick_block = 0
         return
 
-    def read_file(self, file_name, remove_halos=True):
+    def read_file(self, file_name, block_number, remove_halos=True):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[self.pick_block]
+        block_name = list(f.keys())[block_number]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.f, self.block_name, self.dsets = f, block_name, dsets
@@ -24,18 +23,18 @@ class OpenSBLIPreProcess(object):
         self.shape = tuple([x-10 for x in self.shape])
         return
 
-    def read_grid(self, file_name='./data.h5', remove_halos=True):
+    def read_grid(self, block_number, file_name='./data.h5', remove_halos=True):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[self.pick_block]
+        block_name = list(f.keys())[block_number]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
         self.shape = list(f[block_name][dsets[0]].shape)
         self.shape = tuple([x-10 for x in self.shape])
-        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % self.pick_block])
-        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % self.pick_block])
-        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % self.pick_block])
+        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % block_number])
+        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % block_number])
+        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % block_number])
         return
 
     def find_files(self, directory):
