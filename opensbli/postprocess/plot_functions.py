@@ -11,10 +11,10 @@ class OpenSBLIPreProcess(object):
         self.gamma = 1.4
         return
 
-    def read_file(self, file_name, block_number, remove_halos=True):
+    def read_file(self, file_name, blocknumber, remove_halos=True):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[block_number]
+        block_name = list(f.keys())[blocknumber]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.f, self.block_name, self.dsets = f, block_name, dsets
@@ -23,18 +23,19 @@ class OpenSBLIPreProcess(object):
         self.shape = tuple([x-10 for x in self.shape])
         return
 
-    def read_grid(self, block_number, file_name='./data.h5', remove_halos=True):
+    def read_grid(self, blocknumber, file_name='./data.h5', remove_halos=True):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[block_number]
+        block_name = list(f.keys())[blocknumber]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
         self.shape = list(f[block_name][dsets[0]].shape)
         self.shape = tuple([x-10 for x in self.shape])
-        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % block_number])
-        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % block_number])
-        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % block_number])
+        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber])
+        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % blocknumber])
+        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % blocknumber])
+        self.blocknumber = blocknumber
         return
 
     def find_files(self, directory):
@@ -110,19 +111,19 @@ class OpenSBLIPreProcess(object):
     def kinetic_energy(self, conservative=True):
         gamma = 1.4
         if conservative:
-            rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+            rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho_B%d' % self.blocknumber), self.read_full_dset('rhou0_B%d' % self.blocknumber), self.read_full_dset('rhou1_B%d' % self.blocknumber), self.read_full_dset('rhou2_B%d' % self.blocknumber), self.read_full_dset('rhoE_B%d' % self.blocknumber)
             u, v, w = rhou/rho, rhov/rho, rhow/rho
             KE = np.sum(0.5*rho*(u**2 + v**2 + w**2)) / (self.shape[0]*self.shape[1]*self.shape[2])
         return KE
 
     def pressure(self, conservative=True):
-        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho_B%d' % self.blocknumber), self.read_full_dset('rhou0_B%d' % self.blocknumber), self.read_full_dset('rhou1_B%d' % self.blocknumber), self.read_full_dset('rhou2_B%d' % self.blocknumber), self.read_full_dset('rhoE_B%d' % self.blocknumber)
         u, v, w = rhou/rho, rhov/rho, rhow/rho
         p = (self.gamma-1)*(rhoE - 0.5*rho*(u**2 + v**2 + w**2))
         return p
 
     def GlobalMach(self, output='Max', conservative=True):
-        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho'), self.read_full_dset('rhou0'), self.read_full_dset('rhou1'), self.read_full_dset('rhou2'), self.read_full_dset('rhoE')
+        rho, rhou, rhov, rhow, rhoE = self.read_full_dset('rho_B%d' % self.blocknumber), self.read_full_dset('rhou0_B%d' % self.blocknumber), self.read_full_dset('rhou1_B%d' % self.blocknumber), self.read_full_dset('rhou2_B%d' % self.blocknumber), self.read_full_dset('rhoE_B%d' % self.blocknumber)
         u, v, w = rhou/rho, rhov/rho, rhow/rho
         p = (self.gamma-1)*(rhoE - 0.5*rho*(u**2 + v**2 + w**2))
         c = np.sqrt(self.gamma*p/rho)
