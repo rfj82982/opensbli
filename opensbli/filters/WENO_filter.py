@@ -11,6 +11,7 @@ from opensbli.schemes.spatial.weno import *
 from opensbli.core.boundary_conditions.bc_core import WallBC
 from sympy.functions.elementary.piecewise import ExprCondPair
 from opensbli.equation_types.metric import MetricsEquation
+from opensbli.schemes.spatial.scheme import CentralHalos_defdec
 
 
 class WENOFilter(NonSimulationEquations):
@@ -329,9 +330,13 @@ class WENOFilter(NonSimulationEquations):
     def zero_work_arrays(self, block):
         resid_kernel = self.residual_kernels[0]
         zeroed_equations = []
+        # Halo points for the sensor kernel
+        zero_halos = []
+        for _ in range(self.ndim):
+            zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
         for i in range((self.ndim+2)*self.ndim):
             zeroed_equations += [OpenSBLIEq(block.location_dataset('wk%d' % i), 0.0)]
-        zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, resid_kernel.halo_ranges, block)
+        zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
         self.component_counter += 1
         self.add_kernel(zero_kernel)
         return

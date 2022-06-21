@@ -8,27 +8,27 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters,
 # Problem dimension
 ndim = 3
 stats = True
-
-# Define the compresible Navier-Stokes equations in Einstein notation
-# Feiereisen quadratic skew-symmetric formulation, no change in continuity
-mass = "Eq(Der(rho, t), - Der(rhou_j, x_j))"
-
-# Feiereisen quadratic skew-symmetric momentum
-QSSFm = "(1/2) * (Conservative(rhou_i*u_j, x_j) + rhou_j* Der(u_i,x_j) + u_i * Der(rhou_j,x_j))"
-momentum = "Eq(Der(rhou_i, t), - Der(p, x_i) + Der(tau_i_j, x_j) - KD(_i,_j)*c_j )"
-
-QSSFe = "(1/2) * (Conservative(rhoE*u_j, x_j) + rhou_j*Conservative(rhoE/rho, x_j) + (rhoE/rho) * Der(rhou_j, x_j))"
-energy = "Eq(Der(rhoE, t), - %s - Conservative(p*u_j, x_j) - Dot(c_j, u_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j) -theta)" % (QSSFe)
-
-stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-
-substitutions = [stress_tensor, heat_flux]
-# Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "c_j", "theta"]
-
+# # Constants that are used
+constants = ["Re", "Pr", "gama", "Minf", "c_j"]
 # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
+# symbol for the coordinate system in the equations
+conservative = True
+# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+
+# Add channel forcing term and heat sink
+for i, eqn in enumerate(momentum):
+    momentum[i] = OpenSBLIEq(eqn.lhs, eqn.rhs - ConstantObject("c%d" % i))
+energy = OpenSBLIEq(energy.lhs, energy.rhs - (ConstantObject("c0")*DataObject('u0') + ConstantObject("c1")*DataObject('u1') + ConstantObject("c2")*DataObject('u2')) - ConstantObject('theta'))
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
+
 
 # Constituent relations used in the system
 velocity = "Eq(u_i, rhou_i/rho)"
@@ -38,43 +38,20 @@ viscosity = "Eq(mu, (T**0.7))"
 
 # Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
 einstein_eq = EinsteinEquation()
-
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-
-# Expand mass and add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
-# Expand momentum add the expanded equations to the simulation equations
-expanded_Feiereisen = einstein_eq.expand(QSSFm, ndim, coordinate_symbol, substitutions, constants)
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-# Substract the inviscid part ot the RHS
-for no, value in enumerate(eqns):
-    eqns[no] = Eq(eqns[no].lhs,  eqns[no].rhs - expanded_Feiereisen[no])
-simulation_eq.add_equations(eqns)
-
-# Expand energy equation add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 
 # Expand momentum add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-
 # Expand pressure add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-
 # Expand temperature add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-
 # Expand viscosity add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Write the expanded equations to a Latex file with a given name and titile
@@ -280,8 +257,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_V2=True)
 
 # STEP 10
-# Populate the values of the constants like Re, Pr etc and the number of points for the
-# simulation etc. In the future reading thes from HDF5 would be provided
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1',
     'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', "c0", "c1", "c2", "lx0", "lx2", "stretch", "Twall", "theta"]
 values = ['190.71', '1.4', '0.0955', '0.7', '0.0002', '250000', '129', '129', '129',

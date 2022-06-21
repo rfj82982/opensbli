@@ -13,79 +13,39 @@ metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True,
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 
-#Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
-#Specify the schemes
-mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
-momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
-energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-# Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-substitutions = [stress_tensor, heat_flux]
-# Constants that are used
+# # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
-# Formulas for the variables used in the equations
+# symbol for the coordinate system in the equations
+conservative = True
+# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
+
+einstein_eq = EinsteinEquation()
+# Constituent relations
 velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-viscosity = "Eq(mu, T**0.7)"
-
-einstein_eq = EinsteinEquation()
-# einstein_eq.optional_subs_dict = optional_subs_dict
-
-# metric_vel = "Eq(U_i, D_i_j*u_j)"
-# eqns = einstein_eq.expand(metric_vel, ndim, coordinate_symbol, substitutions, constants)
-# for eq in eqns:
-#     einstein_eq.optional_subs_dict[eq.lhs] = eq.rhs
-
-# Change the symbol to xi as we will be using metrics
-simulation_eq = SimulationEquations()
-
-# Perform the expansion
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
-constituent = ConstituentRelations()
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
-constituent.add_equations(eqns)
-
-
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-
-# Expand mass and add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand momentum add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand energy equation add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
+viscosity = "Eq(mu, (T**0.7))"
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 # Expand momentum and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Expand pressure and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Expand temperature and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # # Expand viscosity and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 
@@ -121,7 +81,7 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 u2 T'
-cent = StoreSome(4, fns)
+cent = StoreSome(6, fns)
 # cent = Central(6)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
@@ -133,8 +93,8 @@ q_vector = flatten(simulation_eq.time_advance_arrays)
 boundaries = []
 direction = 0
 # Apply a periodic boundary over the shared mesh line
-boundaries += [PeriodicBC(direction, 0, full_swap=True)]
-boundaries += [PeriodicBC(direction, 1, full_swap=True)]
+boundaries += [PeriodicBC(direction, 0)]
+boundaries += [PeriodicBC(direction, 1)]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
@@ -147,15 +107,15 @@ direction, side = 1,1
 boundaries += [DirichletBC(direction, side, initial_equations)]
 # Periodic span
 direction = 2
-boundaries += [PeriodicBC(direction, 0, full_swap=False)]
-boundaries += [PeriodicBC(direction, 1, full_swap=False)]
+boundaries += [PeriodicBC(direction, 0)]
+boundaries += [PeriodicBC(direction, 1)]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=1000, **kwargs)
+h5 = iohdf5(save_every=5000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 # h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 kwargs = {'iotype': "Read"}
@@ -173,7 +133,7 @@ BF = BinomialFilter(block, order=6, grid_condition=grid_condition, sigma=0.1)
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq])
 block.set_equations(BF.equation_classes)
-DRP = ExplicitFilter(block, [0,1], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
 
 block.set_equations(DRP.equation_classes)
 
@@ -182,6 +142,23 @@ block.set_discretisation_schemes(schemes)
 
 # Discretise the equations on the block
 block.discretise()
+
+# Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
+def create_exchange_calls_codes(block, dsets):
+    kernels = []
+    arrays = [block.location_dataset(a) for a in flatten(dsets)]
+    for direction in [0,2]:
+        for side in [0,1]:
+            BC = PeriodicBC(direction, side, full_swap=True)
+            kernels += [BC.apply(arrays, block)]
+    return kernels
+
+# Make some full swaps for interfaces before filtering
+filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
+for no, eq in enumerate(block.list_of_equation_classes):
+    if isinstance(eq, UserDefinedEquations):
+        if eq.full_swap:
+            eq.Kernels += filter_swaps
 
 alg = TraditionalAlgorithmRK(block)
 
@@ -192,6 +169,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_diagnostics=2)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu']
-values = ['2.1e6', '1.4', '0.2', '0.71', '0.000002', '500000000', '1129', '161', '50', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
+values = ['5.0e5', '1.4', '0.2', '0.71', '1.0e-5', '500000000', '2301', '193', '50', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
