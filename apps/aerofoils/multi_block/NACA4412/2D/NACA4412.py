@@ -16,11 +16,6 @@ def create_exchange_calls_codes(multiblock_descriptor, dsets):
         kernels += block.apply_interface_bc(arrays, multiblock_descriptor, full_halo_swap=True)
     return kernels
 
-ndim = 2
-nblocks = 3
-multi_block = MultiBlock(ndim, nblocks)
-SimulationDataType.set_datatype(Double)
-
 def generate_sponge_kernel(conserve_vector, block):
     """ Applies a sponge boundary on the outflow of the domain to damp oscillations."""
     length_sponge, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
@@ -91,6 +86,13 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     wake_transfer2.computation_name = "waketransfer2"
     return [wake_transfer1, ker, wake_transfer2]
 
+ndim = 2
+nblocks = 3
+multi_block = MultiBlock(ndim, nblocks)
+SimulationDataType.set_datatype(Double)
+# # Constants that are used
+constants = ["Re", "Pr", "gama", "Minf"]
+
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
@@ -98,15 +100,28 @@ metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True,
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 
-#Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
-#Specify the schemes
-mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
-momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
-energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-# Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-substitutions = [stress_tensor, heat_flux]
+
+Einstein_expansion = EinsteinEquation()
+Einstein_expansion.optional_subs_dict = optional_subs_dict
+
+
+metric_vel = "Eq(U_i, D_i_j*u_j)"
+eqns = Einstein_expansion.expand(metric_vel, ndim, coordinate_symbol, [], constants)
+for eq in eqns:
+    Einstein_expansion.optional_subs_dict[eq.lhs] = eq.rhs
+
+
+# symbol for the coordinate system in the equations
+conservative = True
+# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
 # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
 # Formulas for the variables used in the equations
@@ -115,34 +130,14 @@ pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, T**0.7)"
 
-einstein_expasion = EinsteinEquation()
-einstein_expasion.optional_subs_dict = optional_subs_dict
-
-metric_vel = "Eq(U_i, D_i_j*u_j)"
-eqns = einstein_expasion.expand(metric_vel, ndim, coordinate_symbol, substitutions, constants)
-for eq in eqns:
-    einstein_expasion.optional_subs_dict[eq.lhs] = eq.rhs
-
-# Change the symbol to xi as we will be using metrics
-coordinate_symbol = "x"
-simulation_eq = SimulationEquations()
-
-# Perform the expansion
-eqns = einstein_expasion.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-eqns = einstein_expasion.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-eqns = einstein_expasion.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
 constituent = ConstituentRelations()
-eqns = einstein_expasion.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
+eqns = Einstein_expansion.expand(velocity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-eqns = einstein_expasion.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
+eqns = Einstein_expansion.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-eqns = einstein_expasion.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
+eqns = Einstein_expansion.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-eqns = einstein_expasion.expand(viscosity, ndim, coordinate_symbol, substitutions, constants)
+eqns = Einstein_expansion.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Transform the equations into curvilinear form
