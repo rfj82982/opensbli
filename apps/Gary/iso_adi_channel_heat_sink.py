@@ -14,8 +14,8 @@ constants = ["Re", "Pr", "gama", "Minf", "c_j"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 
@@ -227,7 +227,7 @@ def create_exchange_calls_codes(block, dsets):
     return kernels
 
 # Make some full swaps for interfaces before filtering
-filter_swaps = create_exchange_calls_codes(block, simulation_eq.time_advance_arrays)
+filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):
         if eq.full_swap:

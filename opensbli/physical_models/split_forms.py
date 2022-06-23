@@ -27,15 +27,13 @@ class NS_Split(object):
             self.rhou = 'rho*u'
             self.mom_lhs = 'u'
             self.energy_lhs = 'Et'
-        # Kennedy_Gruber coefficients
-        if split_type == 'Kennedy_Gruber':
-            self.Aq, self.Bq = Rational(1,2), Rational(1,2)
-            full = False
-            if full:
-                self.A, self.B = Rational(1,4), Rational(1,4)
-            else:
-                self.A, self.B = Rational(1,2), 0
-            self.Y = 1 - self.A - 2*self.B
+        # KGP coefficients
+        if split_type == 'KGP':
+            self.alpha = Rational(1,4)
+            self.beta = Rational(1,4)
+            self.delta = Rational(1,4)
+            self.gamma = Rational(1,4)
+            self.epsilon = 0
         # Diffusive terms
         self.substitutions = self.diffusive_terms()
         self.mass = self.continuity_eq()
@@ -74,24 +72,15 @@ class NS_Split(object):
             rhs = self.factor_replace(rhs)
         return OpenSBLIEq(lhs, rhs)
 
-    def diffusive_terms(self):
-        if self.viscosity == 'constant':
-            stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
-            heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
-        else:
-            stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
-            heat_flux = "Eq(q_j, ((mu/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
-        substitutions = [stress_tensor, heat_flux]
-        return substitutions
-
     def continuity_eq(self):
         if self.split_type == 'Feiereisen':
             out = "Eq(Der(rho, t), - Conservative(%s_j, x_j))" % self.rhou
-        elif self.split_type == 'Kennedy_Gruber':
-            Aq, Bq = self.Aq, self.Bq
-            out = "Eq(Der(rho, t), - Conservative(%s*%s_j, x_j) - %s*(rho*divV + u_j*Der(rho, x_j)))" % (Aq, self.rhou, Bq)
+        elif self.split_type == 'KGP':
+            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
+            # out = "Eq(Der(rho, t), - Conservative(%s*%s_j, x_j) - %s*(rho*divV + u_j*Der(rho, x_j)))" % (Aq, self.rhou, Bq)
+            out = "Eq(Der(rho, t), - (%s*Conservative(rho*u_j, x_j) + %s*Conservative(rho*u_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
         else:
-            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
         out = self.EE.expand(out, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         if self.replace_factors:
             out = self.common_factors(out)
@@ -103,13 +92,15 @@ class NS_Split(object):
         if self.split_type == 'Feiereisen':
             convective = "(1/2) * (Conservative(%s_i*u_j, x_j) + %s_j*Der(u_i,x_j) + u_i * Der(%s_j,x_j))" % (self.rhou, self.rhou, self.rhou)
         # Kennedy Gruber cubic split
-        elif self.split_type == 'Kennedy_Gruber':
-            A, Aq, B, Bq, Y = self.A, self.Aq, self.B, self.Bq, self.Y
-            convective = "%s*Conservative(%s_i*u_j, x_j) + %s*(rho*Conservative(u_i*u_j, x_j) + u_i*Conservative(%s_j, x_j) + u_j*Conservative(%s_i, x_j)) + %s*(u_i*u_j*Der(rho, x_j) + %s_j*Der(u_i, x_j) + %s_i * divV)" % (A, self.rhou, B, self.rhou, self.rhou, Y, self.rhou, self.rhou)
+        elif self.split_type == 'KGP':
+            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
+            # convective = "%s*Conservative(%s_i*u_j, x_j) + %s*(rho*Conservative(u_i*u_j, x_j) + u_i*Conservative(%s_j, x_j) + u_j*Conservative(%s_i, x_j)) + %s*(u_i*u_j*Der(rho, x_j) + %s_j*Der(u_i, x_j) + %s_i * divV)" % (A, self.rhou, B, self.rhou, self.rhou, Y, self.rhou, self.rhou)
+            convective = "%s*Conservative(rho*u_j*u_i, x_j) + %s*(u_i*Conservative(rho*u_j, x_j) + rho*u_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rho*u_i, x_j) + rho*u_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
         else:
-            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
         # Add convective parts
         expanded_convective = self.EE.expand(convective, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        expanded_convective[0] = factor(expanded_convective[0])
         for no, value in enumerate(out):
             temp = OpenSBLIEq(out[no].lhs,  out[no].rhs - expanded_convective[no])
             if self.replace_factors:
@@ -124,18 +115,27 @@ class NS_Split(object):
                 convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
             else:
                 convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
-            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
-        elif self.split_type == 'Kennedy_Gruber':
-            A, Aq, B, Bq, Y = self.A, self.Aq, self.B, self.Bq, self.Y
+        elif self.split_type == 'KGP':
+            # Split on phi = E
+            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
             if self.conservative:
-                convective = "Conservative(%s*rhoE*u_j, x_j) + Conservative(%s*p*u_j, x_j) + %s*(rho*Conservative(rhoE/rho * u_j, x_j) + (rhoE/rho)*Conservative(%s_j, x_j) + u_j*Conservative(rhoE, x_j)) + %s*((rhoE/rho)*u_j*Der(rho, x_j) + %s_j*Conservative(rhoE/rho, x_j) + rhoE*divV) + %s*(p*divV + u_j*Der(p, x_j)) " % (A, Aq, B, self.rhou, Y, self.rhou, Bq)
+                convective = "(%s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
             else:
-                convective = "Conservative(%s*rho*Et*u_j, x_j) + Conservative(%s*p*u_j, x_j) + %s*(rho*Conservative(Et * u_j, x_j) + Et*Conservative(%s_j, x_j) + u_j*Conservative(rho*Et, x_j)) + %s*(Et*u_j*Der(rho, x_j) + %s_j*Conservative(Et, x_j) + rho*Et*divV) + %s*(p*divV + u_j*Der(p, x_j)) " % (A, Aq, B, self.rhou, Y, self.rhou, Bq)
-
-            energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+                raise ValueError("Haven't added non-conservative form.")
         else:
-            raise NotImplementedError("Only Feierisen and Kennedy_Gruber splitting methods are implemented.")
+            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
+        energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         out = self.EE.expand(energy, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         if self.replace_factors:
             out = self.common_factors(out)
         return out
+
+    def diffusive_terms(self):
+        if self.viscosity == 'constant':
+            stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
+        else:
+            stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            heat_flux = "Eq(q_j, ((mu/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
+        substitutions = [stress_tensor, heat_flux]
+        return substitutions
