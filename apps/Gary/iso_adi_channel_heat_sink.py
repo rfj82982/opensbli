@@ -259,7 +259,7 @@ OPSC(alg, OPS_V2=True)
 # STEP 10
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1',
     'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', "c0", "c1", "c2", "lx0", "lx2", "stretch", "Twall", "theta"]
-values = ['190.71', '1.4', '0.0955', '0.7', '0.0002', '250000', '129', '129', '129',
+values = ['600.0', '1.4', '0.135', '0.7', '0.0000575', '250000', '128', '129', '128',
     '4.0*M_PI/block0np0', '2.0/(block0np1-1)', '(4.0*M_PI/3.0)/block0np2', '-1', '0', '0', "4.0*M_PI", "(4.0*M_PI/3.0)", "1.7", "1.0", "0.1"]
 substitute_simulation_parameters(constants, values)
 print_iteration_ops()
