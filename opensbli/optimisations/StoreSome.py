@@ -111,17 +111,10 @@ class StoreSome(Central):
         # Apply to the convective terms
         convective = [OpenSBLIEq(x, y) for x, y in zip(residual_arrays, convective)]
         convective_equations = self.SS(convective, block, 'Convective')
-        # Factor the equations
-        reduce_count = False
-        if reduce_count:
-            if convective_equations:  
-                for i, eqn in enumerate(convective_equations):
-                    factored = factor(eqn.rhs)
-                    if count_ops(factored) < count_ops(eqn.rhs):
-                        convective_equations[i] = OpenSBLIEq(eqn.lhs, factored)
         # Apply to the viscous terms
         viscous = [OpenSBLIEq(x, x+y) for x, y in zip(residual_arrays, viscous)]
         viscous_equations = self.SS(viscous, block, 'Viscous')
+        
         if convective_equations or viscous_equations:
             for ker in self.local_kernels:
                 eval_ker = self.local_kernels[ker]

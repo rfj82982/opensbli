@@ -754,9 +754,9 @@ class OPSC(object):
                                                                                dset.block_name, dtype.opsc(), dset, dset.input_file_name)
             out += [WriteString(temp)]
         else:
-            # Residual and time-advance arrays do not require halos
+            # Residual and time-advance arrays do not require halos unless using shock filter
             if ('Residual' in str(dset) or 'tempRK' in str(dset) or 'RKold' in str(dset)):
-                hm, hp = [0 for _ in range(len(dset.size))], [0 for _ in range(len(dset.size))]
+                hm, hp = [-5 for _ in range(len(dset.size))], [5 for _ in range(len(dset.size))]
             else:
                 hm, hp = self.get_max_halos(dset.halo_ranges)
             halo_p = self.declare_inline_array("int", "halo_p", hp)
