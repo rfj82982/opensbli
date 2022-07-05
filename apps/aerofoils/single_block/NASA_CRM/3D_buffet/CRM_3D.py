@@ -16,7 +16,7 @@ optional_subs_dict = metriceq.metric_subs
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
 # symbol for the coordinate system in the equations
-conservative = True
+conservative = False
 # NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
@@ -28,16 +28,23 @@ simulation_eq.add_equations(momentum)
 simulation_eq.add_equations(energy)
 
 einstein_eq = EinsteinEquation()
+einstein_eq.optional_subs_dict = optional_subs_dict
+
+metric_vel = "Eq(U_i, D_i_j*u_j)"
+eqns = einstein_eq.expand(metric_vel, ndim, coordinate_symbol, [], constants)
+for eq in eqns:
+    einstein_eq.optional_subs_dict[eq.lhs] = eq.rhs
+
 # Constituent relations
-velocity = "Eq(u_i, rhou_i/rho)"
-pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
+# velocity = "Eq(u_i, rhou_i/rho)"
+pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**0.7))"
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 # Expand momentum and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
+# eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+# constituent.add_equations(eqns)
 # Expand pressure and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
@@ -50,7 +57,7 @@ constituent.add_equations(eqns)
 
 
 # Create a simulation block
-block = SimulationBlock(ndim, block_number=0)
+block = SimulationBlock(ndim, block_number=0, conservative=conservative)
 simulation_eq.apply_metrics(metriceq)
 
 # Local dictionary for parsing the expressions
@@ -64,10 +71,10 @@ p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
 r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
 
 rho = "Eq(DataObject(rho), r)"
-rhou0 = "Eq(DataObject(rhou0), r*u0)"
-rhou1 = "Eq(DataObject(rhou1), r*u1)"
-rhou2 = "Eq(DataObject(rhou2), r*u2)"
-rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
+rhou0 = "Eq(DataObject(u0), u0)"
+rhou1 = "Eq(DataObject(u1), u1)"
+rhou2 = "Eq(DataObject(u2), u2)"
+rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"
 temp_eq = "Eq(GridVariable('temp'), DataObject(x2))"
 eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE, temp_eq]
 
@@ -81,11 +88,11 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 u2 T'
-cent = StoreSome(6, fns)
-# cent = Central(6)
+cent = StoreSome(4, fns)
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension
@@ -98,7 +105,7 @@ boundaries += [PeriodicBC(direction, 1)]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
-wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
+wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
 direction = 1
 lower_wall_eq = wall_energy[:]
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
@@ -127,15 +134,18 @@ block.setio([h5, h5_read])
 # SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75)
 
 j = block.grid_indexes[1]
-grid_condition = j >= 440
+grid_condition = j >= 460
 BF = BinomialFilter(block, order=6, grid_condition=grid_condition, sigma=0.1)
 
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq])
 block.set_equations(BF.equation_classes)
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
-
 block.set_equations(DRP.equation_classes)
+
+# WENO filter for shock-capturing
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
+block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
@@ -154,7 +164,7 @@ def create_exchange_calls_codes(block, dsets):
     return kernels
 
 # Make some full swaps for interfaces before filtering
-filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
+filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):
         if eq.full_swap:
@@ -166,9 +176,9 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
-OPSC(alg, OPS_diagnostics=2)
+OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu']
-values = ['5.0e5', '1.4', '0.2', '0.71', '1.0e-5', '500000000', '2301', '454', '50', '37.6887/(block0np0-1)', '36.9844/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
+values = ['5.0e5', '1.4', '0.72', '0.71', '1.0e-4', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

@@ -16,7 +16,7 @@ def create_exchange_calls_codes(multiblock_descriptor, dsets):
         kernels += block.apply_interface_bc(arrays, multiblock_descriptor, full_halo_swap=True)
     return kernels
 
-def generate_sponge_kernel(conserve_vector, block):
+def generate_sponge_kernel(q_vector, block):
     """ Applies a sponge boundary on the outflow of the domain to damp oscillations."""
     length_sponge, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
     gama, minf = symbols("gama Minf", **{'cls':ConstantObject})
@@ -27,7 +27,7 @@ def generate_sponge_kernel(conserve_vector, block):
     # Characteristic length
     equations += [Eq(lc, x0 - (5.0 -length_sponge)), Eq(sigma,  0.5*(1.0 + cos(pi* lc/length_sponge)))]
     values = [1.0, 1.0, 0.0, 0.0, 1.0/(gama * minf**2.0 *(gama - 1.0)) + 0.5]
-    for b0, b1, b2 in zip(residual, conserve_vector, values):
+    for b0, b1, b2 in zip(residual, q_vector, values):
         equations += [Eq(b0, b0 - sigma * (b1- b2))]
     eqns = block.dataobjects_to_datasets_on_block(equations)
     # pprint ([eq for eq in eqns])
@@ -42,20 +42,20 @@ def generate_sponge_kernel(conserve_vector, block):
     ker.update_block_datasets(block)
     return ker
 
-def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
+def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     """ Wake treatment at the block interface."""
     block = mulitblock.get_block(0)
     wk = symbols("wk0:5", **{'cls':DataObject})
     # Add the grid index if IDX ==0 then 
     # Also change the range of evaluation
     idx = block.grid_indexes[0]
-    equations = [Eq(conserve_vector[0], 0.5 * (conserve_vector[0] + wk[0]))]
+    equations = [Eq(q_vector[0], 0.5 * (q_vector[0] + wk[0]))]
     # for rhou,v,w
-    for b0, b1 in zip(conserve_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, Eq(idx,0)), ExprCondPair(0.5* (b0 + b1), True)]
+    for b0, b1 in zip(q_vector[1:-1], wk[1:-1]):
+        pairs = [ExprCondPair(0.0, Eq(idx,1000000)), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,0)), ExprCondPair(0.5* (conserve_vector[-1] + wk[-1]), True)]
-    equations += [Eq(conserve_vector[-1], Piecewise(*pairs, evaluate=False))]
+    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,1000000)), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
+    equations += [Eq(q_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
     direction = 1
@@ -67,10 +67,10 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     ker.kernelname = "wake_treatment_kernel"
     ker.computation_name = "Wake treatment"
     ker.halo_ranges[1][0] = set()   
-    # Wake exchanges from block2 wakeline (conserve_vector) to blokck0 work_arrays
+    # Wake exchanges from block2 wakeline (q_vector) to blokck0 work_arrays
     block2 = mulitblock.get_block(2)
     bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
-    arrays = [block2.work_array(str(a)) for a in flatten(conserve_vector)]
+    arrays = [block2.work_array(str(a)) for a in flatten(q_vector)]
     other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
     wake_transfer1 = bc.apply_interface(arrays, block2, mulitblock, other_arrays=other_arrays)
     wake_transfer1.transfer_size[1] = 1
@@ -79,7 +79,7 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
     wake_transfer1.computation_name = "waketransfer1"
     
     bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
-    arrays = [block.work_array(str(a)) for a in flatten(conserve_vector)]
+    arrays = [block.work_array(str(a)) for a in flatten(q_vector)]
     wake_transfer2 = bc.apply_interface(arrays, block, mulitblock)
     wake_transfer2.transfer_size[1] = 1
     wake_transfer2.transfer_from[1] = 0
@@ -89,8 +89,12 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
 
 ndim = 3
 nblocks = 3
-multi_block = MultiBlock(ndim, nblocks)
+# Set non-conservative LHS to reduce array storage
+# symbol for the coordinate system in the equations
+conservative = False
+multi_block = MultiBlock(ndim, nblocks, conservative=conservative)
 SimulationDataType.set_datatype(Double)
+
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
@@ -106,10 +110,9 @@ eqns = Einstein_expansion.expand(metric_vel, ndim, coordinate_symbol, [], consta
 for eq in eqns:
     Einstein_expansion.optional_subs_dict[eq.lhs] = eq.rhs
 
-# symbol for the coordinate system in the equations
-conservative = True
+
 # NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -120,20 +123,27 @@ simulation_eq.add_equations(energy)
 # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
 # Formulas for the variables used in the equations
-velocity = "Eq(u_i, rhou_i/rho)"
-pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
+constituent = ConstituentRelations()
+if conservative:
+    velocity = "Eq(u_i, rhou_i/rho)"
+    eqns = Einstein_expansion.expand(velocity, ndim, coordinate_symbol, [], constants)
+    constituent.add_equations(eqns)
+    pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+else:
+    pressure = "Eq(p, (gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, T**0.7)"
+# divV = "Eq(divV, Der(u_j, x_j))"
 
-constituent = ConstituentRelations()
-eqns = Einstein_expansion.expand(velocity, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
 eqns = Einstein_expansion.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 eqns = Einstein_expansion.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 eqns = Einstein_expansion.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
+# eqns = Einstein_expansion.expand(divV, ndim, coordinate_symbol, [], constants)
+# eqns = metriceq.apply_transformation(eqns)
+# constituent.add_equations(eqns)
 
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
@@ -156,13 +166,21 @@ initial_equations += [Eq(u1, 0.0)]
 initial_equations += [Eq(u2, 0.0)]
 initial_equations += [Eq(p, 1.0/(gama*Minf**2.0))]
 
-# Set the conservative values
-conserve_vector = flatten(simulation_eq.time_advance_arrays)
-initial_equations += [Eq(conserve_vector[0], d)]
-initial_equations += [Eq(conserve_vector[1], d*u0)]
-initial_equations += [Eq(conserve_vector[2], d*u1)]
-initial_equations += [Eq(conserve_vector[3], d*u2)]
-initial_equations += [Eq(conserve_vector[4], p/(gama-1.0) + 0.5* d *(u0**2+u1**2+ u2**2))]
+# Set the q vector values
+q_vector = flatten(simulation_eq.time_advance_arrays)
+if conservative:
+    initial_equations += [Eq(q_vector[0], d)]
+    initial_equations += [Eq(q_vector[1], d*u0)]
+    initial_equations += [Eq(q_vector[2], d*u1)]
+    initial_equations += [Eq(q_vector[3], d*u2)]
+    initial_equations += [Eq(q_vector[4], p/(gama-1.0) + 0.5* d *(u0**2+u1**2+ u2**2))]
+else:
+    initial_equations += [Eq(q_vector[0], d)]
+    initial_equations += [Eq(q_vector[1], u0)]
+    initial_equations += [Eq(q_vector[2], u1)]
+    initial_equations += [Eq(q_vector[3], u2)]
+    initial_equations += [Eq(q_vector[4], p/(d*(gama-1.0)) + 0.5*(u0**2+u1**2+ u2**2))]
+
 initial_equations += [Eq(GridVariable('temp'), DataObject('x2'))]
 initial = GridBasedInitialisation()
 initial.add_equations(copy.deepcopy(initial_equations))
@@ -194,8 +212,11 @@ block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
 # Wall temperature is required for halo points
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
-wall_energy = [Eq(conserve_vector[-1], Twall*conserve_vector[0]/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, equations=wall_energy))
+if conservative:
+    wall_energy = [Eq(q_vector[-1], Twall*q_vector[0]/((gama-1.0)*gama*Minf*Minf))]
+else:
+    wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
+block1_bc.append(IsothermalWallBC(direction=1, side=0, shock=False, equations=wall_energy))
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block1_bc.append(PeriodicBC(direction=2, side=0))
 block1_bc.append(PeriodicBC(direction=2, side=1))
@@ -221,7 +242,7 @@ multi_block.set_equations([simulation_eq, constituent, metriceq])
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
-    if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+    if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
         filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
@@ -250,11 +271,11 @@ multi_block.setio([h5_read])
 # Perform the discretization
 multi_block.discretise()
 # Add the wake treatment kernels
-wake_ker = generate_wake_kernel(conserve_vector, multi_block, wall_energy[0])
+wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
 # Sponge kernel for block 0
-sponge_ker_block0 = generate_sponge_kernel(conserve_vector, multi_block.get_block(0))
+sponge_ker_block0 = generate_sponge_kernel(q_vector, multi_block.get_block(0))
 # Sponge kernel for block 2
-sponge_ker_block2 = generate_sponge_kernel(conserve_vector, multi_block.get_block(2))
+sponge_ker_block2 = generate_sponge_kernel(q_vector, multi_block.get_block(2))
 
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
@@ -278,12 +299,12 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_swap=True)
+            BC = PeriodicBC(direction, side, corners=False)
             kernels += [BC.apply(arrays, block)]
     return kernels
 
 # Make some full swaps for interfaces before filtering
-filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
+filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):
         if eq.full_swap:
