@@ -19,13 +19,13 @@ class WENOFilter(NonSimulationEquations):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', conservative=True):
+    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=False):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         self.reconstruction_kernels = []
         self.residual_kernels = []
-        self.conservative = conservative
         self.flux_type = flux_type
-        if self.conservative:
+        self.airfoil = airfoil
+        if block.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
             self.energy_lhs = 'rhoE'
@@ -97,16 +97,21 @@ class WENOFilter(NonSimulationEquations):
                 self.curvilinear = False
         return
 
-    def create_weno_equations(self):
+    def create_weno_equations(self, block):
         # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
         scheme_type = "**{\'scheme\':\'Weno\'}"
         constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Uniform mesh, no stretching or curvilinear terms
         if self.metric_class is None:
             coordinate_symbol = "x"
-            mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
-            momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-            energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+            if block.conservative:
+                mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+            else:
+                mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
+                momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type      
             output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
         else:
             # Full curvilinear
@@ -114,12 +119,20 @@ class WENOFilter(NonSimulationEquations):
                 coordinate_symbol = "xi"
                 optional_subs_dict = self.metric_class.metric_subs
                 self.EE.optional_subs_dict = optional_subs_dict
-                a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
-                mass = "Eq(Der(rho,t), - %s)" % (a)
-                a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
-                momentum = "Eq(Der(rhou_i,t) , -  %s)" % (a)
-                a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
-                energy = "Eq(Der(rhoE,t), - %s)" % (a)
+                if block.conservative:
+                    a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
+                    mass = "Eq(Der(rho,t), - %s)" % (a)
+                    a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
+                    momentum = "Eq(Der(rhou_i,t) , -  %s)" % (a)
+                    a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
+                    energy = "Eq(Der(rhoE,t), - %s)" % (a)
+                else:
+                    a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
+                    mass = "Eq(Der(rho,t), - %s)" % (a)
+                    a = "Conservative(detJ * (rho*u_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
+                    momentum = "Eq(Der(u_i,t) , -  %s)" % (a)
+                    a = "Conservative(detJ * (p+rho*Et)*U_j,xi_j, %s)" % scheme_type
+                    energy = "Eq(Der(Et,t), - %s)" % (a)                    
 
                 base_eqns = [mass, momentum, energy]
                 for i, base in enumerate(base_eqns):
@@ -136,7 +149,7 @@ class WENOFilter(NonSimulationEquations):
             else: ### Only added non-conservative for this stretched case
                 coordinate_symbol = "x"
                 mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
-                if self.conservative:
+                if block.conservative:
                     momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
                     energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
                 else:
@@ -189,7 +202,7 @@ class WENOFilter(NonSimulationEquations):
         CR_eqns += [OpenSBLIEq(inv_rho, 1.0/rho)]
         velocity_components = [block.location_dataset('u%d' % i ) for i in range(self.ndim)]
 
-        if self.conservative:
+        if block.conservative:
             momentum_components = [self.solution_vector[i+1] for i in range(self.ndim)]
             # Primitive components and speed of sound
             CR_eqns += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
@@ -243,13 +256,21 @@ class WENOFilter(NonSimulationEquations):
         Ducros_condition = [ExprCondPair(1, kappa_evaluation > DT)]
         # # No wall or interface, default condition is the sensor is not turned off
         Ducros_condition += [ExprCondPair(0, True)]
-        temp_var = GridVariable('temp')
-        output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        # If airfoil, turn off shock-capturing in front of the leading edge
+        if self.airfoil:
+            if block.blocknumber == 0 or block.blocknumber == 1:
+                Ducros_condition += [ExprCondPair(0, block.location_dataset('x0') < 0.0)]
+                output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        else:
+            output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
             sensor_halos.append([self.halo_type, self.halo_type])
         sensor_kernel = self.create_kernel('Shock sensor', flatten(output_eqns), sensor_halos, block)
+        # for eqn in sensor_kernel.equations:
+        #     pprint(eqn)
+        # exit()
         # Add the kernel
         self.add_kernel(sensor_kernel)
         self.component_counter += 1
@@ -290,9 +311,7 @@ class WENOFilter(NonSimulationEquations):
         q_grid = [GridVariable('q%d' % i) for i in range(nvars)]
         rho = self.solution_vector[0]
         modified_equations = []
-        if not self.conservative:
-            inv_rho = GridVariable('inv_rho')
-            modified_equations += [OpenSBLIEq(inv_rho, 1.0/rho)]
+        if not block.conservative:
             q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
         else:
             q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
@@ -314,8 +333,11 @@ class WENOFilter(NonSimulationEquations):
 
         # Update the global q arrays
         update_equations.append(OpenSBLIEq(self.solution_vector[0], q_vars[0].lhs))
+        if not block.conservative:
+            inv_rho = GridVariable('inv_rho')
+            update_equations += [OpenSBLIEq(inv_rho, 1.0/q_vars[0].lhs)]
         for i, var in enumerate(self.solution_vector[1:]):
-            if not self.conservative:
+            if not block.conservative:
                 update_equations.append(OpenSBLIEq(var, inv_rho*q_vars[i+1].lhs))
             else:
                 update_equations.append(OpenSBLIEq(var, q_vars[i+1].lhs))
@@ -327,15 +349,12 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(residual_kernel)
         return
 
-    def zero_work_arrays(self, block):
+    def zero_work_arrays(self, block, dsets):
         resid_kernel = self.residual_kernels[0]
-        zeroed_equations = []
-        # Halo points for the sensor kernel
         zero_halos = []
         for _ in range(self.ndim):
             zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
-        for i in range((self.ndim+2)*self.ndim):
-            zeroed_equations += [OpenSBLIEq(block.location_dataset('wk%d' % i), 0.0)]
+        zeroed_equations = [OpenSBLIEq(dset, 0.0) for dset in dsets]
         zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
         self.component_counter += 1
         self.add_kernel(zero_kernel)
@@ -363,11 +382,11 @@ class WENOFilter(NonSimulationEquations):
         # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
-        eqn = self.create_weno_equations()
+        eqn = self.create_weno_equations(block)
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=self.conservative)
+        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
@@ -376,6 +395,7 @@ class WENOFilter(NonSimulationEquations):
         CR, solution_vector, reductions = WS.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
+        pprint(self.solution_vector)
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
         # Compute initial Ducros sensor
@@ -392,7 +412,7 @@ class WENOFilter(NonSimulationEquations):
         if len(reductions) > 0:
             self.reduction_operations(reductions)
         # Zero the work arrays
-        self.zero_work_arrays(block)
+        self.zero_work_arrays(block, WS.temp_wk_arrays)
         # Create the WENO reconstruction kernels
         reconstruction_kernels = []
         for direction, ker in enumerate(self.reconstruction_kernels):
