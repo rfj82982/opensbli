@@ -82,7 +82,7 @@ class ReductionCounter():
 
 class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTypes):
     """ A SimulationBlock represents represents the grid on which the equations, boundary conditions etc are set to be solved."""
-    def __init__(self, ndim, block_number=None):
+    def __init__(self, ndim, block_number=None, conservative=True):
         if block_number:
             self.blocknumber = block_number
         else:
@@ -107,6 +107,7 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
         self.list_of_equation_classes = []
         self.shock_filter = False
         self.direction_labels = ['x', 'y', 'z']
+        self.conservative = conservative # Conservative form of LHS
         return
 
     @property

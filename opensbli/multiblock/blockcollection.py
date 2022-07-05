@@ -32,11 +32,11 @@ SimulationBlock.apply_interface_bc = apply_interface_bc
 # MBCHANGE
 
 class MultiBlock():
-    def __init__(self, ndim, nblocks):
+    def __init__(self, ndim, nblocks, conservative=True):
         self.nblocks = nblocks
         self.blocks = [0 for i in range(nblocks)]
         for i in range(nblocks):
-            self.blocks[i] = SimulationBlock(ndim, block_number=i)
+            self.blocks[i] = SimulationBlock(ndim, block_number=i, conservative=conservative)
         return
 
     def get_block(self, number):
