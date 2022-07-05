@@ -1,7 +1,7 @@
 from opensbli.core.boundary_conditions.bc_core import BoundaryConditionBase
 from opensbli.core.boundary_conditions.exchange import ExchangeSelf
 from opensbli.core.kernel import Kernel
-from sympy import Matrix
+from sympy import Matrix, pprint
 
 
 class PeriodicBC(BoundaryConditionBase):
@@ -11,9 +11,10 @@ class PeriodicBC(BoundaryConditionBase):
     :arg int side: Side 0 or 1 to apply the boundary condition for a given direction.
     :arg bool plane: True/False: Apply boundary condition to full range/split range only."""
 
-    def __init__(self, direction, side, full_swap=False, plane=True):
+    def __init__(self, direction, side, full_swap=False, corners=True, plane=True):
         BoundaryConditionBase.__init__(self, direction, side, plane)
         self.full_swap = full_swap
+        self.corners = corners
         return
 
     def halos(self):
@@ -27,7 +28,6 @@ class PeriodicBC(BoundaryConditionBase):
 
     def get_exchange_plane(self, arrays, block):
         """ Create the exchange computations which copy the block point values to/from the periodic domain boundaries. """
-
         # Create a kernel this is a neater way to implement the transfers
         ker = Kernel(block)
         halos = self.get_halo_values(block)
@@ -52,8 +52,12 @@ class PeriodicBC(BoundaryConditionBase):
         else:
             transfer_from[direction] = idx[direction].upper + halos[direction][0]
             transfer_to[direction] = idx[direction].lower + halos[direction][0]
-
-        transfer_size = Matrix([i.upper + i.lower for i in idx]) + \
-            Matrix([abs(dire[0]) + abs(dire[1]) for dire in halos])
+        # Total sizes
+        if self.corners:
+            transfer_size = Matrix([i.upper + i.lower for i in idx]) + \
+                Matrix([abs(dire[0]) + abs(dire[1]) for dire in halos])
+        else:
+            transfer_size = Matrix([i.upper + i.lower for i in idx])
+        # The size over the direction we are swapping (halo depth)
         transfer_size[direction] = abs(halos[direction][side])
         return transfer_size, transfer_from, transfer_to
