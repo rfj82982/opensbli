@@ -27,12 +27,11 @@ class RungeKuttaLS(Scheme):
 
         :arg int order: The order of accuracy of the scheme."""
 
-    def __init__(cls, order, formulation=None, conservative=True):
+    def __init__(cls, order, formulation=None):
         Scheme.__init__(cls, "RungeKutta", order)
         cls.solution = {}
         cls.schemetype = "Temporal"
         cls.formulation = formulation
-        cls.conservative = conservative
         # Create constants
         cls.create_constants(order)
         cls.add_constants()
@@ -158,10 +157,11 @@ class RungeKuttaLS(Scheme):
         # Convert between conservative/primitive form before and after the time update
         rho = block.location_dataset('rho')
         rho_inv = GridVariable('rho_inv')
-        output = [OpenSBLIEq(rho_inv, 1./rho)]
+        output = []
         primitive_to_conservative = [OpenSBLIEq(var, rho*var) for var in cls.var_solved[1:]]
         conservative_to_primitive = [OpenSBLIEq(var, rho_inv*var) for var in cls.var_solved[1:]]
-        output += primitive_to_conservative + equations + conservative_to_primitive
+        inv = [OpenSBLIEq(rho_inv, 1./rho)]
+        output += primitive_to_conservative + equations + inv + conservative_to_primitive
         return output
 
     def create_discretisation_kernel(cls, zipped, block):
@@ -176,7 +176,7 @@ class RungeKuttaLS(Scheme):
         # Update the solution and stages
         if cls.constant_time_step:
             solution_update = cls.constant_time_step_solution(zipped)
-        if not cls.conservative:
+        if not block.conservative:
             solution_update = cls.convert_to_conservative(solution_update, block)
 
         solution_update_kernel.add_equation(solution_update)
