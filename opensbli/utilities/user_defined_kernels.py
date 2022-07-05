@@ -40,6 +40,15 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         cls._place += [place]
         return
 
+    @property
+    def custom_grid_range(cls):
+        return cls._custom_grid_range
+
+    @custom_grid_range.setter
+    def custom_grid_range(cls, custom_range):
+        cls._custom_grid_range = custom_range
+        return
+
     def spatial_discretisation(cls, block):
         """ Applies the spatial discretisation of the equations by calling the discretisation of each spatial scheme provided on the block
 
@@ -89,6 +98,14 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
 
         # Process the kernels to update parameters on the block
         cls.process_kernels(block)
+        # Apply a custom grid range if necessary
+        print(cls.custom_grid_range)
+        try:
+            if cls.custom_grid_range is not None:
+                for ker in cls.Kernels:
+                    ker.range = cls.custom_grid_range
+        except:
+            pass
         return
 
     def process_kernels(cls, block):
