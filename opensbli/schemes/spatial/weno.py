@@ -488,6 +488,7 @@ class LFWeno(LFCharacteristic, Weno):
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")
         self.flux_type = flux_type
+        self.temp_wk_arrays = []
         LFCharacteristic.__init__(self, physics, flux_type, averaging)
         self.conservative = conservative
         if shock_filter is not None:

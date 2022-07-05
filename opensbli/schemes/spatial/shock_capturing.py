@@ -4,7 +4,7 @@
    @details
 """
 
-from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function
+from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor
 from sympy.core.numbers import Zero
 from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
@@ -402,6 +402,7 @@ class LFCharacteristic(Characteristic):
         :arg list derivatives: The derivatives to perform the characteristic decomposition and WENO on.
         :arg list solution_vector: Solution vector from the Euler equations (rho, rhou0, rhou1, rhou2, rhoE) in vector form."""
         self.direction = direction
+        self.input_solution_vector = solution_vector
         pre_process_equations = []
         # Update the ev, LEV and REV dicts and perform averaging
         avg_name = 'AVG_%d' % direction
@@ -519,7 +520,20 @@ class LFCharacteristic(Characteristic):
                 post_process_equations += flatten([self.central_diff_formula(i, recon)])
 
         reconstructed_flux = avg_REV_values*reconstructed_characteristics
-        reconstructed_work = [d.reconstruction_work for d in derivatives]
+        # Re use arrays to reduce memory usage if WENO is being applied as a shock filter step
+        if block.shock_filter:
+            if direction == 0:
+                reconstructed_work = [d.reconstruction_work for d in derivatives]
+            elif direction == 1:
+                reconstructed_work = [block.location_dataset('Residual%d' % i) for i in range(len(derivatives))]
+            else:
+                reconstructed_work = [block.location_dataset('%s_RKold' % fn.base.label) for fn in self.input_solution_vector]
+            # Update the work arrays
+            for i, d in enumerate(derivatives):
+                d.reconstruction_work = reconstructed_work[i]
+                self.temp_wk_arrays.append(reconstructed_work[i])
+        else:
+            reconstructed_work = [d.reconstruction_work for d in derivatives]
         post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
         post_process_equations = self.replace_gamma_factor(post_process_equations)
         return post_process_equations
@@ -544,13 +558,17 @@ class LFCharacteristic(Characteristic):
         CF_evaluations = flatten(self.generate_equations_from_matrices(CF_matrix, characteristic_flux_vector))
         CS_evaluations = flatten(self.generate_equations_from_matrices(CS_matrix, characteristic_solution_vector))
         # Optimise by grouping evaluations by stencil location
-        reordered_CS, reordered_CF = [], []
         n_rows, n_cols = CS_matrix.shape[0], CS_matrix.shape[1]
+        reordered = []
         for j in range(n_cols):
+            reordered_CS, reordered_CF = [], []
             for i in range(n_rows):
-                # reordered_CS.append(CS_evaluations[j+i*n_cols])
-                reordered_CF.append(CF_evaluations[j+i*n_cols])
-        reordered = reordered_CF + CS_evaluations
+                reordered.append(CF_evaluations[j+i*n_cols])
+            for i in range(n_rows):
+                reordered.append(CS_evaluations[j+i*n_cols])
+        # for eqn in reordered:
+        #     pprint(eqn)
+        # exit()
         return reordered, CS_matrix, CF_matrix
 
     def characteristic_flux_splitting(self, ev_matrix, CS_matrix, CF_matrix, derivatives):
@@ -564,9 +582,6 @@ class LFCharacteristic(Characteristic):
                 negative_flux[i, j] = factor(negative[i, j])
         positive_flux.stencil_points = CF_matrix.stencil_points
         negative_flux.stencil_points = CF_matrix.stencil_points
-        # pprint(positive_flux)
-        # pprint(positive_flux.stencil_points)
-        # exit()
         self.generate_right_reconstruction_variables(positive_flux, derivatives)
         self.generate_left_reconstruction_variables(negative_flux, derivatives)
         return
