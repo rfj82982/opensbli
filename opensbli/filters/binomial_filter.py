@@ -1,16 +1,17 @@
-""" David J. Lusher: Binomial filter using the coefficients of (a-b)^n / 2^n for filter of order n.
-    Original three-point 2nd order version by Alex Gillespie."""
+""" djl: Binomial filter using the coefficients of (a-b)^n / 2^n for filter of order n. Used for boundary filtering."""
 
 from opensbli import *
-from sympy import symbols, exp, pprint, Piecewise, binomial
+from sympy import symbols, exp, pprint, Piecewise, binomial, Integer
 from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
 from opensbli.core.kernel import ConstantsToDeclare as CTD
+from opensbli.core.grid import Grididx
 from opensbli.code_generation.algorithm.common import *
 from opensbli.utilities.user_defined_kernels import UserDefinedEquations
 from opensbli.core.block import SimulationBlock
 from opensbli.multiblock.blockcollection import MultiBlock
+import copy
 
 class BinomialFilter(object):
     def __init__(self, block, order, grid_condition=None, sigma=0.1):
@@ -18,7 +19,7 @@ class BinomialFilter(object):
         if (order % 2) != 0:
             raise ValueError("The filter is only defined for even orders n.")
         elif (order > 10):
-            raise ValueError("Increase the number of halo points in scheme.py for high order filters.")
+            raise ValueError("Increase the number of halo points in scheme.py for higher order filters.")
         else:
             self.order = order
         # Spatial dependence of the filter
@@ -72,11 +73,16 @@ class BinomialFilter(object):
     def create_equations(self, block):
         ndim = block.ndim
         # Conservative variables
-        if ndim == 2:
-            q = ['rho', 'rhou0', 'rhou1', 'rhoE']
-        elif ndim == 3:
-            q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
-
+        if block.conservative:
+            if ndim == 2:
+                q = ['rho', 'rhou0', 'rhou1', 'rhoE']
+            elif ndim == 3:
+                q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+        else:
+            if ndim == 2:
+                    q = ['rho', 'u0', 'u1', 'Et']
+            elif ndim == 3:
+                q = ['rho', 'u0', 'u1', 'u2', 'Et']
         # Create the three point stencils
         q_xstencil = self.create_stencil(block, q, 0)
         q_ystencil = self.create_stencil(block, q, 1)
@@ -111,11 +117,23 @@ class BinomialFilter(object):
             output_equations += blended_equations
         return output_equations
 
+    def reduce_grid_range(self, block, filt_class):
+        original = copy.deepcopy(block.ranges)
+        start_index = list(self.grid_condition.atoms(Integer))[0]
+        direction = list(self.grid_condition.atoms(Grididx))[0].number
+        assert isinstance(start_index, Integer) and isinstance(direction, int)
+        # Edit the start_index, currently assumes the filter should be applied to the end of the iteration range in that direction
+        original[direction][0] = start_index
+        filt_class.custom_grid_range = original
+        return
+
     def create_filter(self, block):
         # Create a kernel at the end of the time loop, every iteration (no frequency)
         filter_class = UserDefinedEquations()
         filter_class.algorithm_place = InTheSimulation(frequency=False)
         filter_class.computation_name = 'Binomial filter'
+        if self.grid_condition is not None:
+            self.reduce_grid_range(block, filter_class)
         # Place the filter at the very end
         filter_class.order = 10000
         filter_class.add_equations(self.create_equations(block))
