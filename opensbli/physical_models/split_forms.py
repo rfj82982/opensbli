@@ -57,9 +57,9 @@ class NS_Split(object):
             output = collect(output, key)
         # Substitute simulation constants
         if ConstantObject('mu') in self.constants:
-            output = collect(output, ConstantObject('mu')*ConstantObject('invRe'))
+            output = collect(output, ConstantObject('mu')/ConstantObject('Re'))
         else: # variable viscosity
-            output = collect(output, ConstantObject('invRe'))
+            output = collect(output, ConstantObject('Re'))
         # pprint(output)
         print("New operation count: {:}".format(output.count_ops()))
         return output
@@ -67,7 +67,7 @@ class NS_Split(object):
     def common_factors(self, eqn):
         """ Simplifies the equation by taking out common rational numbers."""
         lhs, rhs = eqn.lhs, eqn.rhs
-        optimized = False
+        optimized = True
         if optimized:
             rhs = self.factor_replace(rhs)
         return OpenSBLIEq(lhs, rhs)
@@ -77,8 +77,10 @@ class NS_Split(object):
             out = "Eq(Der(rho, t), - Conservative(%s_j, x_j))" % self.rhou
         elif self.split_type == 'KGP':
             A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-            # out = "Eq(Der(rho, t), - Conservative(%s*%s_j, x_j) - %s*(rho*divV + u_j*Der(rho, x_j)))" % (Aq, self.rhou, Bq)
-            out = "Eq(Der(rho, t), - (%s*Conservative(rho*u_j, x_j) + %s*Conservative(rho*u_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
+            if self.conservative:
+                out = "Eq(Der(rho, t), - (%s*Conservative(rhou_j, x_j) + %s*Conservative(rhou_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
+            else:
+                out = "Eq(Der(rho, t), - (%s*Conservative(rho*u_j, x_j) + %s*Conservative(rho*u_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
         out = self.EE.expand(out, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
@@ -94,8 +96,10 @@ class NS_Split(object):
         # Kennedy Gruber cubic split
         elif self.split_type == 'KGP':
             A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-            # convective = "%s*Conservative(%s_i*u_j, x_j) + %s*(rho*Conservative(u_i*u_j, x_j) + u_i*Conservative(%s_j, x_j) + u_j*Conservative(%s_i, x_j)) + %s*(u_i*u_j*Der(rho, x_j) + %s_j*Der(u_i, x_j) + %s_i * divV)" % (A, self.rhou, B, self.rhou, self.rhou, Y, self.rhou, self.rhou)
-            convective = "%s*Conservative(rho*u_j*u_i, x_j) + %s*(u_i*Conservative(rho*u_j, x_j) + rho*u_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rho*u_i, x_j) + rho*u_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
+            if self.conservative:
+                convective = "%s*Conservative(rhou_j*u_i, x_j) + %s*(u_i*Conservative(rhou_j, x_j) + rhou_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rhou_i, x_j) + rhou_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
+            else:
+                convective = "%s*Conservative(rho*u_j*u_i, x_j) + %s*(u_i*Conservative(rho*u_j, x_j) + rho*u_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rho*u_i, x_j) + rho*u_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
         # Add convective parts
@@ -119,9 +123,9 @@ class NS_Split(object):
             # Split on phi = E
             A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
             if self.conservative:
-                convective = "(%s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
+                convective = "(%s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
             else:
-                raise ValueError("Haven't added non-conservative form.")
+                convective = "(%s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Der(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
         energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
@@ -136,6 +140,7 @@ class NS_Split(object):
             heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
         else:
             stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            # stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*divV))" # *divV Der(u_k,x_k)
             heat_flux = "Eq(q_j, ((mu/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
         substitutions = [stress_tensor, heat_flux]
         return substitutions
