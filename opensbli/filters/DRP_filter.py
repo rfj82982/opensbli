@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -31,14 +31,20 @@ class ExplicitFilter(object):
         self.filter_type = filter_type
         # Arrays to filter
         # Conservative variables
-        if self.ndim == 2:
-            q = ['rho', 'rhou0', 'rhou1', 'rhoE']
-        elif self.ndim == 3:
-            q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+        if block.conservative:
+            if self.ndim == 2:
+                q = ['rho', 'rhou0', 'rhou1', 'rhoE']
+            elif self.ndim == 3:
+                q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+        else:
+            if self.ndim == 2:
+                q = ['rho', 'u0', 'u1', 'Et']
+            elif self.ndim == 3:
+                q = ['rho', 'u0', 'u1', 'u2', 'Et']
         self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
         self.freq = ConstantObject('filter_frequency')
-        self.freq.value = 25
+        self.freq.value = frequency
         CTD.add_constant(self.freq)
         self.sigma = ConstantObject('DRP_filt')
         self.sigma.value = sigma
@@ -248,5 +254,4 @@ class ExplicitFilter(object):
             filter2 = self.create_UDF(block, update, direction, start_number, 'Update')
             start_number += 1
             self.equation_classes += [filter1, filter2]
-            
         return
