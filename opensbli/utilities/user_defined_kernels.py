@@ -98,8 +98,8 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
 
         # Process the kernels to update parameters on the block
         cls.process_kernels(block)
-        # Apply a custom grid range if necessary
-        print(cls.custom_grid_range)
+        # # Apply a custom grid range if necessary
+        # print(cls.custom_grid_range)
         try:
             if cls.custom_grid_range is not None:
                 for ker in cls.Kernels:

@@ -1,7 +1,7 @@
 """ David J. Lusher 09/21. Dispersion Relation Preserving (DRP) explicit filters."""
 
 from opensbli import *
-from sympy import pprint, Piecewise, factor, Or
+from sympy import pprint, Piecewise, factor, Or, simplify
 from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
@@ -36,13 +36,16 @@ class ExplicitFilter(object):
                 q = ['rho', 'rhou0', 'rhou1', 'rhoE']
             elif self.ndim == 3:
                 q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+            self.q_vector = [block.location_dataset(x) for x in flatten(q)]
         else:
             if self.ndim == 2:
                 q = ['rho', 'u0', 'u1', 'Et']
             elif self.ndim == 3:
                 q = ['rho', 'u0', 'u1', 'u2', 'Et']
-        self.q_vector = [block.location_dataset(x) for x in flatten(q)]
-        self.temp_arrays = [block.location_dataset('%s_RKold' % x.base.noblockname ) for x in self.q_vector]
+            self.q_vector = [block.location_dataset('rho')] + [block.location_dataset('rho')*block.location_dataset('%s' % x) for x in q[1:]]
+            self.lhs = [block.location_dataset(x) for x in q]
+
+        self.temp_arrays = [block.location_dataset('%s_RKold' % x) for x in q]
         self.freq = ConstantObject('filter_frequency')
         self.freq.value = frequency
         CTD.add_constant(self.freq)
@@ -177,7 +180,7 @@ class ExplicitFilter(object):
             stencil = []
             for i, location in enumerate(self.locations):
                 stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
-            output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(sum(stencil)))]
+            output += [OpenSBLIEq(self.temp_arrays[dset_id], simplify(sum(stencil)))]
         # Restrict the filter if close to the wall, in the wall normal direction
         eqns = []
         buffer = self.depth
@@ -194,8 +197,6 @@ class ExplicitFilter(object):
             eqns = [GroupedPiecewise(cond1, cond2)]
         else:
             eqns = output[:]
-        # pprint(eqns)
-        # exit()
         return eqns
 
     def zero_temp_arrays(self):
@@ -210,11 +211,16 @@ class ExplicitFilter(object):
         application = self.create_stencil(direction)
         direction += 1
         # Update the q vector
-        # wall_var, wall_equations = self.apply_wall_control()
-        # update = wall_equations[:]
         update = []
-        for dset_id, dset in enumerate(self.q_vector):
-            update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+        if block.conservative:
+            for dset_id, dset in enumerate(self.q_vector):
+                update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+        else:
+            update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*self.temp_arrays[0])]
+            inv_rho = GridVariable('inv_rho')
+            update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
+            for dset_id, dset in enumerate(self.lhs[1:]):
+                update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
         return application, update
 
     def create_UDF(self, block, equations, direction, order, UDF_type):

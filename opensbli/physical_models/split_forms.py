@@ -67,7 +67,7 @@ class NS_Split(object):
     def common_factors(self, eqn):
         """ Simplifies the equation by taking out common rational numbers."""
         lhs, rhs = eqn.lhs, eqn.rhs
-        optimized = True
+        optimized = False
         if optimized:
             rhs = self.factor_replace(rhs)
         return OpenSBLIEq(lhs, rhs)

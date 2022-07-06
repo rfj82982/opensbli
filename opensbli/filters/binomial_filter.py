@@ -132,8 +132,8 @@ class BinomialFilter(object):
         filter_class = UserDefinedEquations()
         filter_class.algorithm_place = InTheSimulation(frequency=False)
         filter_class.computation_name = 'Binomial filter'
-        if self.grid_condition is not None:
-            self.reduce_grid_range(block, filter_class)
+        # if self.grid_condition is not None:
+        #     self.reduce_grid_range(block, filter_class)
         # Place the filter at the very end
         filter_class.order = 10000
         filter_class.add_equations(self.create_equations(block))
