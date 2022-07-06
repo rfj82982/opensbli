@@ -73,7 +73,6 @@ class RungeKuttaLS(Scheme):
         CTD.add_constant(cls.solution_coeffs)
         CTD.add_constant(cls.stage_coeffs)
         CTD.add_constant(cls.time_step)
-        CTD.add_constant(cls.restart)
         CTD.add_constant(cls.start_time)
         return
 

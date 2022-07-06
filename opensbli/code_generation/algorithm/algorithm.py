@@ -423,7 +423,7 @@ class TraditionalAlgorithmRK(object):
                 for place in key.algorithm_place:
                     if isinstance(place, BeforeSimulationStarts):
                         if place.start_condition is not None:
-                            cond = Condition(start_condition)
+                            cond = Condition(place.start_condition)
                             cond.add_components(key.Kernels)
                             before_time += [cond]
                         else:

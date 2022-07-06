@@ -6,8 +6,9 @@
 
 from opensbli.equation_types.opensbliequations import NonSimulationEquations
 from opensbli.core.kernel import Kernel
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.core.opensbliobjects import GroupedPiecewise, ConstantObject
-from sympy import Equality, flatten, Int
+from sympy import Equality, flatten
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts
 from opensbli.schemes.spatial.scheme import CentralHalos_defdec
 
@@ -21,12 +22,12 @@ class GridBasedInitialisation(NonSimulationEquations):
             ret.order = 0
         ret.equations = []
         ret.kwargs = kwargs
-        # A control parameter is needed for where to put these equations in the algorithm
         # Variable to control restarting
         cls.restart = ConstantObject('restart', integer=True)
-        cls.restart.datatype = Int()
         cls.restart.value = 0
-        condition = Equality(cls.restart, 1)
+        # cls.restart.datatype = Int()
+        CTD.add_constant(cls.restart)
+        condition = Equality(cls.restart, 0)
         ret.algorithm_place = [BeforeSimulationStarts(start_condition=condition)]
         return ret
 
