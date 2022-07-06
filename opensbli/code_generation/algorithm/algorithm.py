@@ -422,7 +422,12 @@ class TraditionalAlgorithmRK(object):
             for key in sorted(non_simulation_eqs, key=lambda x: x.order):
                 for place in key.algorithm_place:
                     if isinstance(place, BeforeSimulationStarts):
-                        before_time += key.Kernels
+                        if place.start_condition is not None:
+                            cond = Condition(start_condition)
+                            cond.add_components(key.Kernels)
+                            before_time += [cond]
+                        else:
+                            before_time += key.Kernels
                     elif isinstance(place, AfterSimulationEnds):
                         after_time += key.Kernels
                     else:

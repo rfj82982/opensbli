@@ -6,8 +6,8 @@
 
 from opensbli.equation_types.opensbliequations import NonSimulationEquations
 from opensbli.core.kernel import Kernel
-from opensbli.core.opensbliobjects import GroupedPiecewise
-from sympy import Equality, flatten
+from opensbli.core.opensbliobjects import GroupedPiecewise, ConstantObject
+from sympy import Equality, flatten, Int
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts
 from opensbli.schemes.spatial.scheme import CentralHalos_defdec
 
@@ -22,7 +22,12 @@ class GridBasedInitialisation(NonSimulationEquations):
         ret.equations = []
         ret.kwargs = kwargs
         # A control parameter is needed for where to put these equations in the algorithm
-        ret.algorithm_place = [BeforeSimulationStarts()]
+        # Variable to control restarting
+        cls.restart = ConstantObject('restart', integer=True)
+        cls.restart.datatype = Int()
+        cls.restart.value = 0
+        condition = Equality(cls.restart, 1)
+        ret.algorithm_place = [BeforeSimulationStarts(start_condition=condition)]
         return ret
 
     def __hash__(self):

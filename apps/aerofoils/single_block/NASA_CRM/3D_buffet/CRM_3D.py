@@ -190,7 +190,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu']
-values = ['5.0e5', '1.4', '0.72', '0.71', '1.0e-5', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu', 'stat_frequency']
+values = ['5.0e5', '1.4', '0.72', '0.71', '1.0e-5', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0', '10']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

@@ -63,10 +63,6 @@ class RungeKuttaLS(Scheme):
         cls.temporal_iteration = Idx(cls.iteration_number, cls.niter_symbol)
         cls.constant_time_step = True
         cls.time_step = ConstantObject("dt")
-        # Variable to control restarting
-        cls.restart = ConstantObject('restart', integer=True)
-        cls.restart.datatype = Int()
-        cls.restart.value = 0
         # Variable to hold the simulation time
         cls.start_time = ConstantObject('tstart')
         cls.start_time.value = 0.0

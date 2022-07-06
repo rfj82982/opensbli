@@ -3,8 +3,9 @@
 
 
 class BeforeSimulationStarts(object):
-    def __init__(self):
+    def __init__(self, start_condition=None):
         self.number = 0
+        self.start_condition = start_condition
         return
 
 

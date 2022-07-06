@@ -48,6 +48,7 @@ class ExplicitFilter(object):
         self.temp_arrays = [block.location_dataset('%s_RKold' % x) for x in q]
         self.freq = ConstantObject('filter_frequency')
         self.freq.value = frequency
+        self.freq.datatype = Int()
         CTD.add_constant(self.freq)
         self.sigma = ConstantObject('DRP_filt')
         self.sigma.value = sigma

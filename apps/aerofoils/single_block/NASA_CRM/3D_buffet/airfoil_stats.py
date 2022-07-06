@@ -167,15 +167,15 @@ def favre_averaged_stats(ndim, q_vector, conservative=True):
     accumulation.algorithm_place = InTheSimulation(frequency=stat_frequency)
     accumulation.order = 1e9
     nsamples = symbols("nsamples", **{'cls':ConstantObject})
-    nsamples.datatype = Int()
     nsamples.value = 'niter/stat_frequency'
+    nsamples.datatype = Int()
     # Divide at the end
     normalisation = UserDefinedEquations()
     normalisation.algorithm_place = AfterSimulationEnds()
     # Left hand side, names to be written by the HDF5 class
     storage_arrays = []
     # Calculate first moment statistics, one for calculation, one to divide by the number of samples
-    first_moms_acc, first_mom_normalise, array_output  = first_order_moments(ndim, q_vector, conservative=conservative)
+    first_moms_acc, first_mom_normalise, array_output  = first_order_moments(ndim, q_vector, nsamples, conservative=conservative)
     accumulation.add_equations(first_moms_acc)
     normalisation.add_equations(first_mom_normalise)
     storage_arrays += array_output
@@ -183,7 +183,7 @@ def favre_averaged_stats(ndim, q_vector, conservative=True):
     # accumulation.add_equations(prim_acc)
     # normalisation.add_equations(prim_norm)
     # Calculate second moment statistics
-    sec_moms_acc, sec_mom_normalise, array_output = second_order_moments(ndim, q_vector, conservative=conservative)
+    sec_moms_acc, sec_mom_normalise, array_output = second_order_moments(ndim, q_vector, nsamples, conservative=conservative)
     storage_arrays += array_output
     accumulation.add_equations(sec_moms_acc)
     normalisation.add_equations(sec_mom_normalise)
