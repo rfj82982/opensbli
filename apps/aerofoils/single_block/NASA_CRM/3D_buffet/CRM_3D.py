@@ -6,6 +6,7 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import pi, sin, cos, Abs, sqrt
 
 ndim = 3
+stats = True
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
@@ -120,6 +121,17 @@ boundaries += [PeriodicBC(direction, 1)]
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
 
+# Set the equations to be solved on the block
+if stats:
+    # Create the statistics equations, this shows another way of writing the equations
+    from airfoil_stats import favre_averaged_stats
+    q_vector = flatten(simulation_eq.time_advance_arrays)
+    stat_equation_classes, stats_arrays = favre_averaged_stats(ndim, q_vector, conservative=conservative)
+else:
+    stat_equation_classes, stats_arrays = [], []
+
+block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
+
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=5000, **kwargs)
@@ -129,22 +141,22 @@ kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 block.setio([h5, h5_read])
+# HDF5 output of statistics arrays
+kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
+stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
+block.setio([stats_hdf5])
 
-# Add SFD filtering
-# SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75)
-
+# Various filters and shock capturing
 j = block.grid_indexes[1]
 grid_condition = j >= 460
 BF = BinomialFilter(block, order=6, grid_condition=grid_condition, sigma=0.1)
-
-# Set the equations to be solved on the block
-block.set_equations([constituent, simulation_eq, initial, metriceq])
 block.set_equations(BF.equation_classes)
+
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
+WF = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
