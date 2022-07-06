@@ -25,4 +25,8 @@ class InTheSimulation(object):
 
     def __init__(self, frequency=False):
         self.frequency = frequency
+        from opensbli.core.kernel import ConstantsToDeclare as CTD
+        from opensbli.core.opensbliobjects import ConstantObject
+        if isinstance(frequency, ConstantObject):
+            CTD.add_constant(frequency)
         return

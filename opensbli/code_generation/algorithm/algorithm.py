@@ -396,7 +396,9 @@ class TraditionalAlgorithmRK(object):
             b = blocks[0]
             bc_kernels, inner_temporal_advance_kernels, temporal_start, temporal_end, spatial_kernels, = [], [], [], [], []
             before_time, after_time, in_time, non_simulation_eqs = [], [], [], []
-
+            sc = b.get_temporal_schemes[0]
+            # Iteration counter for any conditional expressions
+            temporal_iteration = sc.temporal_iteration
             # Raise an error if there is more than one temporal scheme
             if len(b.get_temporal_schemes) > 1:
                 raise ValueError("Found more than one temporal scheme on the block")
@@ -416,6 +418,7 @@ class TraditionalAlgorithmRK(object):
                         if not isinstance(key, ConstituentRelations):
                             print("NOT classified", type(key))
                             raise ValueError("Equations class can not be classified: %s" % key)
+            # Place any non-simulation equation classes (statistics, filters, metric evaluations, ...)
             for key in sorted(non_simulation_eqs, key=lambda x: x.order):
                 for place in key.algorithm_place:
                     if isinstance(place, BeforeSimulationStarts):
@@ -424,13 +427,15 @@ class TraditionalAlgorithmRK(object):
                         after_time += key.Kernels
                     else:
                         if place.frequency:
-                            raise NotImplementedError("In Non-simulation equations")
+                            # in_time += key.Kernels
+                            t = Equality((temporal_iteration + 1) % key._place[0].frequency, 0)
+                            cond = Condition(t)
+                            cond.add_components(key.Kernels)
+                            in_time += [cond]
                         else:
                             in_time += key.Kernels
 
-            sc = b.get_temporal_schemes[0]
-            # Add optional simulation point monitoring
-            temporal_iteration = sc.temporal_iteration
+            # Add optional simulation monitors
             if self.simulation_monitor is not None:
                 t = (Or(Equality((temporal_iteration + 1) % self.simulation_monitor.frequency, 0), Equality(temporal_iteration, 0)))
                 cond = Condition(t)

@@ -225,7 +225,7 @@ class ExplicitFilter(object):
 
     def create_UDF(self, block, equations, direction, order, UDF_type):
         UDF = UserDefinedEquations()
-        UDF.algorithm_place = InTheSimulation(frequency=False)
+        UDF.algorithm_place = InTheSimulation(frequency=self.freq)
         if order == 0 and block.blocknumber == 0:
             # Mark as an explicit filter, to be used for full halo swaps
             UDF.full_swap = True

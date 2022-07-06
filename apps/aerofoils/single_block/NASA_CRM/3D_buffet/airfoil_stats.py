@@ -3,7 +3,7 @@ from opensbli import *
 from opensbli.utilities.user_defined_kernels import *
 from opensbli.code_generation.algorithm.common import InTheSimulation, AfterSimulationEnds, BeforeSimulationStarts
 
-def first_order_moments(ndim, q_vector, conservative=True):
+def first_order_moments(ndim, q_vector, nsamples, conservative=True):
     # Create the statistics equations, this shows another way of writing the equations
     # create variables means required
     r_m = symbols('rhomean', **{'cls': DataObject})
@@ -27,9 +27,6 @@ def first_order_moments(ndim, q_vector, conservative=True):
         accumulation_equations += [Eq(E_mean, E_mean + q_vector[-1])]
     # Step 2: Divide by the number of statistics samples
     normalise_equations = []
-    # Dependent on temporal scheme changes FIX
-    nsamples = symbols("nsamples", **{'cls':ConstantObject})
-    nsamples.datatype = Int()
     # Density
     normalise_equations += [Eq(r_m, r_m/nsamples)]
     # Momentum
@@ -129,7 +126,7 @@ def primitive(ndim, q_vector):
 
     return accumulation_equations, normalisation_equations
 
-def second_order_moments(ndim, q_vector, conservative=True):
+def second_order_moments(ndim, q_vector, nsamples, conservative=True):
     # Matrix of favre reynolds stresses i.e rhou_i*u_j if i >= j, only lower triangular matrix is considered
     def RS(i,j):
         if i >= j:
@@ -138,10 +135,7 @@ def second_order_moments(ndim, q_vector, conservative=True):
             return 0
     stresses_reynolds = Matrix(ndim, ndim, RS)
     accumulation, normalisation, storage_arrays = [], [], []
-    # Dependent on temporal scheme changes FIX
-    nsamples = symbols("nsamples", **{'cls':ConstantObject})
-    nsamples.datatype = Int()
-    
+
     # Divide by density
     if conservative:
         rho_inv = GridVariable("rhoinv")
@@ -171,6 +165,11 @@ def favre_averaged_stats(ndim, q_vector, conservative=True):
     stat_frequency = symbols("stat_frequency", **{'cls':ConstantObject})
     stat_frequency.datatype = Int()
     accumulation.algorithm_place = InTheSimulation(frequency=stat_frequency)
+    accumulation.order = 1e9
+    nsamples = symbols("nsamples", **{'cls':ConstantObject})
+    nsamples.datatype = Int()
+    nsamples.value = 'niter/stat_frequency'
+    # Divide at the end
     normalisation = UserDefinedEquations()
     normalisation.algorithm_place = AfterSimulationEnds()
     # Left hand side, names to be written by the HDF5 class
