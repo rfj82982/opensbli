@@ -215,13 +215,23 @@ class ExplicitFilter(object):
         update = []
         if block.conservative:
             for dset_id, dset in enumerate(self.q_vector):
-                update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+                if self.filter_type == 'DRP':
+                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+                else:
+                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id]))]
         else:
-            update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*self.temp_arrays[0])]
-            inv_rho = GridVariable('inv_rho')
-            update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
-            for dset_id, dset in enumerate(self.lhs[1:]):
-                update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
+            if self.filter_type == 'DRP':
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*self.temp_arrays[0])]
+                inv_rho = GridVariable('inv_rho')
+                update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
+                for dset_id, dset in enumerate(self.lhs[1:]):
+                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
+            else:
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*(self.lhs[0] - self.temp_arrays[0]))]
+                inv_rho = GridVariable('inv_rho')
+                update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
+                for dset_id, dset in enumerate(self.lhs[1:]):
+                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
         return application, update
 
     def create_UDF(self, block, equations, direction, order, UDF_type):
