@@ -145,6 +145,10 @@ block.setio([h5, h5_read])
 kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
 stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
 block.setio([stats_hdf5])
+# Write metrics to the grid file
+kwargs = {'iotype': "Write", 'name': "data.h5"}
+metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')], **kwargs)
+block.setio([metrics_hdf5])
 
 # Various filters and shock capturing
 j = block.grid_indexes[1]
@@ -156,7 +160,7 @@ DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
@@ -191,6 +195,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu', 'stat_frequency']
-values = ['5.0e5', '1.4', '0.72', '0.71', '1.0e-5', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0', '10']
+values = ['5.0e5', '1.4', '0.72', '0.71', '4.0e-5', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0', '10']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
