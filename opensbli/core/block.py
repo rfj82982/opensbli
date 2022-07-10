@@ -127,7 +127,25 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
 
     def set_block_boundaries(self, bclist):
         """Sets the boundary conditions for the block."""
+        self.check_boundaries(bclist)
         self.set_boundary_types(bclist, self)
+        return
+
+    def check_boundaries(self, bclist):
+        """ Check there are the correct number of boundary conditions per direction. """
+        x, y, z = 0, 0, 0
+        for bc in bclist:
+            if bc.direction == 0:
+                x += 1
+            elif bc.direction == 1:
+                y += 1
+            elif bc.direction == 2:
+                z += 1
+        assert x == 2
+        if self.ndim > 1:
+            assert y == 2
+        if self.ndim > 2:
+            assert z == 2
         return
 
     def set_block_boundary_halos(self, direction, side, types):

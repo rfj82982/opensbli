@@ -7,14 +7,14 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters,
 # STEP 0 Create the equations required for the numerical solution
 # Problem dimension
 ndim = 3
-stats = True
+stats = False
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "c_j"]
 # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 # NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
@@ -95,13 +95,11 @@ boundaries = []
 direction = 0
 boundaries += [PeriodicBC(direction, side=0)]
 boundaries += [PeriodicBC(direction, side=1)]
-
 # Isothermal wall in x1 direction
-# Energy on the wall is set
 Twall = ConstantObject("Twall")
 wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
-
 lower_wall_eq = wall_energy[:]
+direction = 1
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
 # Side 1 (top) boundary
 boundaries += [AdiabaticWall_CarpenterBC(direction, 1)]
