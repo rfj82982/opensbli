@@ -81,6 +81,7 @@ def compute_wall_normal_derivative(variable):
 def calculate_angles(D00, D01, D10, D11, detJ):
     """ Calculated on a single y plane."""
     D00, D01, D10, D11, detJ = D00[0,:], D01[0,:], D10[0,:], D11[0,:], detJ[0,:]
+    Nx = np.size(D00)
     # det = (D00*D11-D01*D10)
     aidet = 1.0/detJ
     # dydx = D10/D00
@@ -91,11 +92,11 @@ def calculate_angles(D00, D01, D10, D11, detJ):
     for i in range(0,Nx):
         th_[i]=np.arctan(dydx[i])
         if(D11[i]*detJ[i]>0): # dxdxi
-            S_[i] = -1
-            print("S positive", "x= %.3f" % x[0,i])
-        else:
-            print("S negative", "x= %.3f" % x[0,i])
             S_[i] = 1
+            # print("S positive", "x= %.3f" % x[0,i])
+        else:
+            # print("S negative", "x= %.3f" % x[0,i])
+            S_[i] = -1
         if(D10[i]*detJ[i]>0): # dydxi
             S2_[i] = 1
         else:
@@ -124,13 +125,14 @@ def surface_derivatives(fname, block_number, D00, D01, D10, D11, detJ):
     """ Uses the metric relations to find the derivatives on the airfoil surface."""
     ## WARNING: Can change this to not use loops later
     D00, D01, D10, D11, detJ = D00[0,:], D01[0,:], D10[0,:], D11[0,:], detJ[0,:]
-    corrf = 1.0/(Ny-1)
+    Nx = np.size(D00)
+    # corrf = 1.0/(Ny-1)
     corrf = 1.0
     # Read the file again
     data_file, block_name, dsets, shape = PP.read_block(fname, block_number)
-    rho = PP.read_full_dset(data_file, block_name, "rhomean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,:])
-    rhou = PP.read_full_dset(data_file, block_name, "rhou0mean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,:])
-    rhov = PP.read_full_dset(data_file, block_name, "rhou1mean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,:])
+    rho = PP.read_full_dset(data_file, block_name, "rhomean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,startx:])
+    rhou = PP.read_full_dset(data_file, block_name, "rhou0mean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,startx:])
+    rhov = PP.read_full_dset(data_file, block_name, "rhou1mean_B%d" % block_number, partial_slice=np.s_[:,0:6+2*nhalo,startx:])
     print(rho.shape)
     u, v = rhou/rho, rhov/rho
     
@@ -153,12 +155,17 @@ def surface_derivatives(fname, block_number, D00, D01, D10, D11, detJ):
     return dudy, dvdx
 
 def aerodynamic_coefficients(dudy, dvdx, p, mu):
+    Nz = p.shape[0]
+    Nx = p.shape[-1]
+    # print(p.shape
+    # exit()
     pinf = 1.0 / (gamma*Minf*Minf)
     tau_wall, Cp = np.zeros((Nz,Nx)), np.zeros((Nz,Nx))
     Cl, Cdp, Cdf = np.zeros(Nz), np.zeros(Nz), np.zeros(Nz)
     i = 0
     for k in range(0,Nz):
         tau_wall [k,i]=S_[i]*mu[k,i]*(dudy[k,i]*np.abs(np.cos(th_[i]))-dvdx[k,i]*np.abs(np.sin(th_[i])))
+        Cp[k,i] =(p[k,i]-pinf)/(0.5*gamma*Minf*Minf)
 
     for i in range(1,Nx):
         for k in range(0,Nz):
@@ -187,6 +194,7 @@ def aerodynamic_coefficients(dudy, dvdx, p, mu):
 inPath = './'
 outPath = './file_output/'
 
+startx = 0
 try:
     os.mkdir(outPath)
 except FileExistsError:
@@ -202,17 +210,17 @@ halos = np.abs(grid_file[block_name][dsets[0]].attrs['d_p'])
 nhalo = halos[0]
 # Get the coordinates on the surface
 yloc = 0
-surface = np.s_[:,yloc + nhalo,:]
+surface = np.s_[:,yloc + nhalo,startx:]
 x = PP.read_full_dset(grid_file, block_name, 'x0_B%d' % block_number, partial_slice=surface)
 
 y = PP.read_full_dset(grid_file, block_name, 'x1_B%d' % block_number, partial_slice=surface)
 z = PP.read_full_dset(grid_file, block_name, 'x2_B%d' % block_number, partial_slice=surface)
 # Number of grid points per direction (without halos) on this surface slice
 Nx, Ny, Nz = shape[-1], shape[1], shape[0]
-for i in range(Ny):
-    print(y[0,i])
-exit()
-# Domain size
+# for i in range(Ny):
+#     print(y[0,i])
+# exit()
+# # Domain size
 Lx, Ly, Lz = 0, 10.0, 0
 # Grid spacing
 dx = 0
@@ -253,6 +261,9 @@ for idx, fname in enumerate(input_files):
     print("Cl: {:}, Cdp: {:}, Cdf: {:}".format(np.mean(Cl), np.mean(Cdp), np.mean(Cdf)))
 
     # Test plot
+    # for i in Cp:
+    #     print(i)
+    # exit()
     # Average over the span
     Cp = np.mean(Cp, axis=0)
     # Calculate skin friction
@@ -261,11 +272,13 @@ for idx, fname in enumerate(input_files):
 
     print(Cf)
     print(np.min(Cf), np.max(Cf))
-    plt.plot(x[0,:], Cf)
+    plt.plot(x[startx,:], Cf)
     # plt.gca().invert_yaxis()
     plt.show()
 
     plt.clf()
-    plt.plot(x[0,:], Cp)
+    plt.plot(x[startx,:], Cp)
     plt.gca().invert_yaxis()
+    plt.xlabel('x')
+    plt.ylabel('Cp')
     plt.show()
