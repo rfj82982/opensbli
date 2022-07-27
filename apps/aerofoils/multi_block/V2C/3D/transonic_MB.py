@@ -52,9 +52,9 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     equations = [Eq(q_vector[0], 0.5 * (q_vector[0] + wk[0]))]
     # for rhou,v,w
     for b0, b1 in zip(q_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, Eq(idx,1000000)), ExprCondPair(0.5* (b0 + b1), True)]
+        pairs = [ExprCondPair(0.0, Eq(idx,1000000000)), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,1000000)), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
+    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,1000000000)), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
     equations += [Eq(q_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
@@ -90,7 +90,6 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
 ndim = 3
 nblocks = 3
 # Set non-conservative LHS to reduce array storage
-# symbol for the coordinate system in the equations
 conservative = False
 multi_block = MultiBlock(ndim, nblocks, conservative=conservative)
 SimulationDataType.set_datatype(Double)
@@ -121,7 +120,7 @@ simulation_eq.add_equations(mass)
 simulation_eq.add_equations(momentum)
 simulation_eq.add_equations(energy)
 # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf"]
+constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Formulas for the variables used in the equations
 constituent = ConstituentRelations()
 if conservative:
@@ -132,7 +131,8 @@ if conservative:
 else:
     pressure = "Eq(p, (gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-viscosity = "Eq(mu, T**0.7)"
+# viscosity = "Eq(mu, T**0.7)"
+viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
 # divV = "Eq(divV, Der(u_j, x_j))"
 
 eqns = Einstein_expansion.expand(pressure, ndim, coordinate_symbol, [], constants)
@@ -239,6 +239,18 @@ multi_block.set_block_boundaries(mb_bcs)
 # Set the equations on the blocks
 multi_block.set_equations([simulation_eq, constituent, metriceq])
 
+# Add statsistics gathering
+stats = True
+if stats:
+    # Create the statistics equations, this shows another way of writing the equations
+    from airfoil_stats import favre_averaged_stats
+    q_vector = flatten(simulation_eq.time_advance_arrays)
+    stat_equation_classes, stats_arrays = favre_averaged_stats(ndim, q_vector, conservative=conservative)
+else:
+    stat_equation_classes, stats_arrays = [], []
+
+multi_block.set_equations(stat_equation_classes)
+
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
@@ -251,9 +263,15 @@ for no, block in enumerate(multi_block.blocks):
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
-    if no is not 1:
-        grid_condition = block.grid_indexes[0] >= 790
-        filters[no] += [BinomialFilter(block, order=8, grid_condition=grid_condition).equation_classes]
+    i, j, k = block.grid_indexes[0], block.grid_indexes[1], block.grid_indexes[2]
+    if no == 0:
+        grid_condition = Or(i >= 769, j >= 470)
+    elif no == 1:
+        grid_condition = j >= 470
+    elif no == 2:
+        grid_condition = Or(i >= 769, j >= 470)
+
+    filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
 multi_block.set_filters(filters)
 
 # HDF5 input/output
@@ -267,6 +285,16 @@ kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([x, y, z])
 multi_block.setio([h5_read])
+
+# Stats HDF5 and write metrics to the grid file
+# HDF5 output of statistics arrays
+kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
+stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
+multi_block.setio([stats_hdf5])
+# Write metrics to the grid file
+kwargs = {'iotype': "Write", 'name': "data.h5"}
+metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')], **kwargs)
+multi_block.setio([metrics_hdf5])
 
 # Perform the discretization
 multi_block.discretise()
@@ -312,19 +340,19 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
-OPSC(alg, OPS_diagnostics=2)
+OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt']
-values = ['1.4', '0.72', '0.72', '500000.0', '5.0e-5', '1000000', '0.01']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT']
+values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values += ['801', '692', '50', '5.0/(block0np0 - 1.0)', '7.3/(block0np1 - 1.0)', '0.05/block0np2']
+values += ['799', '480', '50', '4.5/(block0np0 - 1.0)', '7.5/(block0np1 - 1.0)', '0.05/block0np2']
 # Block 1
 constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
-values += ['1799', '692', '50', '7.29705965995/(block1np0 - 1.0)', '7.3/(block1np1 - 1.0)', '0.05/block1np2']
+values += ['1495', '480', '50', '7.5/(block1np0 - 1.0)', '7.5/(block1np1 - 1.0)', '0.05/block1np2']
 # Block 2
 constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
-values += ['801', '692', '50', '5.0/(block2np0 - 1.0)', '7.3/(block2np1 - 1.0)', '0.05/block2np2']
+values += ['799', '480', '50', '4.5/(block2np0 - 1.0)', '7.5/(block2np1 - 1.0)', '0.05/block2np2']
 substitute_simulation_parameters(constants, values)
