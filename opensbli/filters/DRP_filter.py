@@ -22,6 +22,7 @@ class ExplicitFilter(object):
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
+        self.wall_boundaries = [[False, False] for _ in range(self.ndim)]
         if multi_block:
             self.nblocks = multi_block.nblocks
         else:
@@ -66,7 +67,6 @@ class ExplicitFilter(object):
     def detect_wall_boundaries(self):
         """ The shock-filter is turned off in the near-wall region. This function detects which directions, if any, have
         wall boundary conditions."""
-        self.wall_boundaries = [[False, False] for _ in range(self.ndim)]
         try:
             for direction in range(self.ndim):
                 for side in [0,1]:
