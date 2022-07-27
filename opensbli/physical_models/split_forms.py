@@ -1,3 +1,4 @@
+""" Author: djl 05/2022. """
 from sympy import flatten, Idx, sqrt, Rational, pprint, factor, nsimplify, collect
 from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Globalvariable
 from opensbli.core.grid import GridVariable
@@ -8,7 +9,6 @@ from opensbli.core.parsing import EinsteinEquation
 
 class NS_Split(object):
     """ Split forms for the convective parts of the Navier-Stokes equations with central/DRP schemes."""
-
     def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None):
         self.split_type = split_type
         self.conservative = conservative
@@ -119,16 +119,18 @@ class NS_Split(object):
                 convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
             else:
                 convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
+            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         elif self.split_type == 'KGP':
-            # Split on phi = E
+            # Split on phi = E, with quadratic split applied to pressure-velocity term
             A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
             if self.conservative:
-                convective = "(%s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
+                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
             else:
-                convective = "(%s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Der(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
+                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Der(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
+            energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
-        energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+
         out = self.EE.expand(energy, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         if self.replace_factors:
             out = self.common_factors(out)
