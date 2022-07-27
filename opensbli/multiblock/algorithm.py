@@ -1,6 +1,6 @@
 from opensbli.multiblock.blockcollection import MultiBlock as MB
 
-from sympy import flatten, pprint, Idx, Equality
+from sympy import flatten, pprint, Idx, Equality, Or
 from opensbli.code_generation.latex import LatexWriter
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.equation_types.opensbliequations import SimulationEquations, NonSimulationEquations, ConstituentRelations
@@ -393,11 +393,11 @@ class TraditionalAlgorithmRKMB(object):
     sub rk loop
     """
 
-    def __init__(self, blocks, dtype=None):
+    def __init__(self, blocks, simulation_monitor=None, dtype=None):
         self.block_descriptions = []
         self.ntimers = 0
         self.MultiBlock = True
-        self.simulation_monitor = False
+        self.simulation_monitor = simulation_monitor
         if dtype:
             self.dtype = dtype
         else:
@@ -462,6 +462,8 @@ class TraditionalAlgorithmRKMB(object):
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
                 for scheme in b.get_temporal_schemes:
+                    # Iteration counter for any conditional expressions
+                    temporal_iteration = scheme.temporal_iteration
                     inner_loop_blocks += [scheme.stage]
                     tloop_blocks += [scheme.temporal_iteration]
                     for key, value in iter(scheme.solution.items()):
@@ -481,18 +483,35 @@ class TraditionalAlgorithmRKMB(object):
                             if not isinstance(key, ConstituentRelations):
                                 print("NOT classified", type(key))
                                 raise ValueError("Equations class can not be classified: %s" % key)
-            # Place the non-simulation equation kernels in the appropriate position in the simulation code
+            # Place any non-simulation equation classes (statistics, filters, metric evaluations, ...)
             for key in sorted(non_simulation_eqs, key=lambda x: x.order):
                 for place in key.algorithm_place:
                     if isinstance(place, BeforeSimulationStarts):
-                        before_time += key.Kernels
+                        if place.start_condition is not None:
+                            cond = Condition(place.start_condition)
+                            cond.add_components(key.Kernels)
+                            before_time += [cond]
+                        else:
+                            before_time += key.Kernels
                     elif isinstance(place, AfterSimulationEnds):
                         after_time += key.Kernels
                     else:
                         if place.frequency:
-                            raise NotImplementedError("In Non-simulation equations")
+                            # in_time += key.Kernels
+                            t = Equality((temporal_iteration + 1) % key._place[0].frequency, 0)
+                            cond = Condition(t)
+                            cond.add_components(key.Kernels)
+                            in_time += [cond]
                         else:
                             in_time += key.Kernels
+
+            # Add optional simulation monitors
+            if self.simulation_monitor is not None:
+                t = (Or(Equality((temporal_iteration + 1) % self.simulation_monitor.frequency, 0), Equality(temporal_iteration, 0)))
+                cond = Condition(t)
+                cond.add_components(self.simulation_monitor)
+                in_time += [cond]
+
             # Process the metrics we will control here it self later we will move this to multi block
             # The first derivatives this includes bc application
             for m in metrics:
