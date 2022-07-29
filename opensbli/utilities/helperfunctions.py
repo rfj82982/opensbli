@@ -5,7 +5,6 @@
 """
 
 from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, DataObject
-import h5py
 from opensbli.code_generation.opsc import rc
 from sympy import pprint
 
@@ -113,6 +112,7 @@ def output_hdf5(array, array_name, halos, npoints, block, **kwargs):
         fname = kwargs['filename']
     else:
         fname = "data.h5"
+    import h5py
     with h5py.File(fname, 'w') as hf:
         # Create a group
         g1 = hf.create_group(block.blockname)
