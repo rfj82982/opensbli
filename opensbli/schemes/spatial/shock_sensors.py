@@ -44,7 +44,7 @@ class ShockSensor(object):
             divergence = metrics.apply_transformation(divergence)
 
         a = ConstantObject('Ducros_sensitivity')
-        a.value = 0.1
+        a.value = 0.3
         CTD.add_constant(a)
         tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + a*divergence.rhs)))
         output_eqns += [OpenSBLIEq(sensor_array, tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + epsilon))]

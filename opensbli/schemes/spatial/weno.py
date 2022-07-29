@@ -257,7 +257,7 @@ class WenoReconstructionVariable(object):
         rv = self.reconstructed_symbol
         if self.settings["shock_filter"]: # Apply WENO once at the end of a full time-step as a filter
             if self.settings['single_wave']:
-                self.final_equations += [OpenSBLIEq(rv, rv + GridVariable('rj_%s' % self.side)*self.reconstructed_expression)]
+                self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
             else:
                 pass
         else: # Regular WENO application

@@ -91,9 +91,12 @@ class ShockCapturing(object):
                     if single_wave:
                         if no == 0:
                             if isinstance(rv, type(self.reconstruction_classes[0])):
-                                output_eqns += [OpenSBLIEq(GridVariable('rj_right'), self.sensor_evaluation[0].rhs)]
+                                # output_eqns += [OpenSBLIEq(GridVariable('rj_right'), self.sensor_evaluation[0].rhs)]
+                                output_eqns += [OpenSBLIEq(GridVariable('rj_right'), 0.0)]
+
                             elif isinstance(rv, type(self.reconstruction_classes[1])):
-                                output_eqns += [OpenSBLIEq(GridVariable('rj_left'), self.sensor_evaluation[0].rhs)]
+                                # output_eqns += [OpenSBLIEq(GridVariable('rj_left'), self.sensor_evaluation[0].rhs)]
+                                output_eqns += [OpenSBLIEq(GridVariable('rj_left'), 0.0)]
                         # else:
                         #     output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), GridVariable('rj0'))]
                         output_eqns += [rv.final_equations[-1]]
