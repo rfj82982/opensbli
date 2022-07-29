@@ -9,14 +9,17 @@ class MultiBlockBoundary(object):
 
 
 class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
-    def __init__(self, direction, side, match=(None, None, None), plane=True):
+    def __init__(self, direction, side, name=None, match=(None, None, None), plane=True):
         # check if the match is a boundary type
         BoundaryConditionBase.__init__(self, direction, side, plane)
         # Check the match input is correct
         for x in match[0:3]:
             assert type(x) is int
         self.match = match
-        self.bc_name = "interface"
+        if name is None:
+            self.bc_name = "interface"
+        else:
+            self.bc_name = name
         return
 
     def apply(self, arrays, block):
@@ -101,7 +104,7 @@ class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
 
 class SharedInterfaceBC(InterfaceBC, BoundaryConditionBase, MultiBlockBoundary):
 
-    def apply_interface(self, arrays, block, multiblock_descriptor, other_arrays=None, full_halo_swap=False):
+    def apply_interface(self, arrays, block, multiblock_descriptor, name=None, other_arrays=None, full_halo_swap=False):
         arrays = flatten(arrays)
         other_block = multiblock_descriptor.get_block(self.match[0])
         if other_arrays:
@@ -145,7 +148,10 @@ class SharedInterfaceBC(InterfaceBC, BoundaryConditionBase, MultiBlockBoundary):
         ker = Kernel(block)
         # We will make use of exchange self currently, later we will change the perioidBC and combine them both
         exchange = ExchangeSelf(block, self.direction, self.side)
-        exchange.computation_name = "Shared_interface" + "_exchange"
+        if name is None:
+            exchange.computation_name = "Shared_interface_" + "exchange"
+        else:
+            exchange.computation_name = "Shared_interface_" + name
         exchange.set_transfer_size(transfer_size)
         exchange.set_transfer_from(from_location)
         exchange.set_transfer_to(to_location)

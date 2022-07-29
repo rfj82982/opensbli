@@ -35,6 +35,7 @@ class PeriodicBC(BoundaryConditionBase):
             halos = [[-5, 5] for _ in range(block.ndim)]
         size, from_location, to_location = self.get_transfers(block.Idxed_shape, halos)
         ex = ExchangeSelf(block, self.direction, self.side)
+        ex.computation_name = "periodicBC_direction%d_side%d_" % (self.direction, self.side)
         ex.set_transfer_size(size)
         ex.set_transfer_from(from_location)
         ex.set_transfer_to(to_location)
