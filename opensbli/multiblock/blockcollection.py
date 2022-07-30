@@ -7,6 +7,7 @@ from sympy import flatten
 # MBCHANGE
 @property
 def get_interface_bc(self):
+    """ Function to identify boundary conditions which are block interfaces."""
     interface_bcs = []
     for no, b in enumerate(self.boundary_types):
         for side in [0,1]:
@@ -16,6 +17,7 @@ def get_interface_bc(self):
     return interface_bcs
 
 def apply_interface_bc(self, arrays, multiblock_description, full_halo_swap=False):
+    """ Applies boundary conditions on the block interfaces. For flow variables, not the metrics. Metric interfaces are handled in metric.py."""
     kernels = []
     interface_bcs = self.get_interface_bc
     for bc in interface_bcs:
@@ -32,6 +34,7 @@ SimulationBlock.apply_interface_bc = apply_interface_bc
 # MBCHANGE
 
 class MultiBlock():
+    """ Class to handle multiple OpenSBLI SimulationBlocks. Each block is processed in turn in the same manner usual."""
     def __init__(self, ndim, nblocks, conservative=True):
         self.nblocks = nblocks
         self.blocks = [0 for i in range(nblocks)]

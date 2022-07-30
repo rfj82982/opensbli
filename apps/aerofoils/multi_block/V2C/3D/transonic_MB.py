@@ -6,7 +6,7 @@ from opensbli.multiblock.algorithm import TraditionalAlgorithmRKMB
 from sympy.functions.elementary.piecewise import Piecewise, ExprCondPair
 import os
 # Disable the gmpy library for this case to avoid deepcopy issues
-os.environ['MPMATH_NOGMPY'] = '1'
+# os.environ['MPMATH_NOGMPY'] = '1'
 
 import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
@@ -52,9 +52,9 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     equations = [Eq(q_vector[0], 0.5 * (q_vector[0] + wk[0]))]
     # for rhou,v,w
     for b0, b1 in zip(q_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, Eq(idx,1000000000)), ExprCondPair(0.5* (b0 + b1), True)]
+        pairs = [ExprCondPair(0.0, idx <=0), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, Eq(idx,1000000000)), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
+    pairs = [ExprCondPair(wall_energy.rhs, idx <= 0), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
     equations += [Eq(q_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
@@ -90,12 +90,12 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
 ndim = 3
 nblocks = 3
 # Set non-conservative LHS to reduce array storage
-conservative = False
+conservative = True
 multi_block = MultiBlock(ndim, nblocks, conservative=conservative)
 SimulationDataType.set_datatype(Double)
 
 # # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf"]
+constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
@@ -119,8 +119,7 @@ simulation_eq = SimulationEquations()
 simulation_eq.add_equations(mass)
 simulation_eq.add_equations(momentum)
 simulation_eq.add_equations(energy)
-# Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
+
 # Formulas for the variables used in the equations
 constituent = ConstituentRelations()
 if conservative:
@@ -195,9 +194,9 @@ mb_bcs = {0:None, 1:None, 2:None}
 block0_bc = []
 direction = 0
 side = 0
-block0_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 0, True)))
+block0_bc.append(InterfaceBC(direction=0, side=0,  name="block0_to_block1", match=(1, 0, 0, True)))
 block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block0_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(2, 1, 0, True)))
+block0_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block0_to_block2", match=(2, 1, 0, True)))
 block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block0_bc.append(PeriodicBC(direction=2, side=0))
 block0_bc.append(PeriodicBC(direction=2, side=1))
@@ -207,8 +206,8 @@ mb_bcs[0] = block0_bc
 #The boundary conditions are [InterfaceBC, InterfaceBC] in x0 direction and [wall, Inflow]  in x1 direction 
 # Matching boundaries are located at are [0,0,0] and [2, 0, 0]
 block1_bc = []
-block1_bc.append(InterfaceBC(direction=0, side=0,  match=(0, 0, 0, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  match=(2, 0, 0, False)))
+block1_bc.append(InterfaceBC(direction=0, side=0,  name="block1_to_block0", match=(0, 0, 0, True)))
+block1_bc.append(InterfaceBC(direction=0, side=1,  name="block1_to_block2", match=(2, 0, 0, False)))
 # Wall temperature is required for halo points
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
@@ -226,9 +225,9 @@ mb_bcs[1] = block1_bc
 # The boundary conditions are [InterfaceBC, outflow] in x0 direction and  SharedInterfaceBC, Inflow]  in x1 direction 
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block2_bc = []
-block2_bc.append(InterfaceBC(direction=0, side=0,  match=(1, 0, 1, False)))
+block2_bc.append(InterfaceBC(direction=0, side=0,  name="block2_to_block1", match=(1, 0, 1, False)))
 block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block2_bc.append(SharedInterfaceBC(direction=1, side=0,  match=(0, 1, 0, True)))
+block2_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block2_to_block0", match=(0, 1, 0, True)))
 block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block2_bc.append(PeriodicBC(direction=2, side=0))
 block2_bc.append(PeriodicBC(direction=2, side=1))
@@ -255,11 +254,11 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
@@ -293,7 +292,7 @@ stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
 multi_block.setio([stats_hdf5])
 # Write metrics to the grid file
 kwargs = {'iotype': "Write", 'name': "data.h5"}
-metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')], **kwargs)
+metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')] + [DataObject('SD101'), DataObject('SD100'), DataObject('SD000'), DataObject('SD001'), DataObject('SD010'), DataObject('SD110'), DataObject('SD111'), DataObject('SD011')], **kwargs)
 multi_block.setio([metrics_hdf5])
 
 # Perform the discretization
@@ -322,21 +321,31 @@ for block in multi_block.blocks:
                 eq.Kernels += filter_swaps
 
 # Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
-def create_exchange_calls_codes(block, dsets):
+def create_periodic_BCs(multi_block, dsets):
     kernels = []
-    arrays = [block.location_dataset(a) for a in flatten(dsets)]
-    for direction in [2]:
-        for side in [0,1]:
-            BC = PeriodicBC(direction, side, corners=False)
-            kernels += [BC.apply(arrays, block)]
+    for block in multi_block.blocks:
+        arrays = [block.location_dataset(a) for a in flatten(dsets)]
+        for direction in [2]:
+            for side in [0,1]:
+                BC = PeriodicBC(direction, side, corners=False)
+                kernels += [BC.apply(arrays, block)]
     return kernels
 
 # Make some full swaps for interfaces before filtering
-filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
-for no, eq in enumerate(block.list_of_equation_classes):
-    if isinstance(eq, UserDefinedEquations):
-        if eq.full_swap:
-            eq.Kernels += filter_swaps
+if conservative:
+    dsets = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+else:
+    dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
+filter_swaps = create_periodic_BCs(multi_block, dsets)
+print(filter_swaps)
+for block in multi_block.blocks:
+    for no, eq in enumerate(block.list_of_equation_classes):
+        if isinstance(eq, UserDefinedEquations):
+            if eq.order == 0:
+                print("Periodic swaps!")
+                eq.Kernels += filter_swaps
+                print(eq.Kernels)
+                # exit()
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
@@ -344,8 +353,8 @@ OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT']
-values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency']
+values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67', '10']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
 values += ['799', '480', '50', '4.5/(block0np0 - 1.0)', '7.5/(block0np1 - 1.0)', '0.05/block0np2']

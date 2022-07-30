@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.1, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=10, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
