@@ -72,7 +72,7 @@ if stats:
 else:
     stat_equation_classes = []
 # Create a simulation block
-block = SimulationBlock(ndim, block_number=0)
+block = SimulationBlock(ndim, block_number=0, conservative=conservative)
 
 # Define the variables used for creating boundary conditions and the initialisation
 # dx and dy of the grid
@@ -220,7 +220,7 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0,2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_swap=True)
+            BC = PeriodicBC(direction, side, full_depth=True)
             kernels += [BC.apply(arrays, block)]
     return kernels
 

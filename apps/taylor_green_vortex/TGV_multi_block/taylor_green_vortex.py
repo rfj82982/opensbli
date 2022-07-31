@@ -141,7 +141,7 @@ fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, conservative=conservative)
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
@@ -169,7 +169,7 @@ multi_block.setio([h5])
 # Add DRP filtering on each block
 filter_list = []
 for no, block in enumerate(multi_block.blocks):
-    filter_list += [DRPFilter(block, q=simulation_eq.time_advance_arrays, optimized=True).equation_classes]
+    filter_list += [ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=multi_block).equation_classes]
 multi_block.set_filters(filter_list)
 
 # set the equations to be solved on the block

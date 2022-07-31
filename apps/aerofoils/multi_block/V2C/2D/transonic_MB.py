@@ -88,7 +88,8 @@ def generate_wake_kernel(conserve_vector, mulitblock, wall_energy):
 
 ndim = 2
 nblocks = 3
-multi_block = MultiBlock(ndim, nblocks)
+conservative = True
+multi_block = MultiBlock(ndim, nblocks, conservative=conservative)
 SimulationDataType.set_datatype(Double)
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
@@ -112,7 +113,6 @@ for eq in eqns:
 
 
 # symbol for the coordinate system in the equations
-conservative = True
 # NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
@@ -214,7 +214,9 @@ mb_bcs[2] = block2_bc
 multi_block.set_block_boundaries(mb_bcs)
 
 # Set the equations on the blocks
-multi_block.set_equations([simulation_eq, constituent, metriceq])
+multi_block.set_equations([simulation_eq])
+multi_block.set_equations([constituent])
+multi_block.set_equations([copy.deepcopy(metriceq)])
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):

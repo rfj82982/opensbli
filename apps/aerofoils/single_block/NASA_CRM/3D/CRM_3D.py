@@ -149,7 +149,7 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0,2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_swap=True)
+            BC = PeriodicBC(direction, side, full_depth=True)
             kernels += [BC.apply(arrays, block)]
     return kernels
 

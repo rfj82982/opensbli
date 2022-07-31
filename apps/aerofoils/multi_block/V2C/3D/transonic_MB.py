@@ -42,9 +42,9 @@ def generate_sponge_kernel(q_vector, block):
     ker.update_block_datasets(block)
     return ker
 
-def generate_wake_kernel(q_vector, mulitblock, wall_energy):
+def generate_wake_kernel(q_vector, multi_block, wall_energy):
     """ Wake treatment at the block interface."""
-    block = mulitblock.get_block(0)
+    block = multi_block.get_block(0)
     wk = symbols("wk0:5", **{'cls':DataObject})
     # Add the grid index if IDX ==0 then 
     # Also change the range of evaluation
@@ -52,9 +52,9 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     equations = [Eq(q_vector[0], 0.5 * (q_vector[0] + wk[0]))]
     # for rhou,v,w
     for b0, b1 in zip(q_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, idx <=0), ExprCondPair(0.5* (b0 + b1), True)]
+        pairs = [ExprCondPair(0.0, idx == 1000000000), ExprCondPair(0.5* (b0 + b1), True)]
         equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, idx <= 0), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
+    pairs = [ExprCondPair(wall_energy.rhs, idx == 1000000000), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
     equations += [Eq(q_vector[-1], Piecewise(*pairs, evaluate=False))]
     
     equations = block.dataobjects_to_datasets_on_block(equations)
@@ -66,13 +66,21 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     ker = bc.apply([], block)
     ker.kernelname = "wake_treatment_kernel"
     ker.computation_name = "Wake treatment"
-    ker.halo_ranges[1][0] = set()   
+    ker.halo_ranges[1][0] = set()
+    # # Full halo range
+    # full_halos = []
+    # for _ in range(block.ndim):
+    #         full_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
+
+    # ker.halo_ranges[0] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
+    # # ker.halo_ranges[2] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
+    # ker.halo_ranges[2] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
     # Wake exchanges from block2 wakeline (q_vector) to blokck0 work_arrays
-    block2 = mulitblock.get_block(2)
+    block2 = multi_block.get_block(2)
     bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
     arrays = [block2.work_array(str(a)) for a in flatten(q_vector)]
     other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
-    wake_transfer1 = bc.apply_interface(arrays, block2, mulitblock, other_arrays=other_arrays)
+    wake_transfer1 = bc.apply_interface(arrays, block2, multi_block, other_arrays=other_arrays)
     wake_transfer1.transfer_size[1] = 1
     wake_transfer1.transfer_from[1] = 0
     wake_transfer1.transfer_to[1] = 0
@@ -80,7 +88,7 @@ def generate_wake_kernel(q_vector, mulitblock, wall_energy):
     
     bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
     arrays = [block.work_array(str(a)) for a in flatten(q_vector)]
-    wake_transfer2 = bc.apply_interface(arrays, block, mulitblock)
+    wake_transfer2 = bc.apply_interface(arrays, block, multi_block)
     wake_transfer2.transfer_size[1] = 1
     wake_transfer2.transfer_from[1] = 0
     wake_transfer2.transfer_to[1] = 0
@@ -198,8 +206,8 @@ block0_bc.append(InterfaceBC(direction=0, side=0,  name="block0_to_block1", matc
 block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
 block0_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block0_to_block2", match=(2, 1, 0, True)))
 block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block0_bc.append(PeriodicBC(direction=2, side=0))
-block0_bc.append(PeriodicBC(direction=2, side=1))
+block0_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
+block0_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
 mb_bcs[0] = block0_bc
 
 # Boundary conditions for block 1
@@ -215,10 +223,10 @@ if conservative:
     wall_energy = [Eq(q_vector[-1], Twall*q_vector[0]/((gama-1.0)*gama*Minf*Minf))]
 else:
     wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, shock=False, equations=wall_energy))
+block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy))
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block1_bc.append(PeriodicBC(direction=2, side=0))
-block1_bc.append(PeriodicBC(direction=2, side=1))
+block1_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
+block1_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
 mb_bcs[1] = block1_bc
 
 # Boundary conditions for block 2
@@ -229,8 +237,8 @@ block2_bc.append(InterfaceBC(direction=0, side=0,  name="block2_to_block1", matc
 block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
 block2_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block2_to_block0", match=(0, 1, 0, True)))
 block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block2_bc.append(PeriodicBC(direction=2, side=0))
-block2_bc.append(PeriodicBC(direction=2, side=1))
+block2_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
+block2_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
 mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
@@ -254,7 +262,7 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
@@ -327,7 +335,7 @@ def create_periodic_BCs(multi_block, dsets):
         arrays = [block.location_dataset(a) for a in flatten(dsets)]
         for direction in [2]:
             for side in [0,1]:
-                BC = PeriodicBC(direction, side, corners=False)
+                BC = PeriodicBC(direction, side, full_depth=True, corners=True)
                 kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -337,15 +345,11 @@ if conservative:
 else:
     dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
 filter_swaps = create_periodic_BCs(multi_block, dsets)
-print(filter_swaps)
 for block in multi_block.blocks:
     for no, eq in enumerate(block.list_of_equation_classes):
         if isinstance(eq, UserDefinedEquations):
             if eq.order == 0:
-                print("Periodic swaps!")
                 eq.Kernels += filter_swaps
-                print(eq.Kernels)
-                # exit()
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)

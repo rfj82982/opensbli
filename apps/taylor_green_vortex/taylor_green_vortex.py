@@ -61,7 +61,7 @@ for index, eq in enumerate(flatten(constituent.equations)):
 latex.close()
 
 # Create a simulation block
-block = SimulationBlock(ndim, block_number=0)
+block = SimulationBlock(ndim, block_number=0, conservative=conservative)
 
 # Local dictionary for parsing the expressions
 local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
@@ -105,14 +105,14 @@ fns = 'u0 u1 u2'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, conservative=conservative)
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 boundaries = []
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
 for direction in range(ndim):
-    boundaries += [PeriodicBC(direction, 0, full_swap=True)]
-    boundaries += [PeriodicBC(direction, 1, full_swap=True)]
+    boundaries += [PeriodicBC(direction, 0, full_depth=True)]
+    boundaries += [PeriodicBC(direction, 1, full_depth=True)]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
