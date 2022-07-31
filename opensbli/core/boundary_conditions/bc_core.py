@@ -101,11 +101,11 @@ class BoundaryConditionBase(object):
             expression = expression.xreplace({a: b[index]})
         return expression
 
-    def generate_boundary_kernel(self, block, bc_name):
+    def generate_boundary_kernel(self, block, bc_name, corners=True):
         if self.full_plane:
-            return self.bc_plane_kernel(block, bc_name)
+            return self.bc_plane_kernel(block, bc_name, corners=corners)
         else:
-            return self.arbitrary_bc_plane_kernel(block, bc_name)
+            return self.arbitrary_bc_plane_kernel(block, bc_name, corners=corners)
 
     def arbitrary_bc_plane_kernel(self, block, bc_name):
         """ Creates a computational kernel for use with Split BC."""
@@ -155,15 +155,18 @@ class BoundaryConditionBase(object):
             halo_values.append([halo_m, halo_p])
         return halo_values
 
-    def bc_plane_kernel(self, block, bc_name):
+    def bc_plane_kernel(self, block, bc_name, corners=True):
         direction, side = self.direction, self.side
         kernel = Kernel(block, computation_name="%s boundary dir%d side%d" % (bc_name, direction, side))
         kernel = self.set_kernel_range(kernel, block)
         halo_values = self.get_halo_values(block)
         # Add the halos to the kernel in directions not equal to boundary direction
-        for i in [x for x in range(block.ndim) if x != direction]:
-            kernel.halo_ranges[i][0] = block.boundary_halos[i][0]
-            kernel.halo_ranges[i][1] = block.boundary_halos[i][1]
+        if corners:
+            for i in [x for x in range(block.ndim) if x != direction]:
+                kernel.halo_ranges[i][0] = block.boundary_halos[i][0]
+                kernel.halo_ranges[i][1] = block.boundary_halos[i][1]
+        else: # Apply the boundary condition along the boundary line without the corner halos
+            pass
         return halo_values, kernel
 
     def create_boundary_equations(self, left_arrays, right_arrays, transfer_indices):

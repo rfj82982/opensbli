@@ -11,9 +11,9 @@ class PeriodicBC(BoundaryConditionBase):
     :arg int side: Side 0 or 1 to apply the boundary condition for a given direction.
     :arg bool plane: True/False: Apply boundary condition to full range/split range only."""
 
-    def __init__(self, direction, side, full_swap=False, corners=True, plane=True):
+    def __init__(self, direction, side, full_depth=False, corners=True, plane=True):
         BoundaryConditionBase.__init__(self, direction, side, plane)
-        self.full_swap = full_swap
+        self.full_depth = full_depth # Swap 5 halo depth on each side
         self.corners = corners
         return
 
@@ -31,7 +31,7 @@ class PeriodicBC(BoundaryConditionBase):
         # Create a kernel this is a neater way to implement the transfers
         ker = Kernel(block)
         halos = self.get_halo_values(block)
-        if self.full_swap:
+        if self.full_depth:
             halos = [[-5, 5] for _ in range(block.ndim)]
         size, from_location, to_location = self.get_transfers(block.Idxed_shape, halos)
         ex = ExchangeSelf(block, self.direction, self.side)

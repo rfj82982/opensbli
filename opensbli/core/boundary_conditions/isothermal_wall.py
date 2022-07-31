@@ -20,10 +20,10 @@ class IsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBase, WallBC):
     :arg object scheme: Boundary scheme if required, defaults to Carpenter boundary treatment.
     :arg bool plane: True/False: Apply boundary condition to full range/split range only."""
 
-    def __init__(self, direction, side, equations, scheme=None, shock=True, plane=True):
+    def __init__(self, direction, side, equations, scheme=None, corners=True, plane=True):
         BoundaryConditionBase.__init__(self, direction, side, plane)
         self.bc_name = 'IsothermalWall'
-        self.shock = shock
+        self.corners = corners
         self.equations = equations
         if not scheme:
             self.modification_scheme = Carpenter()
@@ -32,7 +32,7 @@ class IsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBase, WallBC):
         return
 
     def apply(self, arrays, block):
-        halos, kernel = self.generate_boundary_kernel(block, self.bc_name)
+        halos, kernel = self.generate_boundary_kernel(block, self.bc_name, corners=self.corners)
         n_halos = abs(halos[self.direction][self.side])
         # Using Navier Stokes physics object, create conservative variables
         NS = NSphysics(block)
