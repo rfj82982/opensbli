@@ -145,6 +145,7 @@ class ExplicitFilter(object):
                 self.weights = [Rational(-1,1024),Rational(5,512),Rational(-45,1024),Rational(15,128),Rational(-105,512)]
                 self.weights += [Rational(63,256)] + self.weights[::-1]
         elif self.width == 13:
+            raise ValueError("Six halos are required to use this filter width, update in Central Def_decs halos.")
             if self.optimized:
                 self.weights = [0.001254597714,-0.008520738659,0.029662754736,-0.069975429105,0.123632891797,-0.171503832236]
                 self.weights += [0.190899511506] + self.weights[::-1]
@@ -237,7 +238,7 @@ class ExplicitFilter(object):
     def create_UDF(self, block, equations, direction, order, UDF_type):
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=self.freq)
-        if order == 0 and block.blocknumber == 0:
+        if order == 0:
             # Mark as an explicit filter, to be used for full halo swaps
             UDF.full_swap = True
         if UDF_type == 'Zeroing':

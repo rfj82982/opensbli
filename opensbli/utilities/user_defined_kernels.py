@@ -18,7 +18,7 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         ret.computation_name = None
         # Optional halo type
         ret.halos = None
-        ret.full_swap = False
+        cls._full_swap = False
         return ret
 
     @property
@@ -38,6 +38,15 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
     @algorithm_place.setter
     def algorithm_place(cls, place):
         cls._place += [place]
+        return
+
+    @property
+    def full_swap(cls):
+        return cls._full_swap
+
+    @full_swap.setter
+    def full_swap(cls, full_swap):
+        cls._full_swap = full_swap
         return
 
     @property

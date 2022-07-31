@@ -5,6 +5,7 @@ from opensbli.core.opensblifunctions import CentralDerivative
 from opensbli.core.kernel import Kernel
 from opensbli.schemes.spatial import Central
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations, ConstituentRelations
+from opensbli.equation_types.metric import MetricsEquation
 
 
 class StoreSome(Central):
@@ -39,7 +40,7 @@ class StoreSome(Central):
             self.sbli_rhs_discretisation(type_of_eq, block)
             return self.required_constituent_relations
         else:
-            discretised_eq = self.SS(type_of_eq.equations, block, None, group=False)
+            discretised_eq = self.SS(type_of_eq, block, None, group=False)
             if discretised_eq:
                 discretisation_kernel = Kernel(block, computation_name="%s evaluation" % type_of_eq.__class__.__name__)
                 discretisation_kernel.set_grid_range(block)
@@ -90,7 +91,7 @@ class StoreSome(Central):
             ker.set_computation_name("Derivative evaluation %s " % (der))
             self.update_range_of_constituent_relations(der, block)
             v = der
-            expr = OpenSBLIEq(v.work, simplify(v._discretise_derivative(self, block)))
+            expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
             # pprint(expr)
             ker.add_equation(expr)
             ker.set_grid_range(block)
@@ -138,9 +139,14 @@ class StoreSome(Central):
         self.check_missing_constituent_relations(block, equations)
         return self.required_constituent_relations
 
-    def SS(self, equations, block, equation_type, group=True, level=1):
+    def SS(self, type_of_eq, block, equation_type, group=True, level=1):
         """ Generates the GridVariables to store the local derivatives. Also sorts the
         derivatives to re-access the same arrays consecutively."""
+        if not isinstance(type_of_eq, list):
+            equations = type_of_eq.equations
+        else:
+            equations = type_of_eq[:]
+
         discrete_equations = flatten(equations)[:]
         cds = self.get_local_function(flatten(equations))
         grid_variable_evaluations = []
@@ -156,7 +162,7 @@ class StoreSome(Central):
                 self.update_range_of_constituent_relations(der, block)
                 if level == 1:
                     gv = gridvars.pop(0)
-                    grid_variable_evaluations += [OpenSBLIEq(gv, simplify(der._discretise_derivative(self, block)))]
+                    grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
                     for no, c in enumerate(discrete_equations):
                         discrete_equations[no] = discrete_equations[no].subs(der, gv)
             return grid_variable_evaluations+discrete_equations
