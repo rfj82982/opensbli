@@ -256,25 +256,31 @@ class WENOFilter(NonSimulationEquations):
         Ducros_condition = [ExprCondPair(1, kappa_evaluation > DT)]
         # # No wall or interface, default condition is the sensor is not turned off
         Ducros_condition += [ExprCondPair(0, True)]
-        # If airfoil, turn off shock-capturing in front of the leading edge
-        if self.airfoil:
-            if block.blocknumber == 0 or block.blocknumber == 1:
-                Ducros_condition += [ExprCondPair(0, block.location_dataset('x0') < 0.0)]
-                output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
-        else:
-            output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
             sensor_halos.append([self.halo_type, self.halo_type])
         sensor_kernel = self.create_kernel('Shock sensor', flatten(output_eqns), sensor_halos, block)
-        # for eqn in sensor_kernel.equations:
-        #     pprint(eqn)
-        # exit()
-        # Add the kernel
         self.add_kernel(sensor_kernel)
         self.component_counter += 1
         return kappa
+
+    def airfoil_modification(self, block):
+        # If airfoil, turn off shock-capturing in front of the leading edge
+        if block.blocknumber == 1:
+            temp = GridVariable('temp')
+            airfoil_condition = [ExprCondPair(0, block.location_dataset('x0') <= 0.0)]
+            airfoil_condition += [ExprCondPair(self.kappa, True)]
+            output_eqns = [OpenSBLIEq(temp, Piecewise(*airfoil_condition))]
+            output_eqns += [OpenSBLIEq(self.kappa, temp)]
+            grid_halos = []
+            for _ in range(self.ndim):
+                grid_halos.append([set(), set()])
+            airfoil_kernel = self.create_kernel('Airfoil sensor modification', flatten(output_eqns), grid_halos, block)
+            self.add_kernel(airfoil_kernel)
+            self.component_counter += 1
+        return
 
     def wall_control(self):
         """ Turns off the filter close to any of the walls or block interfaces in the problem."""
@@ -401,6 +407,9 @@ class WENOFilter(NonSimulationEquations):
         # Compute initial Ducros sensor
         if self.dissipation_sensor == 'Ducros':
             self.kappa = self.evaluate_Ducros_sensor(block)
+            # Turn off shock-capturing ahead of the leading edge
+            if self.airfoil:
+                self.airfoil_modification(block)
         elif self.dissipation_sensor == 'Constant': # No flow sensor for the dissipation control, only a global parameter
             self.kappa, kappa_evaluation = 1, []
             if self.Mach_correction:
