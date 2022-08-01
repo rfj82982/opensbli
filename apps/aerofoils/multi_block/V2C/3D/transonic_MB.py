@@ -3,6 +3,7 @@ from opensbli import *
 from sympy import sin, exp, pi, tan, cos
 import copy
 from opensbli.multiblock.algorithm import TraditionalAlgorithmRKMB
+from opensbli.postprocess.airfoil import *
 from sympy.functions.elementary.piecewise import Piecewise, ExprCondPair
 import os
 # Disable the gmpy library for this case to avoid deepcopy issues
@@ -15,85 +16,6 @@ def create_exchange_calls_codes(multiblock_descriptor, dsets):
         arrays = [block.location_dataset(a) for a in flatten(dsets)]
         kernels += block.apply_interface_bc(arrays, multiblock_descriptor, full_halo_swap=True)
     return kernels
-
-def generate_sponge_kernel(q_vector, block):
-    """ Applies a sponge boundary on the outflow of the domain to damp oscillations."""
-    length_sponge, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
-    gama, minf = symbols("gama Minf", **{'cls':ConstantObject})
-    residual = symbols("Residual0:5", **{'cls':DataObject})
-    x0 = symbols("x0", **{'cls':DataObject})
-    equations = []
-    equations += [Eq(length_sponge, 0.85)]
-    # Characteristic length
-    equations += [Eq(lc, x0 - (5.0 -length_sponge)), Eq(sigma,  0.5*(1.0 + cos(pi* lc/length_sponge)))]
-    values = [1.0, 1.0, 0.0, 0.0, 1.0/(gama * minf**2.0 *(gama - 1.0)) + 0.5]
-    for b0, b1, b2 in zip(residual, q_vector, values):
-        equations += [Eq(b0, b0 - sigma * (b1- b2))]
-    eqns = block.dataobjects_to_datasets_on_block(equations)
-    # pprint ([eq for eq in eqns])
-    ker = Kernel(block, computation_name="Sponge kernel block%d" %block.blocknumber)
-    ker.kernelname = "sponge_kernel_block%d" %block.blocknumber
-    ker.add_equation(eqns)
-    ranges = copy.deepcopy(block.ranges)
-    # for eqn in ker.equations:
-    #     pprint(eqn)
-    ker.ranges = ranges
-    ker.ranges[0][0] =  ranges[0][1] - 62
-    ker.update_block_datasets(block)
-    return ker
-
-def generate_wake_kernel(q_vector, multi_block, wall_energy):
-    """ Wake treatment at the block interface."""
-    block = multi_block.get_block(0)
-    wk = symbols("wk0:5", **{'cls':DataObject})
-    # Add the grid index if IDX ==0 then 
-    # Also change the range of evaluation
-    idx = block.grid_indexes[0]
-    equations = [Eq(q_vector[0], 0.5 * (q_vector[0] + wk[0]))]
-    # for rhou,v,w
-    for b0, b1 in zip(q_vector[1:-1], wk[1:-1]):
-        pairs = [ExprCondPair(0.0, idx == 1000000000), ExprCondPair(0.5* (b0 + b1), True)]
-        equations += [Eq(b0, Piecewise(*pairs, evaluate=False))]
-    pairs = [ExprCondPair(wall_energy.rhs, idx == 1000000000), ExprCondPair(0.5* (q_vector[-1] + wk[-1]), True)]
-    equations += [Eq(q_vector[-1], Piecewise(*pairs, evaluate=False))]
-    
-    equations = block.dataobjects_to_datasets_on_block(equations)
-    direction = 1
-    side = 0
-    pprint(equations)
-    # create it as a boundary condition, kernel, example we use DirichletBC
-    bc = DirichletBC(direction, side, equations)
-    ker = bc.apply([], block)
-    ker.kernelname = "wake_treatment_kernel"
-    ker.computation_name = "Wake treatment"
-    ker.halo_ranges[1][0] = set()
-    # # Full halo range
-    # full_halos = []
-    # for _ in range(block.ndim):
-    #         full_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
-
-    # ker.halo_ranges[0] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
-    # # ker.halo_ranges[2] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
-    # ker.halo_ranges[2] = [set([CentralHalos_defdec()]), set([CentralHalos_defdec()])]
-    # Wake exchanges from block2 wakeline (q_vector) to blokck0 work_arrays
-    block2 = multi_block.get_block(2)
-    bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
-    arrays = [block2.work_array(str(a)) for a in flatten(q_vector)]
-    other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
-    wake_transfer1 = bc.apply_interface(arrays, block2, multi_block, other_arrays=other_arrays)
-    wake_transfer1.transfer_size[1] = 1
-    wake_transfer1.transfer_from[1] = 0
-    wake_transfer1.transfer_to[1] = 0
-    wake_transfer1.computation_name = "waketransfer1"
-    
-    bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
-    arrays = [block.work_array(str(a)) for a in flatten(q_vector)]
-    wake_transfer2 = bc.apply_interface(arrays, block, multi_block)
-    wake_transfer2.transfer_size[1] = 1
-    wake_transfer2.transfer_from[1] = 0
-    wake_transfer2.transfer_to[1] = 0
-    wake_transfer2.computation_name = "waketransfer2"
-    return [wake_transfer1, ker, wake_transfer2]
 
 ndim = 3
 nblocks = 3
@@ -164,7 +86,8 @@ schemes[cent.name] = cent
 multi_block.set_discretisation_schemes(schemes)
 
 # Initial conditions
-d, u0, u1,u2, p = symbols("d, u0:3, p", **{'cls':GridVariable})
+## Need to change for swept cases
+d, u0, u1, u2, p = symbols("d, u0:3, p", **{'cls':GridVariable})
 gama, Minf = symbols("gama, Minf", **{'cls':ConstantObject})
 initial_equations = []
 initial_equations += [Eq(d, 1.0)]
@@ -173,7 +96,7 @@ initial_equations += [Eq(u1, 0.0)]
 initial_equations += [Eq(u2, 0.0)]
 initial_equations += [Eq(p, 1.0/(gama*Minf**2.0))]
 
-# Set the q vector values
+# Set the q vector values for initial condition and farfield boundaries
 q_vector = flatten(simulation_eq.time_advance_arrays)
 if conservative:
     initial_equations += [Eq(q_vector[0], d)]
@@ -188,10 +111,9 @@ else:
     initial_equations += [Eq(q_vector[3], u2)]
     initial_equations += [Eq(q_vector[4], p/(d*(gama-1.0)) + 0.5*(u0**2+u1**2+ u2**2))]
 
-initial_equations += [Eq(GridVariable('temp'), DataObject('x2'))]
+temp_x2 = [Eq(GridVariable('temp'), DataObject('x2'))]
 initial = GridBasedInitialisation()
-initial.add_equations(copy.deepcopy(initial_equations))
-
+initial.add_equations(copy.deepcopy(initial_equations) + temp_x2)
 multi_block.set_equations([initial])
 
 # block 0 boundary conditions
@@ -262,7 +184,7 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, airfoil=True, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
@@ -278,7 +200,7 @@ for no, block in enumerate(multi_block.blocks):
     elif no == 2:
         grid_condition = Or(i >= 769, j >= 470)
 
-    filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+    filters[no] += [BinomialFilter(block, order=4, grid_condition=grid_condition).equation_classes]
 multi_block.set_filters(filters)
 
 # HDF5 input/output
@@ -307,17 +229,21 @@ multi_block.setio([metrics_hdf5])
 multi_block.discretise()
 # Add the wake treatment kernels
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
-# Sponge kernel for block 0
-sponge_ker_block0 = generate_sponge_kernel(q_vector, multi_block.get_block(0))
-# Sponge kernel for block 2
-sponge_ker_block2 = generate_sponge_kernel(q_vector, multi_block.get_block(2))
+# Sponge zones for outer boundaries
+# Outlet
+outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=62)
+outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=62)
+# Farfield
+farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=7.5, npoints=62)
+farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=7.5, npoints=62)
+farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=7.5, npoints=62)
 
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
 for no, eq in enumerate(b.list_of_equation_classes):
-    # Add sponge kernels to block2 spatial solution i.e after evaluating the residuals
+    # Add the sponge kernels after updating the residuals for all blocks, before time advancement
     if isinstance(eq, SimulationEquations):
-        eq.Kernels += [sponge_ker_block0, sponge_ker_block2]
+        eq.Kernels += [outlet_sponge_block0, outlet_sponge_block2, farfield_sponge_block0, farfield_sponge_block1, farfield_sponge_block2]
         eq.boundary_kernels += wake_ker
 
 # Make some full swaps for interfaces before filtering
@@ -340,16 +266,16 @@ def create_periodic_BCs(multi_block, dsets):
     return kernels
 
 # Make some full swaps for interfaces before filtering
-if conservative:
-    dsets = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
-else:
-    dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
-filter_swaps = create_periodic_BCs(multi_block, dsets)
-for block in multi_block.blocks:
-    for no, eq in enumerate(block.list_of_equation_classes):
-        if isinstance(eq, UserDefinedEquations):
-            if eq.order == 0:
-                eq.Kernels += filter_swaps
+# if conservative:
+#     dsets = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+# else:
+#     dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
+# filter_swaps = create_periodic_BCs(multi_block, dsets)
+# for block in multi_block.blocks:
+#     for no, eq in enumerate(block.list_of_equation_classes):
+#         if isinstance(eq, UserDefinedEquations):
+#             if eq.order == 0:
+#                 eq.Kernels += filter_swaps
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)

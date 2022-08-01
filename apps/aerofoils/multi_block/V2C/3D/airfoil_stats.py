@@ -165,7 +165,7 @@ def favre_averaged_stats(ndim, q_vector, conservative=True):
     stat_frequency = symbols("stat_frequency", **{'cls':ConstantObject})
     stat_frequency.datatype = Int()
     accumulation.algorithm_place = InTheSimulation(frequency=stat_frequency)
-    accumulation.order = 1e9
+    accumulation.order = 1000000
     nsamples = symbols("nsamples", **{'cls':ConstantObject})
     nsamples.value = 'niter/stat_frequency'
     nsamples.datatype = Int()
