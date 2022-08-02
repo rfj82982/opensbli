@@ -4,7 +4,7 @@
    @details Implements the metric transformations of first and second derivatives
 """
 
-from sympy import zeros, flatten, Matrix, Function, S, Equality
+from sympy import zeros, flatten, Matrix, Function, S, Equality, pprint
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts
 from opensbli.equation_types.opensbliequations import NonSimulationEquations, Discretisation, Solution, OpenSBLIEquation
 from opensbli.core.opensblifunctions import CentralDerivative
@@ -15,6 +15,9 @@ from opensbli.code_generation.latex import LatexWriter
 from opensbli.core.boundary_conditions.bc_core import BoundaryConditionBase
 from opensbli.core.parsing import EinsteinEquation
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
+from opensbli.core.boundary_conditions.multi_block import MultiBlockBoundary, SharedInterfaceBC, InterfaceBC
+from copy import deepcopy
+
 
 
 class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
@@ -30,6 +33,18 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         h = hash(self._hashable_content())
         self._mhash = h
         return h
+
+    def __deepcopy__(self, memo):
+        deepcopy_method = self.__deepcopy__
+        self.__deepcopy__ = None
+        cp = deepcopy(self, memo)
+        self.__deepcopy__ = deepcopy_method
+        cp.__deepcopy__ = deepcopy_method
+
+        # custom treatments
+        # for instance: cp.id = None
+
+        return cp
 
     def _hashable_content(self):
         return "MetricsEquation"
@@ -256,7 +271,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
             cls.create_residual_arrays()
             schemes[sc].discretise(cls, block)
             schemes[sc].required_constituent_relations = {}
-            # Apply metric boundary conditions
+            # Apply metric boundary conditions on the first derivative metrics, to be able to calculate the second derivative metrics after
             cls.metric_boundary_condition(block)
             cls.fd_kernels = cls.Kernels
             cls.Kernels = []
@@ -288,11 +303,11 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
 
 #MB change
     def apply_interface_bc(cls, block, multiblock_descriptor):
+        """ Interface boundary condition on the first derivative metrics and detJ."""
         arrays = cls.FD_metrics[:] + [cls.detJ]
         arrays = [a for a in arrays if isinstance(a, DataObject)]
         arrays = block.dataobjects_to_datasets_on_block(arrays)
         kernels = MetricInterfaceBC().apply(block, arrays, multiblock_descriptor, cls)
-        #kernels = block.apply_interface_bc(arrays, multiblock_descriptor)
         cls.fd_kernels += kernels
         return
 
@@ -310,7 +325,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         # the function self.interface_test
         factors += [-S.One]
         return factors
-#MB CHANGE
+# #MB CHANGE
 
     def metric_boundary_condition(cls, block):
         arrays = cls.FD_metrics[:] + [cls.detJ]
@@ -339,38 +354,56 @@ class MetricInterfaceBC(object):
     
     def apply(self, block, arrays, multiblock_descriptor, metrics):
         kernels = block.apply_interface_bc(arrays, multiblock_descriptor)
+        # Apply only to SharedInterfaces
+        shared_interface_kernels = [x for x in kernels if 'Shared' in x.computation_name]
+        inner_block_interface_kernels = []
         interface_bcs = block.get_interface_bc
         for bc in interface_bcs:
-            other_block = multiblock_descriptor.get_block(bc.match[0])
-            other_block_arrays = [other_block.work_array(str(a.base.label)) for a in flatten(arrays)]
-            direction, side = bc.match[1], bc.match[2]
-            other_bc = other_block.boundary_types[direction][side]
-            halos, kernel = other_bc.generate_boundary_kernel(other_block, other_bc.bc_name)
-            # Get the factors for fd metrics and jacobians
-            factor_for_arrays = metrics.fd_interface_factors(direction)
-            equations = []
-            for ar, factor in zip(other_block_arrays, factor_for_arrays):
-                equations += [OpenSBLIEq(ar, factor*ar)]
-            # Remove non equations
-            equations = [eq for eq in equations if isinstance(eq, OpenSBLIEq)]
-            kernel.add_equation(equations)
-            kernel.halo_ranges[direction][side] = other_block.boundary_halos[direction][side]
-            kernel.update_block_datasets(other_block)
-            kernels += [kernel]
-        from sympy import pprint
+            # Apply a halo exchange on the metrics if it is a shared interface
+            if isinstance(bc, SharedInterfaceBC):
+                other_block = multiblock_descriptor.get_block(bc.match[0])
+                other_block_arrays = [other_block.work_array(str(a.base.label)) for a in flatten(arrays)]
+                direction, side = bc.match[1], bc.match[2]
+                other_bc = other_block.boundary_types[direction][side]
+                halos, kernel = other_bc.generate_boundary_kernel(other_block, other_bc.bc_name)
+                # Get the factors for fd metrics and jacobians
+                factor_for_arrays = metrics.fd_interface_factors(direction)
+                equations = []
+                for ar, factor in zip(other_block_arrays, factor_for_arrays):
+                    equations += [OpenSBLIEq(ar, factor*ar)]
+                # Remove non equations
+                equations = [eq for eq in equations if isinstance(eq, OpenSBLIEq)]
+                kernel.add_equation(equations)
+                kernel.halo_ranges[direction][side] = other_block.boundary_halos[direction][side]
+                kernel.update_block_datasets(other_block)
+                shared_interface_kernels += [kernel]
+            # Else, for regular interfaces extend the last metric into the halos on this block, with no inter-block communication
+            elif isinstance(bc, InterfaceBC):
+                # Call a metric boundary at this interface
+                direction, side = bc.direction, bc.side
+                MBC_kernel = MetricBoundaryCondition(direction, side, plane=True).apply(arrays, block)
+                inner_block_interface_kernels += [MBC_kernel]
+                from sympy import pprint
+                for eqn in MBC_kernel.equations:
+                    pprint(eqn)
+                # # print(bc.__dict__)
+                # exit()
+            else:
+                raise ValueError("Metric interface boundary conditions should either be type InterfaceBC or SharedInterfaceBC.")
+
         # for eqn in kernel.equations:
         #     pprint(eqn)
-        # exit()
-        return kernels
+        # # exit()
+        return shared_interface_kernels + inner_block_interface_kernels
 
 class MetricBoundaryCondition(BoundaryConditionBase):
     def __init__(self, boundary_direction, side, plane=True):
         BoundaryConditionBase.__init__(self, boundary_direction, side, plane)
-        self.bc_name = 'Metric'
+        self.bc_name = 'Metric_copy'
         return
 
     def apply(self, arrays, block):
-        halos, kernel = self.generate_boundary_kernel(block, self.bc_name)
+        halos, kernel = self.generate_boundary_kernel(block, self.bc_name + '_block%d' % block.blocknumber)
         from_side_factor, to_side_factor = self.set_side_factor()
         transfer_indices = [tuple([from_side_factor*t, to_side_factor*t]) for t in range(1, int(abs(halos[self.direction][self.side])) + 1)]
         final_equations = self.create_boundary_equations(arrays, arrays, transfer_indices)

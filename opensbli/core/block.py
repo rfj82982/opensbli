@@ -134,7 +134,7 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
     def check_boundaries(self, bclist):
         """ Check there are the correct number of boundary conditions per direction. """
         x, y, z = 0, 0, 0
-        for bc in bclist:
+        for bc in flatten(bclist):
             if bc.direction == 0:
                 x += 1
             elif bc.direction == 1:

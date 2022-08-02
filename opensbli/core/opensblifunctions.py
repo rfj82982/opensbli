@@ -9,7 +9,6 @@ from numpy import ndindex as mutidimindex
 from sympy.functions.special.tensor_functions import eval_levicivita
 from opensbli.utilities.helperfunctions import get_inverse_deltas
 
-
 class KD(Function):
     """ Handler for the built-in SymPy KroneckerDelta function. """
 
@@ -482,7 +481,7 @@ class CentralDerivative(Function, BasicDiscretisation, DerPrint):
     def _eval_expand_func(self, **hints):
         return self.expand()
 
-    def _discretise_derivative(cls, scheme, block, boundary=True):
+    def _discretise_derivative(cls, scheme, block, type_of_eq=None, boundary=True):
         """
         TODO V2 documentation
         This would return the discritized derivative of the
@@ -513,16 +512,24 @@ class CentralDerivative(Function, BasicDiscretisation, DerPrint):
         else:
             raise ValueError("The provided derivative is not homogeneous, %s" % cls)
         if boundary:
-            form = cls.modify_boundary_formula(form, block)
+            form = cls.modify_boundary_formula(form, block, type_of_eq)
 
         delta = S.One/block.deltas[dire]**order
         inv_delta = get_inverse_deltas(delta)
         form = form*(inv_delta)
         return form
 
-    def modify_boundary_formula(cls, form, block):
+    def modify_boundary_formula(cls, form, block, type_of_eq):
         # Apply the boundary modifications
         modifications = block.check_modify_central()
+        # Force all metric calculations to use one-sided derivatives at the boundaries
+        from opensbli.equation_types.metric import MetricsEquation
+        if isinstance(type_of_eq, MetricsEquation):
+            from opensbli.postprocess.post_process_eq import DummyCarpenter
+            for direction in modifications.keys():
+                for side in [0,1]:
+                    modifications[direction][side] = DummyCarpenter(direction, side)
+
         dire = cls.get_direction[0]
         if dire in modifications:
             boundary_mods = [k for k in modifications[dire] if k]
