@@ -115,6 +115,7 @@ class WENOFilter(NonSimulationEquations):
             output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
         else:
             # Full curvilinear
+            # self.curvilinear = False
             if self.curvilinear:
                 coordinate_symbol = "xi"
                 optional_subs_dict = self.metric_class.metric_subs
@@ -155,8 +156,12 @@ class WENOFilter(NonSimulationEquations):
                 else:
                     momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
                     energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
-                # governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
-                # output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])                          
+                governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
+                # output_equations = flatten([x for x in (governing_eq)])
+        for eqn in output_equations:
+            pprint(eqn)
+        # exit()                      
         return output_equations
 
     def create_kernel(self, name, equations, halo_type, block):
@@ -270,7 +275,7 @@ class WENOFilter(NonSimulationEquations):
         # If airfoil, turn off shock-capturing in front of the leading edge
         if block.blocknumber == 1:
             temp = GridVariable('temp')
-            airfoil_condition = [ExprCondPair(0, block.location_dataset('x0') <= 0.0)]
+            airfoil_condition = [ExprCondPair(0, block.location_dataset('x0') <= -0.5)]
             airfoil_condition += [ExprCondPair(self.kappa, True)]
             output_eqns = [OpenSBLIEq(temp, Piecewise(*airfoil_condition))]
             output_eqns += [OpenSBLIEq(self.kappa, temp)]
@@ -284,7 +289,7 @@ class WENOFilter(NonSimulationEquations):
 
     def wall_control(self):
         """ Turns off the filter close to any of the walls or block interfaces in the problem."""
-        buffer = 5
+        buffer = 30
         wall_var = GridVariable('Wall')
         wall_conditions, wall_equations = [], []
         indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
@@ -377,8 +382,8 @@ class WENOFilter(NonSimulationEquations):
         from sympy import Or
         input_equations = flatten(kernel.equations)
         kernel.equations = []
-        locations = [increment_dataset(self.kappa, direction, location) for location in [-1, 0, 1]]
-        check = Or(locations[0] > 0.0, locations[1] > 0.0, locations[2] > 0.0)
+        locations = [increment_dataset(self.kappa, direction, location) for location in [-2, -1, 0, 1, -2]]
+        check = Or(locations[0] > 0.0, locations[1] > 0.0, locations[2] > 0.0, locations[3] > 0.0, locations[4] > 0.0)
         cond1 = ExprCondPair(input_equations, check)
         cond2 = ExprCondPair(OpenSBLIEq(GridVariable('temp'), 0.0), True)
         kernel.add_equation([GroupedPiecewise(cond1, cond2)])
@@ -392,7 +397,7 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        WS = LFWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
