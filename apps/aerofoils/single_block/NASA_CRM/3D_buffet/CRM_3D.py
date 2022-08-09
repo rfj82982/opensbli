@@ -153,7 +153,7 @@ block.setio([metrics_hdf5])
 # Various filters and shock capturing
 j = block.grid_indexes[1]
 grid_condition = j >= 460
-BF = BinomialFilter(block, order=6, grid_condition=grid_condition, sigma=0.1)
+BF = BinomialFilter(block, order=6, directions=3, grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
