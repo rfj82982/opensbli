@@ -11,30 +11,47 @@ class OpenSBLIPreProcess(object):
         self.gamma = 1.4
         return
 
-    def read_file(self, file_name, blocknumber, remove_halos=True):
+    def read_block(self, file_name, blocknumber):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
         block_name = list(f.keys())[blocknumber]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
-        self.f, self.block_name, self.dsets = f, block_name, dsets
-        self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
-        self.shape = list(f[block_name][dsets[0]].shape)
-        self.shape = tuple([x-10 for x in self.shape])
-        return
+        f, block_name, dsets
+        nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
+        shape = list(f[block_name][dsets[0]].shape)
+        shape = tuple([x-10 for x in shape])
+        return f, block_name, dsets, shape
 
-    def read_grid(self, blocknumber, file_name='./data.h5', remove_halos=True):
+    def domain_size(self, f, block_name, blocknumber):
+        Lx = np.max(self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber]))
+        Ly = np.max(self.remove_halos(f[block_name]['x1'+'_B%d' % blocknumber]))
+        Lz = np.max(self.remove_halos(f[block_name]['x2'+'_B%d' % blocknumber]))
+        print("Domain size (Lx, Ly, Lz): ({:}, {:}, {:})".format(Lx, Ly, Lz))
+        exit()
+        return Lx, Ly, Lz
+
+    def read_grid(self, blocknumber, file_name='./data.h5', partial_slice=None):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
         block_name = list(f.keys())[blocknumber]
         dsets = list(f[block_name].keys())
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
-        self.nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
+        self.halos = np.abs(f[block_name][dsets[0]].attrs['d_p'])
+        self.nhalos = self.halos[0]
         self.shape = list(f[block_name][dsets[0]].shape)
         self.shape = tuple([x-10 for x in self.shape])
-        self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber])
-        self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % blocknumber])
-        self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % blocknumber])
+        # Domain sizes
+        # self.Lx, self.Ly, self.Lz = self.domain_size(f, block_name, blocknumber)
+
+        if partial_slice is not None:
+            self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber][partial_slice])
+            self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % blocknumber][partial_slice])
+            self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % blocknumber][partial_slice])
+        else:
+            self.x = self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber])
+            self.y = self.remove_halos(f[block_name]['x1'+'_B%d' % blocknumber])
+            self.z = self.remove_halos(f[block_name]['x2'+'_B%d' % blocknumber])
         self.blocknumber = blocknumber
         return
 
@@ -61,10 +78,10 @@ class OpenSBLIPreProcess(object):
             data = self.read_full_dset(dset)
         return
 
-    def remove_halos(self, dataset):
+    def remove_halos(self, dataset, halos):
         size = dataset.shape
-        read_start = [abs(d) for d in self.nhalos]
-        read_end = [s-abs(d) for d, s in zip(self.nhalos, size)]
+        read_start = [abs(d) for d in halos]
+        read_end = [s-abs(d) for d, s in zip(halos, size)]
         if len(read_end) == 1:
             read_data = dataset[read_start[0]:read_end[0]]
         elif len(read_end) == 2:
@@ -73,34 +90,16 @@ class OpenSBLIPreProcess(object):
             read_data = dataset[read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
         return read_data
 
-    def read_full_dset(self, dset, remove_halos=True, min_max=True):
+    def read_full_dset(self, f, block_name, dset, remove_halos=True, min_max=True, partial_slice=None):
         if remove_halos:
-            data = self.remove_halos(self.f[self.block_name][dset])
+            halos = np.abs(f[block_name][dset].attrs['d_p'])
+            if partial_slice is not None:
+                data = self.remove_halos(f[block_name][dset][partial_slice], halos)
+            else:
+                data = self.remove_halos(f[block_name][dset], halos)
         else:
-            data = self.f[self.block_name][dset]
+            data = f[block_name][dset][partial_slice]
         print("Reading dataset: {:}, Min: {:.3f}, Max: {:.3f}".format(dset, np.min(data), np.max(data)))
-        return data
-
-
-    def x_slice(self, dset, location, remove_halos=True):
-        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
-        data = self.f[self.block_name][dset][:,:,location]
-        if remove_halos:
-            data = self.remove_halos(data)
-        return data
-
-    def y_slice(self, dset, location, remove_halos=True):
-        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
-        data = self.f[self.block_name][dset][:,location,:]
-        if remove_halos:
-            data = self.remove_halos(data)
-        return data
-
-    def z_slice(self, dset, location, remove_halos=True):
-        """ Only used for 3D arrays, slicing in 3 directions without loading the entire array."""
-        data = self.f[self.block_name][dset][location,:,:]
-        if remove_halos:
-            data = self.remove_halos(data)
         return data
 
     def add_flow_attributes(self):
