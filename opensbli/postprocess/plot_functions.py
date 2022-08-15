@@ -14,8 +14,10 @@ class OpenSBLIPreProcess(object):
     def read_block(self, file_name, blocknumber):
         print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
-        block_name = list(f.keys())[blocknumber]
-        dsets = list(f[block_name].keys())
+        block_name = 'opensbliblock0%d' % blocknumber
+        print(block_name)
+        print(f[block_name].__dict__)
+        dsets = [x for x in f[block_name].keys()]
         print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         f, block_name, dsets
         nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
