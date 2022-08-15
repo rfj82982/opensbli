@@ -7,7 +7,7 @@ from opensbli.code_generation.algorithm.common import InTheSimulation, AfterSimu
 from opensbli.core.opensbliobjects import Globalvariable, ConstantObject
 from opensbli.core.datatypes import Int
 from opensbli.core.kernel import ConstantsToDeclare as CTD
-from sympy import flatten
+from sympy import flatten, pprint
 
 
 class opensbliIO(object):
@@ -17,7 +17,6 @@ class opensbliIO(object):
     def increase_io_group_number():
         opensbliIO.group_number += 1
         return
-
 
 class iohdf5(opensbliIO):
     def __new__(cls, arrays=None, save_every=None, **kwargs):
@@ -42,6 +41,7 @@ class iohdf5(opensbliIO):
             CTD.add_constant(cls.save_every)
         else:
             cls.save_every = None
+        cls.constants_to_write = []
         ret.get_algorithm_location()
         ret.arrays = []
         if arrays:
@@ -107,34 +107,50 @@ class iohdf5(opensbliIO):
             raise ValueError("Cant classify HDF5io")
         return code
 
-    def hdf5write_opsc_code(self):
-        var_name = 'name%s' % self.block_number
+    def set_output_constants(cls, constants):
+        cls.constants_to_write += flatten([constants])
+        return
+
+    def hdf5write_opsc_code(cls):
+        var_name = 'name%s' % cls.block_number
         code = []
-        if "name" in self.kwargs:
-            if '.h5' in self.kwargs["name"]:
-                name = self.kwargs["name"]
-            elif '.' in self.kwargs["name"]:
+        if "name" in cls.kwargs:
+            if '.h5' in cls.kwargs["name"]:
+                name = cls.kwargs["name"]
+            elif '.' in cls.kwargs["name"]:
                 raise ValueError("")
             else:
-                name = self.kwargs["name"] + '.h5'
-            if self.dynamic_fname:
+                name = cls.kwargs["name"] + '.h5'
+            if cls.dynamic_fname:
                 raise ValueError("dynamic fname not allowed ")
             filename = "\"%s\"" % name
         else:
             name = "opensbli_output"
             code += ['char %s[80];' % var_name]
-            if self.dynamic_fname:
-                code += ['sprintf(%s, \"%s_%%06d.h5\", %s);' % (var_name, name, self.control_parameter)]
+            if cls.dynamic_fname:
+                code += ['sprintf(%s, \"%s_%%06d.h5\", %s);' % (var_name, name, cls.control_parameter)]
             else:
                 code += ['sprintf(%s, \"%s.h5\");' % (var_name, name)]
             filename = var_name
         dataset_write = []
-        for ar in self.arrays:
+        for ar in cls.arrays:
             block_name = ar.base.blockname
             dataset_write += ['ops_fetch_dat_hdf5_file(%s, %s);' % (ar, filename)]
 
         # generate the block name
         code += ['ops_fetch_block_hdf5_file(%s, %s);' % (block_name, filename)] + dataset_write
+        # Write constants to the HDF5 output file
+        if len(cls.constants_to_write) > 0:
+            # Get the ConstantObjects corresponding to the constants set by the user
+            # Check there are no missing constants
+            known_names = [c.name for c in CTD.constants]
+            for c in cls.constants_to_write:
+                if c not in known_names:
+                    raise ValueError("The constant \"{:}\" set by the user to the HDF IO class has not been defined in the problem (ConstantsToDeclare).".format(c))
+            cls.constants_to_write = [c for c in CTD.constants if c.name in cls.constants_to_write]
+            # Generate the OPS API calls
+            for c in cls.constants_to_write:
+                code += ['ops_write_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, %s);' % (c.name, c.datatype.opsc(), c.name, filename)]
         return code
 
     def hdf5read_opsc_code(cls):

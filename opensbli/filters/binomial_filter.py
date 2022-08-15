@@ -14,7 +14,7 @@ from opensbli.multiblock.blockcollection import MultiBlock
 import copy
 
 class BinomialFilter(object):
-    def __init__(self, block, order, grid_condition=None, sigma=0.1):
+    def __init__(self, block, order, directions, grid_condition=None, sigma=0.1):
         self.filter_no = block.blocknumber
         if (order % 2) != 0:
             raise ValueError("The filter is only defined for even orders n.")
@@ -24,6 +24,8 @@ class BinomialFilter(object):
             self.order = order
         # Spatial dependence of the filter
         self.grid_condition = grid_condition
+        # Which directions to apply
+        self.directions = directions
         # Width and weightings of the filter
         self.generate_weights()
         sigma_symbol = ConstantObject('BF_filt')
@@ -88,21 +90,21 @@ class BinomialFilter(object):
         q_ystencil = self.create_stencil(block, q, 1)
         q_fx = [GridVariable(u + "_xfiltered") for u in q]
         q_fy = [GridVariable(u + "_yfiltered") for u in q]
-        if ndim == 3:
+        if self.directions == 3:
             q_zstencil = self.create_stencil(block, q, 2)
             q_fz = [GridVariable(u + "_zfiltered") for u in q]
         
         # Create the filter equations
         output_equations = self.filtered_equations(q_fx, q_xstencil)
         output_equations += self.filtered_equations(q_fy, q_ystencil)
-        if ndim == 3:
+        if self.directions == 3:
             output_equations += self.filtered_equations(q_fz, q_zstencil)
         # Average the filter
         q_f = [GridVariable(u + "_filtered") for u in q]
         if ndim == 2:
             for u_f, u_fx, u_fy in zip(q_f, q_fx, q_fy):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy)/2.0)]
-        elif ndim == 3:
+        elif self.directions == 3:
             for u_f, u_fx, u_fy, u_fz in zip(q_f, q_fx, q_fy, q_fz):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy + u_fz)/3.0)]
         # Blend the filter
