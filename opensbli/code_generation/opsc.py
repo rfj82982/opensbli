@@ -525,6 +525,8 @@ class OPSC(object):
         # Define and declare blocks
         for b in algorithm.block_descriptions:
             output += self.declare_block(b)
+        # Notify whether the simulation is being restarted or not
+        output += self.restart_notification()
         # Define and declare datasets on each block
         f = open('defdec_data_set.h', 'w')
         datasets_dec = []
@@ -587,6 +589,21 @@ class OPSC(object):
         :returns: The partitioning code in OPSC format. Each line is a separate list element.
         :rtype: list"""
         return [WriteString('// Init OPS partition'), WriteString('ops_partition(\"\");\n')]
+
+    def restart_notification(self):
+        """ Notifies the user whether the simulation is being restarted from file or not."""
+        out = []
+        out += [WriteString('ops_printf("\\033[1;32m\");')]
+        out += [WriteString('if (restart == 1){')]
+        ### Add the simulation time afterwards ###
+        out += [WriteString('ops_printf("OpenSBLI is restarting from the input file: restart.h5\\n");')]
+        out += [WriteString("}")]
+        # Else clause
+        out += [WriteString('else {')]
+        out += [WriteString('ops_printf("OpenSBLI is starting from the initial condition.\\n");')]
+        out += [WriteString("}")]
+        out += [WriteString('ops_printf("\\033[0m");')]
+        return out
 
     def ops_init(self):
         """ The default diagnostics level is 1, which offers no diagnostic information and should be used for production runs.
@@ -770,7 +787,6 @@ class OPSC(object):
             dtype = dset.dtype
         else:
             dtype = SimulationDataType.dtype()
-        print(type(dset))
         # Create the code segment
         declaration = WriteString("ops_dat %s;" % dset)
         out = [declaration, WriteString("{")]
