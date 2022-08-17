@@ -169,7 +169,7 @@ def constant_attributes(const):
     return const
 
 
-def print_iteration_ops(simulation_name='opensbli', every=250, NaN_check=None, nblocks=1):
+def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, nblocks=1):
     """ Prints the iteration number to standard output. If an array name is passed to NaNcheck
     then the OPS NaN_check is also called. Requires OPS versions since 01/03/2019."""
     file_path = "./%s.cpp" % simulation_name

@@ -13,7 +13,7 @@ constants = ["Re", "Pr", "gama", "Minf"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative)
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative)
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -85,7 +85,7 @@ cent = StoreSome(4, fns)
 # cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension
@@ -110,7 +110,7 @@ block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=100000, **kwargs)
+h5 = iohdf5(save_every=5000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa')])
 kwargs = {'iotype': "Read"}
@@ -122,12 +122,12 @@ block.setio([h5, h5_read])
 # SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75)
 
 j = block.grid_indexes[1]
-grid_condition = j >= 169
-BF = BinomialFilter(block, order=10, grid_condition=grid_condition, sigma=0.1)
+grid_condition = j >= 175
+BF = BinomialFilter(block, order=6, directions=[0,1], grid_condition=grid_condition, sigma=0.1)
 
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq])
-ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=True, flux_type='LLF')
+ShockFilter = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
 
 block.set_equations(ShockFilter.equation_classes + BF.equation_classes)
 
@@ -142,6 +142,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall']
-values = ['100.0', '1.4', '1.5', '0.71', '0.0001', '50000', '357', '179', '120.0/(block0np0-1)', '120.0/(block0np1-1)', '1.0']
+values = ['250.0', '1.4', '1.5', '0.71', '0.0001', '500000', '357', '179', '1.0/(block0np0-1)', '1.0/(block0np1-1)', '1.0']
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho', every=100)

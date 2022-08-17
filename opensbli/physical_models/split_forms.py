@@ -91,6 +91,7 @@ class NS_Split(object):
     def momentum_eq(self):
         momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
         out = self.EE.expand(momentum, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
+        # Feiereisen split form
         if self.split_type == 'Feiereisen':
             convective = "(1/2) * (Conservative(%s_i*u_j, x_j) + %s_j*Der(u_i,x_j) + u_i * Der(%s_j,x_j))" % (self.rhou, self.rhou, self.rhou)
         # Kennedy Gruber cubic split
