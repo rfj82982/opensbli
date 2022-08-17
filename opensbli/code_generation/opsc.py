@@ -61,12 +61,13 @@ class OPSCCodePrinter(C99CodePrinter):
         C99CodePrinter.__init__(self, settings={})
 
     def _print_ReductionVariable(self, expr):
-        if expr.usage == 'lhs':
-            return '*%s' % str(expr)
-        elif expr.usage == 'rhs':
-            return '*%s' % str(expr)
-        else:
-            raise ValueError("The reduction variable does not have a status in the equation.")
+        print(expr.__dict__)
+        # if expr.usage == 'lhs':
+            # return '*%s' % str(expr)
+        # elif expr.usage == 'rhs':
+        return '*%s' % str(expr)
+        # else:
+            # raise ValueError("The reduction variable does not have a status in the equation.")
 
     def _print_Rational(self, expr):
         """ Settings: if rational is True then rational numbers are printed as they are.
@@ -545,7 +546,7 @@ class OPSC(object):
 
         for name in sorted(dsets_to_declare, key=str.lower):
             d = dsets_to_declare[name]
-            datasets_dec += self.declare_dataset(d)
+            datasets_dec += self.declare_dataset(d, algorithm.time_advance_arrays)
         f.write('\n'.join(flatten([dset.opsc_code for dset in datasets_dec])))
         f.close()
         # Declare stencils
@@ -734,39 +735,60 @@ class OPSC(object):
         return halo_m, halo_p
 
     def declare_reduction(self, rv):
+        """ Declare a reduction variable in the code with the necessary handles."""
         dtype = SimulationDataType.dtype()
         variable_declaration = WriteString("%s %s = 0.0;" % (dtype.opsc(), str(rv.value)))
         handle_declaration = WriteString('ops_reduction %s = ops_decl_reduction_handle(sizeof(%s), \"%s\", \"reduction_%s\");' % (str(rv), dtype.opsc(), dtype.opsc(), str(rv)))
         out = [variable_declaration, handle_declaration]
         return out
 
-    def declare_dataset(self, dset):
-        declaration = WriteString("ops_dat %s;" % dset)
-        out = [declaration, WriteString("{")]
+    def initialize_dataset(self, dset, dtype):
+        """ Initialize a dataset to zeros, not from a restart file."""
+        # Residual and time-advance arrays do not require halos unless using shock filter
+        if ('Residual' in str(dset) or 'tempRK' in str(dset) or 'RKold' in str(dset)):
+            hm, hp = [-5 for _ in range(len(dset.size))], [5 for _ in range(len(dset.size))]
+        else:
+            hm, hp = self.get_max_halos(dset.halo_ranges)
+        halo_p = self.declare_inline_array("int", "halo_p", hp)
+        halo_m = self.declare_inline_array("int", "halo_m", hm)
+        sizes = self.declare_inline_array("int", "size", [str(s) for s in (dset.size)])
+        base = self.declare_inline_array("int", "base", [0 for i in range(len(dset.size))])
+        value = WriteString("%s* value = NULL;" % dtype.opsc())
+        temp = '%s = ops_decl_dat(%s, 1, size, base, halo_m, halo_p, value, \"%s\", \"%s\");' % (dset,
+                                                                                                 dset.block_name, dtype.opsc(), dset)
+        return [halo_p, halo_m, sizes, base, value, WriteString(temp)]
 
+    def restart_dataset(self, dset, dtype, fname):
+        """ Initialize a dataset from a restart HDF5 file."""
+        temp = '%s = ops_decl_dat_hdf5(%s, 1, \"%s\", \"%s\", \"%s\");' % (dset,
+                                                                           dset.block_name, dtype.opsc(), dset, fname)
+        return [WriteString(temp)]
+
+    def declare_dataset(self, dset, time_advance_arrays):
+        """ Allocates memory for the storage arrays used by the simulation."""
         if dset.dtype:
             dtype = dset.dtype
         else:
             dtype = SimulationDataType.dtype()
-
-        if dset.read_from_hdf5:
-            temp = '%s = ops_decl_dat_hdf5(%s, 1, \"%s\", \"%s\", \"%s\");' % (dset,
-                                                                               dset.block_name, dtype.opsc(), dset, dset.input_file_name)
-            out += [WriteString(temp)]
+        print(type(dset))
+        # Create the code segment
+        declaration = WriteString("ops_dat %s;" % dset)
+        out = [declaration, WriteString("{")]
+        # Add a restart flag to make it easier to restart the time advance arrays
+        time_advance_arrays = [str(x) for x in time_advance_arrays]
+        if str(dset) in time_advance_arrays:
+            out += [WriteString('if (restart == 1){')]
+            out += self.restart_dataset(dset, dtype, 'restart.h5')
+            out += [WriteString("}")]
+            # Else clause
+            out += [WriteString('else {')]
+            out += self.initialize_dataset(dset, dtype)
+            out += [WriteString("}")]
+        # All other arrays
         else:
-            # Residual and time-advance arrays do not require halos unless using shock filter
-            if ('Residual' in str(dset) or 'tempRK' in str(dset) or 'RKold' in str(dset)):
-                hm, hp = [-5 for _ in range(len(dset.size))], [5 for _ in range(len(dset.size))]
+            if dset.read_from_hdf5:
+                out += self.restart_dataset(dset, dtype, dset.input_file_name)
             else:
-                hm, hp = self.get_max_halos(dset.halo_ranges)
-            halo_p = self.declare_inline_array("int", "halo_p", hp)
-            halo_m = self.declare_inline_array("int", "halo_m", hm)
-            sizes = self.declare_inline_array("int", "size", [str(s) for s in (dset.size)])
-            base = self.declare_inline_array("int", "base", [0 for i in range(len(dset.size))])
-            value = WriteString("%s* value = NULL;" % dtype.opsc())
-            temp = '%s = ops_decl_dat(%s, 1, size, base, halo_m, halo_p, value, \"%s\", \"%s\");' % (dset,
-                                                                                                     dset.block_name, dtype.opsc(), dset)
-            out += [halo_p, halo_m, sizes, base, value, WriteString(temp)]
-
+                out += self.initialize_dataset(dset, dtype)
         out += [WriteString("}")]
         return out

@@ -398,6 +398,13 @@ class TraditionalAlgorithmRKMB(object):
         self.ntimers = 0
         self.MultiBlock = True
         self.simulation_monitor = simulation_monitor
+        # For restart flag in the definitions to restart the time-advance arrays
+        self.time_advance_arrays = []
+        from opensbli.equation_types.opensbliequations import SimulationEquations
+        for b in flatten([blocks.blocks]):
+            for eqn_class in b.list_of_equation_classes:
+                if isinstance(eqn_class, SimulationEquations):
+                    self.time_advance_arrays += flatten(eqn_class.time_advance_arrays)
         if dtype:
             self.dtype = dtype
         else:
