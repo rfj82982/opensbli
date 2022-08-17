@@ -28,7 +28,8 @@ class iohdf5(opensbliIO):
         if kwargs:
             ret.kwargs = {}
             for key in kwargs:
-                ret.kwargs[key.lower()] = kwargs[key].lower()
+                if isinstance(key, str):
+                    ret.kwargs[key.lower()] = kwargs[key].lower()
         else:
             # Default IO type is write to hdf5
             ret.kwargs = {'iotype': "write"}
@@ -88,6 +89,12 @@ class iohdf5(opensbliIO):
                     block.block_datasets[str(ar)] = ar
                     block.block_datasets[str(ar)].read_from_hdf5 = True
                     dset.input_file_name = fname
+            # Check if restarting from a previous solution or not
+            if 'restart_simulation' in cls.kwargs.keys():
+                if cls.kwargs['restart_simulation']:
+                    for const in CTD.constants:
+                        if str(const) == 'restart':
+                            const._value = 1
         return
 
     def write_latex(cls, latex):
