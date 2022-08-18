@@ -8,12 +8,12 @@ from sympy import pi, sin, cos, Abs, sqrt
 # Problem dimension
 ndim = 2
 # # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf"]
+constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative)
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -23,14 +23,13 @@ simulation_eq.add_equations(momentum)
 simulation_eq.add_equations(energy)
 
 # Constituent relations used in the system
-velocity = "Eq(u_i, rhou_i/rho)"
 if conservative:
     pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
     velocity = "Eq(u_i, rhou_i/rho)"
 else:
     pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-viscosity = "Eq(mu, T**0.7)"
+viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
 
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
@@ -50,7 +49,7 @@ constituent.add_equations(eqns)
 eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Create a simulation block
-block = SimulationBlock(ndim, block_number=0)
+block = SimulationBlock(ndim, block_number=0, conservative=conservative)
 
 metriceq = MetricsEquation()
 metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2)
@@ -122,12 +121,12 @@ block.setio([h5, h5_read])
 # SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75)
 
 j = block.grid_indexes[1]
-grid_condition = j >= 175
+grid_condition = j >= 595
 BF = BinomialFilter(block, order=6, directions=[0,1], grid_condition=grid_condition, sigma=0.1)
 
 # Set the equations to be solved on the block
 block.set_equations([constituent, simulation_eq, initial, metriceq])
-ShockFilter = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
+ShockFilter = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF')
 
 block.set_equations(ShockFilter.equation_classes + BF.equation_classes)
 
@@ -141,7 +140,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall']
-values = ['250.0', '1.4', '1.5', '0.71', '0.0001', '500000', '357', '179', '1.0/(block0np0-1)', '1.0/(block0np1-1)', '1.0']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall', 'SuthT', 'RefT']
+values = ['300.0', '1.4', '1.5', '0.71', '0.0002', '5000000', '471', '602', '1.0/(block0np0-1)', '1.0/(block0np1-1)', '1.0', '110.4', '273.15']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho', every=100)

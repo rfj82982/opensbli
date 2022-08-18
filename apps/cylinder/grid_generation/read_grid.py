@@ -46,48 +46,48 @@ full_x[nx+6,:] = full_x[nx+3,:] + 2*dx2
 full_x[nx+7,:] = full_x[nx+3,:] + 3*dx2 
 full_x[nx+8,:] = full_x[nx+3,:] + 4*dx2 
 full_x[nx+9,:] = full_x[nx+3,:] + 5*dx2 
-# Bottom halos
-full_x[:,4] = full_x[:, ny-1]
-full_x[:,3] = full_x[:, ny-2]
-full_x[:,2] = full_x[:, ny-3]
-full_x[:,1] = full_x[:, ny-4]
-full_x[:,0] = full_x[:, ny-5]
-# Top halos
-full_x[:,ny+5] = full_x[:,5]
-full_x[:,ny+6] = full_x[:,6]
-full_x[:,ny+7] = full_x[:,7]
-full_x[:,ny+8] = full_x[:,8]
-full_x[:,ny+9] = full_x[:,9]
+# # Bottom halos
+# full_x[:,4] = full_x[:, ny-1]
+# full_x[:,3] = full_x[:, ny-2]
+# full_x[:,2] = full_x[:, ny-3]
+# full_x[:,1] = full_x[:, ny-4]
+# full_x[:,0] = full_x[:, ny-5]
+# # Top halos
+# full_x[:,ny+5] = full_x[:,5]
+# full_x[:,ny+6] = full_x[:,6]
+# full_x[:,ny+7] = full_x[:,7]
+# full_x[:,ny+8] = full_x[:,8]
+# full_x[:,ny+9] = full_x[:,9]
 
 # Y coordinate array
 # Left halos
 # Add constant spacing dy in each of the halos
 dy1 = np.abs(full_y[6,:] - full_y[5,:])
-full_y[4,:] = -dy1
-full_y[3,:] = -2*dy1
-full_y[2,:] = -3*dy1
-full_y[1,:] = -4*dy1
-full_y[0,:] = -5*dy1
+full_y[4,:] = dy1
+full_y[3,:] = 2*dy1
+full_y[2,:] = 3*dy1
+full_y[1,:] = 4*dy1
+full_y[0,:] = 5*dy1
 # Right halos
 dy2 = np.abs(full_y[nx+4,:] - full_y[nx+3,:])
-full_y[nx+5,:] = dy2
-full_y[nx+6,:] = 2*dy2
-full_y[nx+7,:] = 3*dy2 
-full_y[nx+8,:] = 4*dy2 
-full_y[nx+9,:] = 5*dy2 
+full_y[nx+5,:] = -dy2
+full_y[nx+6,:] = -2*dy2
+full_y[nx+7,:] = -3*dy2 
+full_y[nx+8,:] = -4*dy2 
+full_y[nx+9,:] = -5*dy2 
 # Bottom halos
 # DJL 11/04: Haven't changed these yet, they shouldn't matter (in y direction)
-full_y[:,4] = full_y[:, ny-1]
-full_y[:,3] = full_y[:, ny-2]
-full_y[:,2] = full_y[:, ny-3]
-full_y[:,1] = full_y[:, ny-4]
-full_y[:,0] = full_y[:, ny-5]
-# Top halos
-full_y[:,ny+5] = full_y[:,5]
-full_y[:,ny+6] = full_y[:,6]
-full_y[:,ny+7] = full_y[:,7]
-full_y[:,ny+8] = full_y[:,8]
-full_y[:,ny+9] = full_y[:,9]
+# full_y[:,4] = full_y[:, ny-1]
+# full_y[:,3] = full_y[:, ny-2]
+# full_y[:,2] = full_y[:, ny-3]
+# full_y[:,1] = full_y[:, ny-4]
+# full_y[:,0] = full_y[:, ny-5]
+# # Top halos
+# full_y[:,ny+5] = full_y[:,5]
+# full_y[:,ny+6] = full_y[:,6]
+# full_y[:,ny+7] = full_y[:,7]
+# full_y[:,ny+8] = full_y[:,8]
+# full_y[:,ny+9] = full_y[:,9]
 
 
 #Transpose the data arrangement
