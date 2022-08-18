@@ -15,11 +15,10 @@ metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True,
 optional_subs_dict = metriceq.metric_subs
 
 # # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf"]
+constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
 # symbol for the coordinate system in the equations
 conservative = False
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -37,15 +36,16 @@ for eq in eqns:
     einstein_eq.optional_subs_dict[eq.lhs] = eq.rhs
 
 # Constituent relations
-# velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-viscosity = "Eq(mu, (T**0.7))"
+viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 # Expand momentum and add the expanded equations to the constituent relations
-# eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
-# constituent.add_equations(eqns)
+if not conservative:
+    velocity = "Eq(u_i, rhou_i/rho)"
+    eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+    constituent.add_equations(eqns)
 # Expand pressure and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
@@ -152,7 +152,7 @@ block.setio([metrics_hdf5])
 
 # Various filters and shock capturing
 j = block.grid_indexes[1]
-grid_condition = j >= 460
+grid_condition = j >= 725
 BF = BinomialFilter(block, order=6, directions=3, grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
@@ -175,7 +175,7 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0,2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_depth=True)
+            BC = PeriodicBC(direction, side, full_depth=False)
             kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -194,7 +194,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'mu', 'stat_frequency']
-values = ['5.0e5', '1.4', '0.72', '0.71', '4.0e-5', '500000000', '2301', '499', '50', '20.849/(block0np0-1)', '19.988/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '1.0', '10']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT']
+values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '731', '50', '1.0/(block0np0-1)', '1.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
