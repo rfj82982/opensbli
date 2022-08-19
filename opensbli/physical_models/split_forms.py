@@ -38,8 +38,9 @@ class Feiereisen(object):
 
 
 class KGP(object):
-    def __init__(self, conservative):
+    def __init__(self, conservative, energy_formulation):
         self.conservative = conservative
+        self.energy_formulation = energy_formulation
         if self.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -75,21 +76,26 @@ class KGP(object):
     def energy(self):
         # Split on phi = E, with quadratic split applied to pressure-velocity term
         A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-        if self.conservative:
-            convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
+        if self.energy_formulation == 'enthalpy': # The RHS does not have rhoE or E explicitly here. Pressure divergence derivative is included within H definition H = E + p / rho (constituent relations)
+            convective = "(%s*Conservative(rho*H*u_j, x_j) + %s*(H*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(H, x_j)) + %s*(u_j*Conservative(rho*H, x_j) + rho*H*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*H, x_j) + u_j*H*Der(rho, x_j)))" % (A, B, C, D)
         else:
-            convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*E*u_j, x_j) + %s*(E*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(E, x_j)) + %s*(u_j*Conservative(rho*E, x_j) + rho*E*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*E, x_j) + u_j*E*Der(rho, x_j)))" % (A, B, C, D)
+            if self.conservative:
+                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
+            else:
+                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*E*u_j, x_j) + %s*(E*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(E, x_j)) + %s*(u_j*Conservative(rho*E, x_j) + rho*E*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*E, x_j) + u_j*E*Der(rho, x_j)))" % (A, B, C, D)
         energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         return energy
 
 
 class NS_Split(object):
     """ Split forms for the convective parts of the Navier-Stokes equations with central/DRP schemes."""
-    def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None, debug=False):
+    def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None, energy_formulation='none', debug=False):
         if split_type == 'Feiereisen':
+            print("Convective terms are using the Feiereisen split form.")
             self.split = Feiereisen(conservative)
         elif split_type == 'KGP':
-            self.split = KGP(conservative)
+            print("Convective terms are using the Kennedy-Gruber-Pirozzoli split form.")
+            self.split = KGP(conservative, energy_formulation)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
 
