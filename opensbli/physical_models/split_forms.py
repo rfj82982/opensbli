@@ -7,10 +7,92 @@ from opensbli.core.kernel import Kernel
 from opensbli.core.datatypes import Int
 from opensbli.core.parsing import EinsteinEquation
 
+class Feiereisen(object):
+    def __init__(self, conservative):
+        self.conservative = conservative
+        if self.conservative:
+            self.rhou = 'rhou'
+            self.mom_lhs = 'rhou'
+            self.energy_lhs = 'rhoE'
+        else:
+            self.rhou = 'rho*u'
+            self.mom_lhs = 'u'
+            self.energy_lhs = 'E'
+        return
+
+    def continuity(self):
+        mass = "Eq(Der(rho, t), - Conservative(%s_j, x_j))" % self.rhou
+        return mass
+
+    def momentum(self):
+        convective_momentum = "(1/2) * (Conservative(%s_i*u_j, x_j) + %s_j*Der(u_i,x_j) + u_i * Der(%s_j,x_j))" % (self.rhou, self.rhou, self.rhou)
+        return convective_momentum
+
+    def energy(self):
+        if self.conservative:
+            convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
+        else:
+            convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
+        energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        return energy
+
+
+class KGP(object):
+    def __init__(self, conservative):
+        self.conservative = conservative
+        if self.conservative:
+            self.rhou = 'rhou'
+            self.mom_lhs = 'rhou'
+            self.energy_lhs = 'rhoE'
+        else:
+            self.rhou = 'rho*u'
+            self.mom_lhs = 'u'
+            self.energy_lhs = 'E'
+        # KGP coefficients
+        self.alpha = Rational(1,4)
+        self.beta = Rational(1,4)
+        self.delta = Rational(1,4)
+        self.gamma = Rational(1,4)
+        self.epsilon = 0
+        return
+
+    def continuity(self):
+        A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
+        if self.conservative:
+            mass = "Eq(Der(rho, t), - (%s*Conservative(rhou_j, x_j) + %s*Conservative(rhou_j, x_j) + %s*(u_j*Der(rho, x_j) + rho*Der(u_j, x_j)) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
+        else:
+            mass = "Eq(Der(rho, t), - (%s*Conservative(rho*u_j, x_j) + %s*Conservative(rho*u_j, x_j) + %s*(u_j*Der(rho, x_j) + rho*Der(u_j, x_j)) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
+        return mass
+
+    def momentum(self):
+        A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
+        if self.conservative:
+            convective_momentum = "%s*Conservative(rhou_j*u_i, x_j) + %s*(u_i*Conservative(rhou_j, x_j) + rhou_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rhou_i, x_j) + rhou_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
+        else:
+            convective_momentum = "%s*Conservative(rho*u_j*u_i, x_j) + %s*(u_i*Conservative(rho*u_j, x_j) + rho*u_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rho*u_i, x_j) + rho*u_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
+        return convective_momentum
+
+    def energy(self):
+        # Split on phi = E, with quadratic split applied to pressure-velocity term
+        A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
+        if self.conservative:
+            convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
+        else:
+            convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*E*u_j, x_j) + %s*(E*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(E, x_j)) + %s*(u_j*Conservative(rho*E, x_j) + rho*E*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*E, x_j) + u_j*E*Der(rho, x_j)))" % (A, B, C, D)
+        energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        return energy
+
+
 class NS_Split(object):
     """ Split forms for the convective parts of the Navier-Stokes equations with central/DRP schemes."""
-    def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None):
-        self.split_type = split_type
+    def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None, debug=False):
+        if split_type == 'Feiereisen':
+            self.split = Feiereisen(conservative)
+        elif split_type == 'KGP':
+            self.split = KGP(conservative)
+        else:
+            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
+
         self.conservative = conservative
         self.coordinate_symbol = coordinate_symbol
         self.constants = constants
@@ -26,20 +108,15 @@ class NS_Split(object):
         else:
             self.rhou = 'rho*u'
             self.mom_lhs = 'u'
-            self.energy_lhs = 'Et'
-        # KGP coefficients
-        if split_type == 'KGP':
-            self.alpha = Rational(1,4)
-            self.beta = Rational(1,4)
-            self.delta = Rational(1,4)
-            self.gamma = Rational(1,4)
-            self.epsilon = 0
-        # Diffusive terms
-        self.substitutions = self.diffusive_terms()
+            self.energy_lhs = 'E'
+        # Viscous and heat-flux substitutions
+        if debug: # Don't expand the diffusive terms
+            self.substitutions = []
+        else:
+            self.substitutions = self.diffusive_terms()
         self.mass = self.continuity_eq()
         self.momentum = self.momentum_eq()
         self.energy = self.energy_eq()
-        # self.diffusive = self.diffusive_eq()
         return
 
     def factor_replace(self, original_eqn):
@@ -73,37 +150,17 @@ class NS_Split(object):
         return OpenSBLIEq(lhs, rhs)
 
     def continuity_eq(self):
-        if self.split_type == 'Feiereisen':
-            out = "Eq(Der(rho, t), - Conservative(%s_j, x_j))" % self.rhou
-        elif self.split_type == 'KGP':
-            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-            if self.conservative:
-                out = "Eq(Der(rho, t), - (%s*Conservative(rhou_j, x_j) + %s*Conservative(rhou_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
-            else:
-                out = "Eq(Der(rho, t), - (%s*Conservative(rho*u_j, x_j) + %s*Conservative(rho*u_j, x_j) + %s*u_j*Der(rho, x_j) + %s*(rho*Der(u_j, x_j) + u_j*Der(rho, x_j))))" % (A, B, C, D)
-        else:
-            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
+        out = self.split.continuity()
         out = self.EE.expand(out, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         if self.replace_factors:
             out = self.common_factors(out)
         return out
 
     def momentum_eq(self):
-        momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
-        out = self.EE.expand(momentum, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
-        # Feiereisen split form
-        if self.split_type == 'Feiereisen':
-            convective = "(1/2) * (Conservative(%s_i*u_j, x_j) + %s_j*Der(u_i,x_j) + u_i * Der(%s_j,x_j))" % (self.rhou, self.rhou, self.rhou)
-        # Kennedy Gruber cubic split
-        elif self.split_type == 'KGP':
-            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-            if self.conservative:
-                convective = "%s*Conservative(rhou_j*u_i, x_j) + %s*(u_i*Conservative(rhou_j, x_j) + rhou_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rhou_i, x_j) + rhou_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
-            else:
-                convective = "%s*Conservative(rho*u_j*u_i, x_j) + %s*(u_i*Conservative(rho*u_j, x_j) + rho*u_j*Der(u_i, x_j)) + %s*(u_j*Conservative(rho*u_i, x_j) + rho*u_i*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*u_i, x_j) + u_i*u_j*Der(rho, x_j))" % (A, B, C, D)
-        else:
-            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
+        base_momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
+        out = self.EE.expand(base_momentum, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         # Add convective parts
+        convective = self.split.momentum()
         expanded_convective = self.EE.expand(convective, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         expanded_convective[0] = factor(expanded_convective[0])
         for no, value in enumerate(out):
@@ -115,35 +172,19 @@ class NS_Split(object):
         return out
 
     def energy_eq(self):
-        if self.split_type == 'Feiereisen':
-            if self.conservative:
-                convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
-            else:
-                convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
-            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
-        elif self.split_type == 'KGP':
-            # Split on phi = E, with quadratic split applied to pressure-velocity term
-            A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
-            if self.conservative:
-                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative(rhoE/rho, x_j)) + %s*(u_j*Der(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
-            else:
-                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Der(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
-            energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
-        else:
-            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
-
+        energy = self.split.energy()
         out = self.EE.expand(energy, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         if self.replace_factors:
             out = self.common_factors(out)
         return out
 
     def diffusive_terms(self):
+        """ Viscous stress tensor and heat-flux terms, depending on whether viscosity is variable or not."""
         if self.viscosity == 'constant':
-            stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
+            stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))"
             heat_flux = "Eq(q_j, ((1.0/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
         else:
-            stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))" # *divV Der(u_k,x_k)
-            # stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*divV))" # *divV Der(u_k,x_k)
+            stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)*Der(u_k,x_k)))"
             heat_flux = "Eq(q_j, ((mu/Re)/((gama-1)*Minf*Minf*Pr))*Der(T,x_j))"
         substitutions = [stress_tensor, heat_flux]
         return substitutions
