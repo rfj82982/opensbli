@@ -17,7 +17,7 @@ class Feiereisen(object):
         else:
             self.rhou = 'rho*u'
             self.mom_lhs = 'u'
-            self.energy_lhs = 'E'
+            self.energy_lhs = 'Et'
         return
 
     def continuity(self):
@@ -48,7 +48,7 @@ class KGP(object):
         else:
             self.rhou = 'rho*u'
             self.mom_lhs = 'u'
-            self.energy_lhs = 'E'
+            self.energy_lhs = 'Et'
         # KGP coefficients
         self.alpha = Rational(1,4)
         self.beta = Rational(1,4)
@@ -82,7 +82,7 @@ class KGP(object):
             if self.conservative:
                 convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
             else:
-                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*E*u_j, x_j) + %s*(E*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(E, x_j)) + %s*(u_j*Conservative(rho*E, x_j) + rho*E*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*E, x_j) + u_j*E*Der(rho, x_j)))" % (A, B, C, D)
+                convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Conservative(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
         energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         return energy
 
@@ -114,7 +114,7 @@ class NS_Split(object):
         else:
             self.rhou = 'rho*u'
             self.mom_lhs = 'u'
-            self.energy_lhs = 'E'
+            self.energy_lhs = 'Et'
         # Viscous and heat-flux substitutions
         if debug: # Don't expand the diffusive terms
             self.substitutions = []

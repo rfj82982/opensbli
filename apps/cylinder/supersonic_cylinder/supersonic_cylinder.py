@@ -28,8 +28,8 @@ if conservative:
     velocity = "Eq(u_i, rhou_i/rho)"
     enthalpy = "Eq(H, (rhoE + p) / rho)"
 else:
-    pressure = "Eq(p, rho*(gama-1)*(E - (1/2)*(KD(_i,_j)*u_i*u_j)))"
-    enthalpy = "Eq(H, E + p / rho)"
+    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
+    enthalpy = "Eq(H, Et + p / rho)"
 
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
@@ -167,7 +167,7 @@ def create_exchange_calls_codes(block, dsets):
 if conservative:
     filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhoE'])
 else:
-    filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'E'])
+    filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'Et'])
 
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):

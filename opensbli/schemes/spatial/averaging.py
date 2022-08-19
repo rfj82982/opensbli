@@ -96,7 +96,7 @@ class RoeAverage(Averaging):
         if block.conservative:
             rhoE_L, rhoE_R = self.get_locations('rhoE', direction, block)
         else:
-            E_L, E_R = self.get_locations('E', direction, block)
+            E_L, E_R = self.get_locations('Et', direction, block)
             rhoE_L, rhoE_R = rho_L*E_L, rho_R*E_R
         # Enthalpy
         H_L = (rhoE_L + P_L)/rho_L
