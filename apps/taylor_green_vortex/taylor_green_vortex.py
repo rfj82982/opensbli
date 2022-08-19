@@ -120,6 +120,7 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
+h5.set_output_constants(['Minf', 'Re', 'Pr', 'gama'])
 # h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
