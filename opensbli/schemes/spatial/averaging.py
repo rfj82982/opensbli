@@ -93,7 +93,12 @@ class RoeAverage(Averaging):
 
         # Calcualte enthalpy h = rhoE + P/rho
         P_L, P_R = self.get_locations('p', direction, block)
-        rhoE_L, rhoE_R = self.get_locations('rhoE', direction, block)
+        if block.conservative:
+            rhoE_L, rhoE_R = self.get_locations('rhoE', direction, block)
+        else:
+            E_L, E_R = self.get_locations('E', direction, block)
+            rhoE_L, rhoE_R = rho_L*E_L, rho_R*E_R
+        # Enthalpy
         H_L = (rhoE_L + P_L)/rho_L
         H_R = (rhoE_R + P_R)/rho_R
         roe_enthalpy = (sqrt(rho_L)*H_L+sqrt(rho_R)*H_R)*grid_vars[1]
