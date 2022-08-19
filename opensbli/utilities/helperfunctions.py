@@ -28,6 +28,22 @@ def get_min_max_halo_values(halos):
     else:
         raise ValueError("")
 
+def debug_equation(ndim, input_eqns, direction):
+    """ Extracts only terms involving derivatives in the specified direction (0, 1, 2), for debugging purposes."""
+    output = []
+    from opensbli.schemes import Central
+    from sympy import simplify
+    c = Central(4)
+    original = input_eqns.rhs
+    grouped = c.group_by_direction([original])
+    subs_dict = {}
+    for dire in range(ndim):
+        if dire != direction:
+            derivatives = grouped[dire]
+            for der in derivatives:
+                subs_dict[der] = 0
+    output = simplify(original.subs(subs_dict))
+    return output
 
 def increment_dataset(expression, direction, value):
     """ Increments an expression containing datasets by the given increment and direction.
@@ -178,8 +194,14 @@ def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, n
     for no, line in enumerate(lines):
         check_string = "int iter=0;"
         if check_string in line:
+            # Add average iteration time
+            lines[no-1] += """double inner_start, elapsed_inner_start;\n"""
+            lines[no-1] += """double inner_end, elapsed_inner_end;\n"""
+            lines[no-1] += """ops_timers(&inner_start, &elapsed_inner_start);\n"""
+            # Inside the condition
             lines[no+1] += """if(fmod(iter+1, %d) == 0){
-        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f\\n", iter+1, dt, dt*(iter+1) + tstart); """ % every
+        ops_timers(&inner_end, &elapsed_inner_end);
+        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f. Time/iteration: %%lf.\\n", iter+1, dt, dt*(iter+1) + tstart, (elapsed_inner_end - elapsed_inner_start)/%d); """ % (every, every)
             if NaN_check is not None:
                 for i in range(nblocks):
                     if i == 0:
@@ -187,6 +209,7 @@ def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, n
         ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
                     else:
                         lines[no+1] += """        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+                lines[no+1] += """        ops_timers(&inner_start, &elapsed_inner_start);\n"""
 
                 lines[no+1] += """}\n""" 
             else:
