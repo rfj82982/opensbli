@@ -19,6 +19,7 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         # Optional halo type
         ret.halos = None
         cls._full_swap = False
+        ret.custom_grid_range = None
         return ret
 
     @property
@@ -47,15 +48,6 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
     @full_swap.setter
     def full_swap(cls, full_swap):
         cls._full_swap = full_swap
-        return
-
-    @property
-    def custom_grid_range(cls):
-        return cls._custom_grid_range
-
-    @custom_grid_range.setter
-    def custom_grid_range(cls, custom_range):
-        cls._custom_grid_range = custom_range
         return
 
     def spatial_discretisation(cls, block):
@@ -107,14 +99,10 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
 
         # Process the kernels to update parameters on the block
         cls.process_kernels(block)
-        # # Apply a custom grid range if necessary
-        # print(cls.custom_grid_range)
-        try:
-            if cls.custom_grid_range is not None:
-                for ker in cls.Kernels:
-                    ker.range = cls.custom_grid_range
-        except:
-            pass
+        # Apply a custom grid range if defined
+        if cls.custom_grid_range is not None:
+            for ker in cls.Kernels:
+                ker.ranges = cls.custom_grid_range
         return
 
     def process_kernels(cls, block):

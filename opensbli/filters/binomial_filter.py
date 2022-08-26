@@ -14,7 +14,7 @@ from opensbli.multiblock.blockcollection import MultiBlock
 import copy
 
 class BinomialFilter(object):
-    def __init__(self, block, order, directions, grid_condition=None, sigma=0.1):
+    def __init__(self, block, order, directions=None, grid_condition=None, sigma=0.1):
         self.filter_no = block.blocknumber
         if (order % 2) != 0:
             raise ValueError("The filter is only defined for even orders n.")
@@ -25,7 +25,10 @@ class BinomialFilter(object):
         # Spatial dependence of the filter
         self.grid_condition = grid_condition
         # Which directions to apply
-        self.directions = directions
+        if directions == None: # All directions
+            self.directions = [i for i in range(block.ndim)]
+        else:
+            self.directions = directions
         # Width and weightings of the filter
         self.generate_weights()
         sigma_symbol = ConstantObject('BF_filt')
@@ -134,8 +137,8 @@ class BinomialFilter(object):
         filter_class = UserDefinedEquations()
         filter_class.algorithm_place = InTheSimulation(frequency=False)
         filter_class.computation_name = 'Binomial filter'
-        # if self.grid_condition is not None:
-        #     self.reduce_grid_range(block, filter_class)
+        if self.grid_condition is not None:
+            self.reduce_grid_range(block, filter_class)
         # Place the filter at the very end
         filter_class.order = 10000
         filter_class.add_equations(self.create_equations(block))
