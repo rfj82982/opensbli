@@ -33,6 +33,10 @@ class iohdf5(opensbliIO):
         else:
             # Default IO type is write to hdf5
             ret.kwargs = {'iotype': "write"}
+            # Default write placement is the end of the simulation
+        # Position of write calls in the output
+        if 'position' not in ret.kwargs:
+            ret.kwargs['position'] = 'end'
         ret.algorithm_place = []
         # Constant for file write frequency
         if save_every:
@@ -53,7 +57,10 @@ class iohdf5(opensbliIO):
         if cls.save_every:
             cls.algorithm_place += [InTheSimulation(cls.save_every)]
         if cls.kwargs['iotype'] == "write":
-            cls.algorithm_place += [AfterSimulationEnds()]
+            if cls.kwargs['position'] == "init":
+                cls.algorithm_place = [BeforeSimulationStarts()]
+            else:
+                cls.algorithm_place += [AfterSimulationEnds()]
         elif cls.kwargs['iotype'] == "read":
             cls.algorithm_place = [BeforeSimulationStarts()]
         else:
