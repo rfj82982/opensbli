@@ -3,7 +3,7 @@
    @contributors Satya Pramod Jammy
    @details
 """
-from sympy import diag, eye, Rational, pprint
+from sympy import diag, eye, Rational, pprint, simplify
 from opensbli.core.opensbliobjects import ConstantObject, EinsteinTerm, DataSet
 from sympy.parsing.sympy_parser import parse_expr
 
@@ -25,10 +25,10 @@ class EulerEquations(object):
         met_symbols = self.met_symbols
         # Metric terms for this direction to substitute into the matrix
         terms = [EinsteinTerm('k%d' % i) for i in range(self.ndim)]
-        metric_values = [met_symbols[direction, i] for i in range(self.ndim)]
+        metric_values = [self.detJ*met_symbols[direction, i] for i in range(self.ndim)]
         subs_dict = dict([(x, y) for (x, y) in zip(terms, metric_values)])
         # Scaling factor based on metrics
-        factor = sum([met_symbols[direction, i]**2 for i in range(self.ndim)])**(Rational(1, 2))
+        factor = self.detJ*sum([met_symbols[direction, i]**2 for i in range(self.ndim)])**(Rational(1, 2))
         required_metrics = factor.atoms(DataSet)
         subs_dict[EinsteinTerm('k')] = factor
 
@@ -37,6 +37,8 @@ class EulerEquations(object):
         ev_dict[direction] = diag(*list(self.ev.applyfunc(g)))
         LEV_dict[direction] = self.LEV.applyfunc(g)
         REV_dict[direction] = self.REV.applyfunc(g)
+        # remove the detJ from the 1 / sqrt(D00*2 + D10**2) factor, as it cancels out in the LEV/REV matrices
+        factor = factor / self.detJ
         return ev_dict, LEV_dict, REV_dict, required_metrics, factor
 
     def generate_eig_system(self, block):
@@ -48,10 +50,13 @@ class EulerEquations(object):
         ndim = self.ndim
         # Check if block has metrics
         metrics = block.fd_metrics
+
         if metrics.is_diagonal():
             self.met_symbols = eye(block.ndim)
+            self.detJ = block.detJ_metrics[0]
         else:
             self.met_symbols = metrics
+            self.detJ = block.detJ_metrics[0]
         local_dict = {'Symbol': EinsteinTerm, 'gama': ConstantObject('gama')}
 
         if ndim == 1:
