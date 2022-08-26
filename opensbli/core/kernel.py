@@ -155,6 +155,8 @@ class Kernel(object):
         for eq in self.equations:
             if isinstance(eq, OpenSBLIEq):
                 reduction_vars = reduction_vars.union(eq.rhs.atoms(ReductionVariable))
+            elif isinstance(eq, GroupedPiecewise):
+                reduction_vars = reduction_vars.union(eq.atoms(ReductionVariable))
             elif isinstance(eq, Equality):
                 raise TypeError("Equality should be of types %s" % _known_equation_types)
         return reduction_vars
