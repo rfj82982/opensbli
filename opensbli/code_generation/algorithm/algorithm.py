@@ -300,16 +300,15 @@ class Timers(object):
 
     @property
     def opsc_start_timer(self):
-        """ OPSC code for the starting the timers, this is called from Timers.opsc_code()
-        """
+        """ OPSC code for the starting the timers, this is called from Timers.opsc_code(). """
         start = self._start_variables
-        timer_start = ["double %s, %s;" % (start[0], start[1])] + ["ops_timers(&%s, &%s);" % (start[0], start[1])]
+        timer_start = ["// Initialize loop timers"]
+        timer_start += ["double %s, %s;" % (start[0], start[1])] + ["ops_timers(&%s, &%s);" % (start[0], start[1])]
         return timer_start
 
     @property
     def opsc_end_timer(self):
-        """ OPSC code for the ending the timers, this is called from Timers.opsc_code()
-        """
+        """ OPSC code for the ending the timers, this is called from Timers.opsc_code(). """
         end = self._end_variables
         code = []
         code += ["double %s, %s;" % (end[0], end[1])] + ["ops_timers(&%s, &%s);" % (end[0], end[1])]
@@ -318,8 +317,7 @@ class Timers(object):
 
     @property
     def timing_result_opsc(self):
-        """ Generates the code for printing the timing results in OPSC
-        """
+        """ Generates the code for printing the timing results in OPSC. """
         code = []
         code += ["ops_printf(\"\\nTimings are:\\n\");"]
         code += ["ops_printf(\"-----------------------------------------\\n\");"]

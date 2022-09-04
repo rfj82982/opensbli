@@ -61,6 +61,11 @@ simulation_eq.add_equations(eqns)
 eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
 simulation_eq.add_equations(eqns)
 
+
+metriceq = MetricsEquation()
+metriceq.generate_transformations(ndim, coordinate_symbol, [(False, False), (True, False), (False, False)], 2)
+simulation_eq.apply_metrics(metriceq)
+
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 

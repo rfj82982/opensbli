@@ -8,6 +8,8 @@ from sympy.functions.elementary.piecewise import ExprCondPair, Piecewise
 from numpy import ndindex as mutidimindex
 from sympy.functions.special.tensor_functions import eval_levicivita
 from opensbli.utilities.helperfunctions import get_inverse_deltas
+from opensbli.core.grid import GridVariable
+
 
 class KD(Function):
     """ Handler for the built-in SymPy KroneckerDelta function. """
@@ -524,11 +526,14 @@ class CentralDerivative(Function, BasicDiscretisation, DerPrint):
         modifications = block.check_modify_central()
         # Force all metric calculations to use one-sided derivatives at the boundaries
         from opensbli.equation_types.metric import MetricsEquation
+        from opensbli.core.boundary_conditions.multi_block import InterfaceBC, SharedInterfaceBC
         if isinstance(type_of_eq, MetricsEquation):
             from opensbli.postprocess.post_process_eq import DummyCarpenter
             for direction in modifications.keys():
                 for side in [0,1]:
-                    modifications[direction][side] = DummyCarpenter(direction, side)
+                    # Check if InterfaceBC
+                    if isinstance(block.boundary_types[direction][side], InterfaceBC) or isinstance(block.boundary_types[direction][side], SharedInterfaceBC):
+                        modifications[direction][side] = DummyCarpenter(direction, side)
 
         dire = cls.get_direction[0]
         if dire in modifications:
@@ -596,7 +601,11 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
         delta = block.deltas[dire]
         loc = list(cls.reconstruction_work.indices[:])
         loc[dire] += -1
-        form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) / delta
+        if block.shock_filter:
+            # Scale with grid size for the shock filter
+            form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) * ConstantObject('inv_rfact%d' % dire)
+        else:
+            form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) / delta
         return form
 
     def add_reconstruction_classes(self, classes):
