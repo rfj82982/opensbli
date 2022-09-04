@@ -116,10 +116,11 @@ class BinomialFilter(object):
             u = block.location_dataset(u)
             blended_equations += [OpenSBLIEquation(u, (1-self.sigma)*u + self.sigma*u_f)]
         # Apply the spatial condition
-        if self.grid_condition is not None:
-            output_equations += self.conditional_expression(blended_equations)
-        else:
-            output_equations += blended_equations
+        # if self.grid_condition is not None:
+            # output_equations += self.conditional_expression(blended_equations)
+        # else:
+        ## Always enforce the grid condition just on the evaluation range
+        output_equations += blended_equations
         return output_equations
 
     def reduce_grid_range(self, block, filt_class):
