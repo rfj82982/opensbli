@@ -63,6 +63,7 @@ class RungeKuttaLS(Scheme):
         # Set the number of stages if provided
         cls.n_stages = cls.set_stages(order, stages)
         cls.stage = Idx('stage', cls.n_stages)
+        cls.stage.restart = None
         cls.solution_coeffs = ConstantIndexed('rkB', cls.stage)
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
         cls.niter_symbol = ConstantObject('niter', integer=True)
@@ -74,9 +75,13 @@ class RungeKuttaLS(Scheme):
         cls.temporal_iteration = Idx(cls.iteration_number, cls.niter_symbol)
         cls.constant_time_step = True
         cls.time_step = ConstantObject("dt")
-        # Variable to hold the simulation time
-        cls.start_time = ConstantObject('tstart')
+        # Variables to hold the simulation time and starting iteration
+        cls.start_time = ConstantObject('simulation_time', restart=True)
         cls.start_time.value = 0.0
+        cls.start_iter = ConstantObject('start_iter', integer=True, restart=True)
+        cls.start_iter.value = 0
+        cls.start_iter.datatype = Int()
+        cls.temporal_iteration.restart = cls.start_iter
         return
 
     def add_constants(cls):
@@ -85,6 +90,7 @@ class RungeKuttaLS(Scheme):
         CTD.add_constant(cls.stage_coeffs)
         CTD.add_constant(cls.time_step)
         CTD.add_constant(cls.start_time)
+        CTD.add_constant(cls.start_iter)
         return
 
     @property

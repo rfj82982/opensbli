@@ -191,12 +191,14 @@ class ConstantObject(EinsteinTerm, Constant):
     :rtype: ConstantObject """
     is_commutative = True
 
-    def __new__(cls, label, **kwargs):
+    def __new__(cls, label, rational=False, restart=False, **kwargs):
         ret = super(ConstantObject, cls).__new__(cls, label, **kwargs)
         ret.is_constant = True
         ret.is_input = True
         ret._datatype = SimulationDataType()
         ret._value = "Input"
+        ret.rational = rational
+        ret.restart = restart # Restart the constant from HDF5?
         return ret
 
     def __hash__(self):
@@ -244,7 +246,7 @@ class ConstantIndexed(Indexed, Constant):
 
     :param str label: Name of the ConstantIndexed.
     :param list indices: Indices of the ConstantIndexed. (See: Sympy Indexed class)."""
-    def __new__(cls, label, indices, **kwargs):
+    def __new__(cls, label, indices, restart=False, **kwargs):
         base = IndexedBase(label)
         if isinstance(indices, list):
             for i in indices:
@@ -260,6 +262,7 @@ class ConstantIndexed(Indexed, Constant):
         ret.is_input = True
         ret._datatype = SimulationDataType()
         ret._value = ["Input" for i in range(ret.shape[0])]
+        ret.restart = restart # Restart the constant from HDF5?
         return ret
 
     @property
@@ -573,11 +576,12 @@ class Globalvariable(EinsteinTerm, GlobalValue):
 
     is_commutative = True
 
-    def __new__(cls, label, **kwargs):
+    def __new__(cls, label, restart=False, **kwargs):
         ret = super(Globalvariable, cls).__new__(cls, label, **kwargs)
         ret._datatype = SimulationDataType()
         ret.is_input = True
         ret._value = "Input"
+        ret.restart = restart
         return ret
 
     @property

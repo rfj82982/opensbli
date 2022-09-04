@@ -170,8 +170,7 @@ class DoLoop(Loop):
 
     @property
     def opsc_code(self):
-        """ Writes the OPS  version of the Do loop with the components
-        """
+        """ Writes the OPS  version of the Do loop with the components."""
         code = []
         code += [self.opsc_start]
         for c in self.components:
@@ -181,21 +180,23 @@ class DoLoop(Loop):
 
     @property
     def opsc_start(self):
-        """ Do loop in OPSC is a for loop, and the starting of the for loop is written by this function
-        """
-        return "for(int %s=%s; %s<=%s; %s++)\n{" % (self.loop, str(self.loop.lower), self.loop, str(self.loop.upper), self.loop)
+        """ Do loop in OPSC is a for loop, and the starting of the for loop is written by this function."""
+        if self.loop.restart is not None:
+            out = "for(%s=%s; %s<=%s+%s; %s++)\n{\n" % (self.loop, str(self.loop.restart), self.loop, str(self.loop.restart), str(self.loop.upper), self.loop)
+            out += "simulation_time = tstart + dt*((iter - start_iter)+1);\n" # keep track of the simulation time on the outer loop
+            return out
+        else:
+            return "for(%s=%s; %s<=%s; %s++)\n{" % (self.loop, str(self.loop.lower), self.loop, str(self.loop.upper), self.loop)
 
     @property
     def opsc_end(self):
-        """ Ending of a for loop in OPSC
-        """
+        """ Ending of a for loop in OPSC."""
         return "}"
 
 
 class DefDecs(object):
     """ Definitions and declarations in a program. This write latex and OPS C code printing functions are
-    not used currently but these will be added in the future releases
-    """
+    not used currently but these will be added in the future releases."""
 
     def __init__(self):
         self.components = []

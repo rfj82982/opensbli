@@ -47,7 +47,7 @@ phi = parse_expr("Eq(DataObject(phi), sin(2.0*pi*DataObject(x0)))", local_dict=l
 initial = GridBasedInitialisation()
 initial.add_equations([x0, phi])
 
-kwargs = {'iotype': "Write"}
+kwargs = {'iotype': "Write", 'write_constants': True}
 output_arrays = simulation_eq.time_advance_arrays + [DataObject('x0')]
 h5 = iohdf5(arrays=output_arrays, **kwargs)
 
@@ -58,7 +58,7 @@ block.setio([h5])
 schemes = {}
 cent = Central(4)
 schemes[cent.name] = cent
-rk = RungeKutta(3)
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 block.set_discretisation_schemes(schemes)
@@ -73,3 +73,5 @@ OPSC(alg)
 constants = ['c0', 'dt', 'niter', 'block0np0', 'Delta0block0']
 values = ['0.5', '0.001', '1.0/0.001', '200', '1.0/block0np0']
 substitute_simulation_parameters(constants, values)
+print_iteration_ops(NaN_check='phi', every=100)
+

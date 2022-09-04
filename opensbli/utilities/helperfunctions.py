@@ -192,28 +192,28 @@ def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, n
     with open(file_path) as f:
         lines = f.readlines()
     for no, line in enumerate(lines):
-        check_string = "int iter=0;"
+        check_string = "for(iter"
         if check_string in line:
             # Add average iteration time
             lines[no-1] += """double inner_start, elapsed_inner_start;\n"""
             lines[no-1] += """double inner_end, elapsed_inner_end;\n"""
             lines[no-1] += """ops_timers(&inner_start, &elapsed_inner_start);\n"""
             # Inside the condition
-            lines[no+1] += """if(fmod(iter+1, %d) == 0){
+            lines[no+2] += """if(fmod(iter+1, %d) == 0){
         ops_timers(&inner_end, &elapsed_inner_end);
-        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f. Time/iteration: %%lf.\\n", iter+1, dt, dt*(iter+1) + tstart, (elapsed_inner_end - elapsed_inner_start)/%d); """ % (every, every)
+        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f. Time/iteration: %%lf.\\n", iter+1, dt, simulation_time, (elapsed_inner_end - elapsed_inner_start)/%d); """ % (every, every)
             if NaN_check is not None:
                 for i in range(nblocks):
                     if i == 0:
-                        lines[no+1] += """
+                        lines[no+2] += """
         ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
                     else:
-                        lines[no+1] += """        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
-                lines[no+1] += """        ops_timers(&inner_start, &elapsed_inner_start);\n"""
+                        lines[no+2] += """        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+                lines[no+2] += """        ops_timers(&inner_start, &elapsed_inner_start);\n"""
 
-                lines[no+1] += """}\n""" 
+                lines[no+2] += """}\n""" 
             else:
-                lines[no+1] += """\n}\n"""
+                lines[no+2] += """\n}\n"""
     with open(file_path, 'w') as f:
         f.write(''.join(lines))
     return

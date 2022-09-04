@@ -29,7 +29,8 @@ class iohdf5(opensbliIO):
             ret.kwargs = {}
             for key in kwargs:
                 if isinstance(key, str):
-                    ret.kwargs[key.lower()] = kwargs[key].lower()
+                    if isinstance(kwargs[key], str):
+                        ret.kwargs[key.lower()] = kwargs[key].lower()
         else:
             # Default IO type is write to hdf5
             ret.kwargs = {'iotype': "write"}
@@ -38,6 +39,10 @@ class iohdf5(opensbliIO):
         if 'position' not in ret.kwargs:
             ret.kwargs['position'] = 'end'
         ret.algorithm_place = []
+        # Check if constants should be written to the HDF5 file
+        if 'write_constants' in kwargs:
+            if kwargs['write_constants']:
+                cls.write_constants = True
         # Constant for file write frequency
         if save_every:
             cls.save_every = ConstantObject('write_output_file', integer=True)
@@ -46,7 +51,6 @@ class iohdf5(opensbliIO):
             CTD.add_constant(cls.save_every)
         else:
             cls.save_every = None
-        cls.constants_to_write = []
         ret.get_algorithm_location()
         ret.arrays = []
         if arrays:
@@ -154,17 +158,14 @@ class iohdf5(opensbliIO):
         # generate the block name
         code += ['ops_fetch_block_hdf5_file(%s, %s);' % (block_name, filename)] + dataset_write
         # Write constants to the HDF5 output file
-        if len(cls.constants_to_write) > 0:
-            # Get the ConstantObjects corresponding to the constants set by the user
-            # Check there are no missing constants
-            known_names = [c.name for c in CTD.constants]
-            for c in cls.constants_to_write:
-                if c not in known_names:
-                    raise ValueError("The constant \"{:}\" set by the user to the HDF IO class has not been defined in the problem (ConstantsToDeclare).".format(c))
-            cls.constants_to_write = [c for c in CTD.constants if c.name in cls.constants_to_write]
+        if cls.write_constants:
             # Generate the OPS API calls
-            for c in cls.constants_to_write:
+            user_constants = [x for x in CTD.constants if isinstance(x, ConstantObject)]
+            user_constants = [x for x in user_constants if not x.rational]
+            for c in user_constants: # Write only user input constants, not rational factors and inverses
                 code += ['ops_write_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, %s);' % (c.name, c.datatype.opsc(), c.name, filename)]
+        # Constants to always write to HDF5
+        code += ['ops_write_const_hdf5(\"iter\", 1, \"int\", (char*)&iter, %s);' % (filename)]
         return code
 
     def hdf5read_opsc_code(cls):

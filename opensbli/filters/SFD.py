@@ -52,7 +52,7 @@ class SFD(object):
 	def generate_initial_condition(self):
 		""" Initializes the conservative variables with the freestream conditions."""
 		initial_class = UserDefinedEquations()
-		initial_class.computation_name = 'Initialize the filter'
+		initial_class.computation_name = 'Initialize the SFD temporal filter'
 		initial_class.algorithm_place = BeforeSimulationStarts()
 		# Ensure that the evaluation comes after the initial condition
 		initial_class.order = 10000000

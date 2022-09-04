@@ -35,7 +35,7 @@ class RationalCounter():
         from opensbli.core.kernel import ConstantsToDeclare
         name = self.name % self.rational_counter
         self.increase_rational_counter
-        ret = ConstantObject(name)
+        ret = ConstantObject(name, rational=True) # Don't write rational constants to the HDF files
         ret.value = numerical_value
         self.existing[numerical_value] = ret
         ConstantsToDeclare.add_constant(ret)
@@ -483,8 +483,15 @@ class OPSC(object):
         """ Adds the required preamble to the main opensbli.cpp file and declares the simulation constants."""
         out = ['#include <stdlib.h> \n#include <string.h> \n#include <math.h>']
         from opensbli.core.kernel import ConstantsToDeclare
+        # Declare a restart flag and loop variables globally
+        out += ["%s %s;" % ('int', 'restart')]
+        out += ["%s %s;" % ('int', 'iter')]
+        out += ["%s %s;" % ('int', 'stage')]
+        out += ["%s %s;" % ('double', 'tstart')]
+
         for d in ConstantsToDeclare.constants:
             if isinstance(d, ConstantObject):
+                print(d, d.datatype.opsc())
                 out += ["%s %s;" % (d.datatype.opsc(), d)]
             elif isinstance(d, ConstantIndexed):
                 if not d.inline_array:
@@ -492,6 +499,7 @@ class OPSC(object):
                     for s in d.shape:
                         indices = indices + '[%d]' % s
                     out += ["%s %s%s;" % (d.datatype.opsc(), d.base.label, indices)]
+        # Declare the simulation blocks
         for b in algorithm.block_descriptions:
             out += ['#define OPS_%dD' % b.ndim]
         out += ['#include \"ops_seq.h\"']
@@ -514,9 +522,10 @@ class OPSC(object):
         # Add OPS_init to the declarations as it should be called before all ops
         decls += self.ops_init()
         # First process all the constants in the definitions
+        defs += self.set_constant_values(ConstantsToDeclare.constants)
+        # OPS declaration of the constants
         for d in ConstantsToDeclare.constants:
             if isinstance(d, Constant):
-                defs += self.define_constants(d)
                 decls += self.declare_ops_constants(d)
         # Once the constants are done define and declare OPS dats
         output = defs + decls
@@ -683,36 +692,55 @@ class OPSC(object):
         else:
             raise NotImplementedError("")
 
-    def define_constants(self, c):
+    def set_constant_values(self, constants):
         """ Declares all of the constants required by the simulation at the start of the program."""
-        # Fix spacing on constant declarations %s=%s
-        if isinstance(c, ConstantObject):
-            if not isinstance(c.value, str):
-                return [WriteString("%s = %s;" % (str(c), ccode(c.value, settings={'rational': True})))]
+        # First restart any constants from HDF5 if required
+        out = []
+        out += [WriteString('// Set restart to 1 to restart the simulation from HDF5 file')]
+        restart = [c for c in constants if str(c) == 'restart'][0]
+        out += [WriteString("%s = %s;" % (str(restart), restart.value))]
+        constants.remove(restart)
+        # Find which constants to restart
+        restarted_constants = [x for x in constants if x.restart]
+        init_constants = [x for x in constants if not x.restart]
+        out += [WriteString('// Constants from HDF5 restart file')]
+        out += [WriteString('if (restart == 1){')]
+        for c in restarted_constants:
+            if c.name == 'start_iter':
+                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % ('iter', c.datatype.opsc(), c.name))]
             else:
-                return [WriteString("%s=%s;" % (str(c), c.value))]
-        elif isinstance(c, ConstantIndexed):
-            out = []
-            if c.value:
-                if len(c.shape) == 1:
-                    if c.inline_array:
-                        values = [ccode(c.value[i], settings={'rational': True}) for i in range(c.shape[0])]
-                        return [WriteString("%s %s[] = {%s};" % (c.datatype.opsc(), c.base.label, ', '.join(values)))]
-                    else:
-                        indices = ''
-                        for s in c.shape:
-                            indices = indices + '[%d]' % s
-                        out += [WriteString("%s %s%s;" % (c.base.label, indices))]
-                        for i in range(c.shape[0]):
-                            out += [WriteString("%s[%d] = %s;" % (str(c.base.label), i, ccode(c.value[i], settings={'rational': True})))]
-                        return out
+                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % (c.name, c.datatype.opsc(), c.name))]
+        out += [WriteString('}')]
+        out += [WriteString('else {')]
+        for c in restarted_constants:
+            out += [WriteString("%s = %s;" % (str(c), c.value))]
+        out += [WriteString('}')]
+        out += [WriteString('tstart = simulation_time;')]
+        out += [WriteString('// User defined constant values')]
+        # Write the rest of the constants
+        for c in init_constants:
+            if isinstance(c, ConstantObject):
+                if not isinstance(c.value, str):
+                    out += [WriteString("%s = %s;" % (str(c), ccode(c.value, settings={'rational': True})))]
                 else:
-                    raise NotImplementedError("Indexed constant declaration is done for only one ")
-            else:
-                raise NotImplementedError("")
-        else:
-            print(c)
-            raise ValueError("")
+                    out += [WriteString("%s=%s;" % (str(c), c.value))]
+
+            elif isinstance(c, ConstantIndexed):
+                if c.value:
+                    if len(c.shape) == 1:
+                        if c.inline_array:
+                            values = [ccode(c.value[i], settings={'rational': True}) for i in range(c.shape[0])]
+                            out += [WriteString("%s %s[] = {%s};" % (c.datatype.opsc(), c.base.label, ', '.join(values)))]
+                        else:
+                            indices = ''
+                            for s in c.shape:
+                                indices = indices + '[%d]' % s
+                            out += [WriteString("%s %s%s;" % (c.base.label, indices))]
+                            for i in range(c.shape[0]):
+                                out += [WriteString("%s[%d] = %s;" % (str(c.base.label), i, ccode(c.value[i], settings={'rational': True})))]
+        return out
+
+
 
     def declare_ops_constants(self, c):
         """ Calls the OPS declare constant function for all of the defined constants."""

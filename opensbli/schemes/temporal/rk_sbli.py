@@ -45,13 +45,13 @@ class RungeKutta(Scheme):
         cls.temporal_iteration = Idx(cls.iteration_number, cls.niter_symbol)
         cls.constant_time_step = True
         cls.time_step = ConstantObject("dt")
-        # Variable to control restarting
-        cls.restart = ConstantObject('restart', integer=True)
-        cls.restart.datatype = Int()
-        cls.restart.value = 0
-        # Variable to hold the simulation time
-        cls.start_time = ConstantObject('tstart')
+        # Variables to hold the simulation time and starting iteration
+        cls.start_time = ConstantObject('simulation_time', restart=True)
         cls.start_time.value = 0.0
+        cls.start_iter = ConstantObject('start_iter', integer=True, restart=True)
+        cls.start_iter.value = 0
+        cls.start_iter.datatype = Int()
+        cls.temporal_iteration.restart = cls.start_iter
         return
 
     def add_constants(cls):
@@ -61,6 +61,7 @@ class RungeKutta(Scheme):
         CTD.add_constant(cls.time_step)
         CTD.add_constant(cls.restart)
         CTD.add_constant(cls.start_time)
+        CTD.add_constant(cls.start_iter)
         return
 
     @property
