@@ -152,7 +152,9 @@ class BoundaryConditionBase(object):
         for i in range(len(halo_objects)):
             halo_m, halo_p = get_min_max_halo_values(halo_objects)
             halo_m, halo_p = halo_m[0], halo_p[0]
-            halo_values.append([halo_m, halo_p])
+            # Make the halo swap symmetric (-4, 5) becomes (-5, 5) etc
+            max_halo = max(abs(halo_m), abs(halo_p))
+            halo_values.append([-max_halo, max_halo])
         return halo_values
 
     def bc_plane_kernel(self, block, bc_name, corners=True):
