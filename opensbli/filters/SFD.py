@@ -45,8 +45,8 @@ class SFD(object):
 			cons_vars = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
 		self.cons_arrays = [DataObject('%s' % var) for var in cons_vars]
 		# Filter variables
-		self.f_old = [DataObject('%s_filtold' % var) for var in cons_vars]
-		self.f_new = [DataObject('%s_filt' % var) for var in cons_vars]
+		self.f_old = [DataObject('%s_SFDold' % var) for var in cons_vars]
+		self.f_new = [DataObject('%s_SFD' % var) for var in cons_vars]
 		return
 
 	def generate_initial_condition(self):
@@ -55,7 +55,7 @@ class SFD(object):
 		initial_class.computation_name = 'Initialize the filter'
 		initial_class.algorithm_place = BeforeSimulationStarts()
 		# Ensure that the evaluation comes after the initial condition
-		initial_class.order = 1000
+		initial_class.order = 10000000
 		# Create the equations from the conservative variables
 		initial_equations = [OpenSBLIEq(left, right) for (left, right) in zip(self.f_new, self.cons_arrays)]
 		initial_class.add_equations(initial_equations)
@@ -66,7 +66,7 @@ class SFD(object):
 		# Create a kernel at the end of the time loop, every iteration (no frequency)
 		filter_class = UserDefinedEquations()
 		filter_class.algorithm_place = InTheSimulation(frequency=False)
-		filter_class.computation_name = 'Apply the filter'
+		filter_class.computation_name = 'SFD application'
 		# Create the filtered equation for all of the conservative variables
 		cons_vars, f_old, f_new = self.cons_arrays, self.f_old, self.f_new
 		# Copy the value from the previous time-step
@@ -79,8 +79,6 @@ class SFD(object):
 		equations += [OpenSBLIEq(filt, (v*(1.0-exp(-(chi+omega)*dt))+filt*(chi/omega+exp(-(chi+omega)*dt)))/(chi/omega+1.0)) for (filt, v) in zip(f_new, cons_vars)]
 		# Second part
 		equations += [OpenSBLIEq(v, (v*(exp(-(chi+omega)*dt)*chi/omega+1)+old_filt*chi/omega*(1.0-exp(-(chi+omega)*dt)))/(chi/omega+1.0)) for (old_filt, v) in zip(f_old, cons_vars)]
-		# for eqn in equations:
-		# 	pprint(eqn)
 		filter_class.add_equations(equations)
 		self.equation_classes.append(filter_class)
 		return
