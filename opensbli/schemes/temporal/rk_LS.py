@@ -27,13 +27,13 @@ class RungeKuttaLS(Scheme):
 
         :arg int order: The order of accuracy of the scheme."""
 
-    def __init__(cls, order, formulation=None):
+    def __init__(cls, order, stages=None, formulation=None):
         Scheme.__init__(cls, "RungeKutta", order)
         cls.solution = {}
         cls.schemetype = "Temporal"
         cls.formulation = formulation
         # Create constants
-        cls.create_constants(order)
+        cls.create_constants(order, stages)
         cls.add_constants()
         # Update the RK coefficients
         cls.get_coefficients
@@ -46,12 +46,23 @@ class RungeKuttaLS(Scheme):
             print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
         return
 
-    def create_constants(cls, order):
+    def set_stages(cls, order, stages):
         if order == 3:  # 3rd order schemes are 3-stage
-            n_stages = order
+            if cls.formulation == 'SSP':
+                if stages == None:
+                    n_stages = 3 # default is (3,3) for RK-SSP
+                else:
+                    n_stages = stages # User input stages
+            else:
+                n_stages = order # Regular (3,3) RK scheme, non-SSP
         elif order == 4:  # 4th order scheme is 5-stage
             n_stages = order + 1
-        cls.stage = Idx('stage', n_stages)
+        return n_stages
+
+    def create_constants(cls, order, stages):
+        # Set the number of stages if provided
+        cls.n_stages = cls.set_stages(order, stages)
+        cls.stage = Idx('stage', cls.n_stages)
         cls.solution_coeffs = ConstantIndexed('rkB', cls.stage)
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
         cls.niter_symbol = ConstantObject('niter', integer=True)
@@ -78,24 +89,27 @@ class RungeKuttaLS(Scheme):
 
     @property
     def get_coefficients(cls):
-        """ Create A (intermediate update) and B (solution advance) coefficients for the RK scheme."""
+        """ Create A (intermediate update) and B (solution advance) coefficients for the RK scheme.
+        From: S. Ruuth. GLOBAL OPTIMIZATION OF EXPLICIT STRONG-STABILITY-PRESERVING RUNGE-KUTTA METHODS (2005)."""
         if cls.order == 3:
             if cls.formulation == 'SSP':
-                c = 0.924574
-                z1 = float(sqrt(36*c**4 + 36*c**3 - 135*c**2 + 84*c - 12))
-                z2 = float(2*c**2 + c - 2)
-                z3 = float(12*c**4 - 18*c**3 + 18*c**2 - 11*c + 2)
-                z4 = float(36*c**4 - 36*c**3 + 13*c**2 - 8*c + 4)
-                z5 = float(69*c**3 - 62*c**2 + 28*c - 8)
-                z6 = float(34*c**4 - 46*c**3 + 34*c**2 - 13*c + 2)
-                B1 = 0.924574
-                B2 = (12*c*(c-1)*(3*z2-z1) - (3*z2-z1)**2)/(144*c*(3*c-2)*(c-1)**2)
-                B3 = (-24*(3*c-2)*(c-1)**2)/((3*z2-z1)**2 - 12*c*(c-1)*(3*z2-z1))
-                A1 = 0.0
-                A2 = (-z1*(6*c**2 - 4*c + 1) + 3*z3)/((2*c+1)*z1 - 3*(c+2)*(2*c-1)**2)
-                A3 = (-z1*z4 + 108*(2*c-1)*c**5 - 3*(2*c-1)*z5)/(24*z1*c*(c-1)**4 + 72*c*z6 + 72*c**6 * (2*c-13))
-                cls.solution_coeffs.value = [B1, B2, B3]
-                cls.stage_coeffs.value = [A1, A2, A3]
+                if cls.n_stages == 3: # CFL coefficient 0.322349301195940
+                    B1, B2, B3 = 0.924574112262461, 0.287712943868770, 0.626538293270800
+                    A1, A2, A3 = 0.0, -2.915493957701923, 0.0
+                    cls.solution_coeffs.value = [B1, B2, B3]
+                    cls.stage_coeffs.value = [A1, A2, A3]
+                elif cls.n_stages == 4: # CFL coefficient 0.634274456962008
+                    B1, B2, B3, B4 = 1.086620745813428, 0.854115548251602, -1.576604558206099, -0.278475500113052
+                    A1, A2, A3, A4 = 0.0, -0.449336503268844, 0.0, -4.661555711601366
+                    cls.solution_coeffs.value = [B1, B2, B3, B4]
+                    cls.stage_coeffs.value = [A1, A2, A3, A4]
+                elif cls.n_stages == 5: # CFL coefficient 1.40154693827206
+                    B1, B2, B3, B4, B5 = 0.713497331193829, 0.133505249805329, 0.713497331193829, 0.149579395628565, 0.384471116121269
+                    A1, A2, A3, A4, A5 = 0.0, -4.344339134485095, 0.0, -3.770024161386381, -0.046347284573284
+                    cls.solution_coeffs.value = [B1, B2, B3, B4, B5]
+                    cls.stage_coeffs.value = [A1, A2, A3, A4, A5]               
+                else:
+                    raise ValueError("The 3rd order RK-SSP is defined for 3, 4, or 5 stages.")
             else:
                 A1, A2, A3 = 0, Rational(-5, 9), Rational(-153, 128)
                 B1, B2, B3 = Rational(1, 3), Rational(15, 16), Rational(8, 15)
@@ -105,8 +119,6 @@ class RungeKuttaLS(Scheme):
             A1, A2, A3, A4, A5 = 0, -0.4178904745, -1.192151694643, -1.697784692471, -1.514183444257
             B1, B2, B3, B4, B5 = 0.1496590219993, 0.3792103129999, 0.8229550293869, 0.6994504559488, 0.1530572479681
             cls.solution_coeffs.value = [B1, B2, B3, B4, B5]
-            # print(cls.solution_coeffs.value)
-            # exit()
             cls.stage_coeffs.value = [A1, A2, A3, A4, A5]
         else:
             raise NotImplementedError("Only 3rd and 4th order RK schemes are currently implemented.")
