@@ -4,10 +4,11 @@
    @details Implements the metric transformations of first and second derivatives
 """
 
-from sympy import zeros, flatten, Matrix, Function, S, Equality, pprint
+from sympy import zeros, flatten, Matrix, Function, S, Equality, pprint, Rational
+from sympy import symbols as s
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts
 from opensbli.equation_types.opensbliequations import NonSimulationEquations, Discretisation, Solution, OpenSBLIEquation
-from opensbli.core.opensblifunctions import CentralDerivative
+from opensbli.core.opensblifunctions import CentralDerivative as CD
 from sympy.tensor.array import MutableDenseNDimArray
 from opensbli.core.opensbliobjects import CoordinateObject, DataObject
 from opensbli.core.kernel import Kernel
@@ -21,9 +22,11 @@ from copy import deepcopy
 
 
 class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
-    def __new__(cls, **kwargs):
+    def __new__(cls, write_derivatives=True, conservative_metrics = False, **kwargs):
         ret = super(MetricsEquation, cls).__new__(cls, **kwargs)
         ret.equations = []
+        ret.conservative_metrics = conservative_metrics
+        ret.write_derivatives = write_derivatives
         ret.kwargs = {'strong_differentiability': True}
         ret.algorithm_place = [BeforeSimulationStarts()]
         ret.order = 1
@@ -117,12 +120,12 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
                 args_orig = [cls.curvilinear_coordinates[i], cls.cartesian_coordinates[j]]
                 args_eval = [cls.curvilinear_coordinates[i], M2[i, j]]
                 args_metricder = [DataObject("%s" % cls.cartesian_coordinates[i]), cls.curvilinear_coordinates[j]]
-                v = CentralDerivative(*args_eval).doit()
-                if isinstance(v, CentralDerivative):
-                    fd_subs[CentralDerivative(*args_orig)] = fd_jacobians[i, j]
-                    Cartesian_curvilinear_derivatives[i, j] = CentralDerivative(*args_metricder)
+                v = CD(*args_eval).doit()
+                if isinstance(v, CD):
+                    fd_subs[CD(*args_orig)] = fd_jacobians[i, j]
+                    Cartesian_curvilinear_derivatives[i, j] = CD(*args_metricder)
                 else:
-                    fd_subs[CentralDerivative(*args_orig)] = v
+                    fd_subs[CD(*args_orig)] = v
                     fd_jacobians[i, j] = v
                     Cartesian_curvilinear_derivatives[i, j] = v
         fd_transformed = zeros(cls.ndim, 1)
@@ -145,16 +148,54 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         # Write latex file for easy debugging
         latex = cls.latex_file
         for i in range(cls.ndim):
-            cd = CentralDerivative(cls.general_function, cls.cartesian_coordinates[i])
+            cd = CD(cls.general_function, cls.cartesian_coordinates[i])
             latex.write_expression(OpenSBLIEq(cd, cls.classical_strong_differentiabilty_transformation[i]))
         return fd_subs, M2
 
+    # def conservative_3D_metrics(cls, Cartesian_curvilinear_derivatives):
+    #     # Coordinate arrays
+    #     xi, eta, zeta = cls.curvilinear_coordinates
+    #     x, y, z = cls.cartesian_coordinates
+    #     mets = Cartesian_curvilinear_derivatives
+    #     args = []
+    #     D00 = CD(mets[1,1]*z, zeta).doit() - CD(mets[1,2]*z, eta).doit() + CD(y*mets[2,2], eta).doit() - CD(y*mets[2,1], zeta).doit()
+    #     D01 = CD(mets[2,1]*x, zeta).doit() - CD(mets[2,2]*x, eta).doit() + CD(z*mets[0,2], eta).doit() - CD(z*mets[0,1], zeta).doit()
+    #     D02 = CD(mets[0,1]*y, zeta).doit() - CD(mets[0,2]*y, eta).doit() + CD(x*mets[1,2], eta).doit() - CD(x*mets[1,1], zeta).doit()
+
+    #     D10 = CD(mets[1,2]*z, xi).doit() - CD(mets[1,0]*z, zeta).doit() + CD(y*mets[2,0], zeta).doit() - CD(y*mets[2,2], xi).doit()
+    #     D11 = CD(mets[2,2]*x, xi).doit() - CD(mets[2,0]*x, zeta).doit() + CD(z*mets[0,0], zeta).doit() - CD(z*mets[0,2], xi).doit()
+    #     D12 = CD(mets[0,2]*y, xi).doit() - CD(mets[0,0]*y, zeta).doit() + CD(x*mets[1,0], zeta).doit() - CD(x*mets[1,2], xi).doit()
+
+    #     D20 = CD(mets[1,0]*z, eta).doit() - CD(mets[1,1]*z, xi).doit() + CD(y*mets[2,1], xi).doit() - CD(y*mets[2,0], eta).doit()
+    #     D21 = CD(mets[2,0]*x, eta).doit() - CD(mets[2,1]*x, xi).doit() + CD(z*mets[0,1], xi).doit() - CD(z*mets[0,0], eta).doit()
+    #     D22 = CD(mets[0,0]*y, eta).doit() - CD(mets[0,1]*y, xi).doit() + CD(x*mets[1,1], xi).doit() - CD(x*mets[1,0], eta).doit()
+
+    #     pprint(cls.FD_metrics)
+    #     pprint(D20)
+    #     exit()
+    #     # Temp arrays
+
+
+    #     return
+
+    def output_grid_derivatives(cls, Cartesian_curvilinear_derivatives):
+        eqns = []
+        # Temporary arrays
+        cls.grid_der_wks = s("wk0:%d" % cls.ndim**2, **{'cls':DataObject})
+        eqns = [OpenSBLIEq(wk, Cartesian_curvilinear_derivatives[i]) for i, wk in enumerate(cls.grid_der_wks) if isinstance(Cartesian_curvilinear_derivatives[i], CD)]
+        # Take only the non-zero ones to write to disk
+        cls.grid_der_wks = [ar.lhs for ar in eqns]
+        return eqns
+
     def generate_fd_metrics_equations(cls, Cartesian_curvilinear_derivatives):
+        eqns = []
+        # Write the derivatives of (x,y,z) to file for post-processing requirements if needed
+        if cls.write_derivatives:
+            eqns += cls.output_grid_derivatives(Cartesian_curvilinear_derivatives)
         adjointJ = Cartesian_curvilinear_derivatives.adjugate()
         detJ = Cartesian_curvilinear_derivatives.det()
         evaluation = adjointJ/detJ
-        eqns = []
-        eqns = [OpenSBLIEq(cls.detJ, detJ)]
+        eqns += [OpenSBLIEq(cls.detJ, detJ)]
         eqns += [OpenSBLIEq(x, y) for (x, y) in zip(cls.FD_metrics, evaluation)]
         eqns = [e for e in eqns if isinstance(e, Equality)]
         eqns = [OpenSBLIEquation(eq.lhs, eq.rhs) for eq in eqns]
@@ -185,15 +226,15 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
                 for k in range(cls.ndim):
                     args_orig = [cls.curvilinear_coordinates[i], cls.cartesian_coordinates[j], cls.curvilinear_coordinates[k]]
                     args_eval = [cls.curvilinear_coordinates[i], cls.cartesian_coordinates[j], SD[i, j, k]]
-                    v = CentralDerivative(*args_eval).doit()
+                    v = CD(*args_eval).doit()
                     derivative_args = [cls.FD_metrics[i, j], cls.curvilinear_coordinates[k]]
-                    sd = CentralDerivative(*derivative_args).doit()
+                    sd = CD(*derivative_args).doit()
                     if sd == S.Zero:
-                        sd_subs[CentralDerivative(*args_orig)] = 0
-                    elif not isinstance(v, CentralDerivative):
-                        sd_subs[CentralDerivative(*args_orig)] = 0
+                        sd_subs[CD(*args_orig)] = 0
+                    elif not isinstance(v, CD):
+                        sd_subs[CD(*args_orig)] = 0
                     else:
-                        sd_subs[CentralDerivative(*args_orig)] = DataObject("SD%d%d%d" % (i, j, k))
+                        sd_subs[CD(*args_orig)] = DataObject("SD%d%d%d" % (i, j, k))
                         SD_jacobians[i, j, k] = DataObject("SD%d%d%d" % (i, j, k))
                         SD_evaluations[i, j, k] = sd
 
@@ -215,7 +256,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         cls.generate_sd_metrics_equations()
         for i in range(cls.ndim):
             for j in range(cls.ndim):
-                fn = CentralDerivative(cls.general_function, cls.cartesian_coordinates[i], cls.cartesian_coordinates[j])
+                fn = CD(cls.general_function, cls.cartesian_coordinates[i], cls.cartesian_coordinates[j])
                 latex.write_expression(OpenSBLIEq(fn, cls.classical_strong_differentiabilty_transformation_sd[i, j]))
         return
 
@@ -340,7 +381,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
                 # Apply Metric BC only if that direction and side is not periodic
                 if isinstance(block.boundary_types[direction][side], bc_types):
                     bc = block.boundary_types[direction][side]
-                    cls.Kernels += [bc.apply(arrays, block)]
+                    cls.Kernels += [bc.apply(arrays, block, full_depth=True)] # Swap all 5 halos for the metrics once at the start
                 elif not isinstance(block.boundary_types[direction][side], donot_apply):
                     bc = MetricBoundaryCondition(direction, side)
                     cls.Kernels += [bc.apply(arrays, block)]
