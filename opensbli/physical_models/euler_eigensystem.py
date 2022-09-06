@@ -51,7 +51,10 @@ class EulerEquations(object):
         # Check if block has metrics
         metrics = block.fd_metrics
 
-        if metrics.is_diagonal():
+        if metrics == eye(block.ndim):
+            self.met_symbols = eye(block.ndim)
+            self.detJ = 1
+        elif metrics.is_diagonal() and metrics != eye(block.ndim):
             self.met_symbols = eye(block.ndim)
             self.detJ = block.detJ_metrics[0]
         else:
