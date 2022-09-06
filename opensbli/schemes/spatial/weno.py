@@ -9,7 +9,7 @@ from opensbli.core.opensblifunctions import WenoDerivative
 from opensbli.core.opensbliobjects import ConstantObject
 from opensbli.core.kernel import Kernel
 from opensbli.equation_types.opensbliequations import SimulationEquations, OpenSBLIEq, NonSimulationEquations
-from opensbli.core.grid import GridVariable
+from opensbli.core.grid import GridVariable as gv
 from .scheme import Scheme
 from sympy import horner, pprint
 from opensbli.schemes.spatial.shock_capturing import ShockCapturing, LFCharacteristic
@@ -42,9 +42,9 @@ class ConfigureWeno(object):
     def __init__(self, k, side):
         self.side = side
         if self.side == -1:
-            self.name, self.short_name, self.shift = 'left', 'L', 1
+            self.name, self.short_name, self.shift = 'left', 'L', 1 # downwind
         elif self.side == 1:
-            self.name, self.short_name, self.shift = 'right', 'R', 0
+            self.name, self.short_name, self.shift = 'right', 'R', 0 # upwind
         self.k, self.side = k, side
         self.func_points = self.generate_left_right_points()
         # k passed explicitly as 2 sets of ENO coefficients are needed for the smoothness indicators
@@ -224,17 +224,17 @@ class WenoReconstructionVariable(object):
         self.omega_symbols = []
         self.function_stencil_dictionary = {}
         self.reconstructed_expression = None
-        self.reconstructed_symbol = GridVariable('%s' % (name))
+        self.reconstructed_symbol = gv('%s' % (name))
         return
 
     def update_quantities(self, original):
         """ Updates the quantities required by WENO in the reconstruction variable.
 
         :arg object original: Reconstruction object variable, either left or right reconstruction."""
-        self.smoothness_symbols += [GridVariable('%s' % (s)) for s in original.smoothness_symbols]
-        self.alpha_symbols += [GridVariable('%s' % (s)) for s in original.alpha_symbols]
-        self.inv_alpha_sum_symbols += [GridVariable('%s' % (s)) for s in original.inv_alpha_sum_symbols]
-        self.omega_symbols += [GridVariable('%s' % (s)) for s in original.omega_symbols]
+        self.smoothness_symbols += [gv('%s' % (s)) for s in original.smoothness_symbols]
+        self.alpha_symbols += [gv('%s' % (s)) for s in original.alpha_symbols]
+        self.inv_alpha_sum_symbols += [gv('%s' % (s)) for s in original.inv_alpha_sum_symbols]
+        self.omega_symbols += [gv('%s' % (s)) for s in original.omega_symbols]
 
         subs_dict = dict(zip(original.smoothness_symbols+original.alpha_symbols+original.inv_alpha_sum_symbols + original.omega_symbols, self.smoothness_symbols+self.alpha_symbols+self.inv_alpha_sum_symbols+self.omega_symbols))
         for key, value in original.function_stencil_dictionary.items():
@@ -256,10 +256,11 @@ class WenoReconstructionVariable(object):
         self.final_equations = final_equations
         rv = self.reconstructed_symbol
         if self.settings["shock_filter"]: # Apply WENO once at the end of a full time-step as a filter
+            number = int(str(self.reconstructed_symbol).split('_')[-1]) # get the index
             if self.settings['single_wave']:
-                self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
+                self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
             else:
-                pass
+                self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
         else: # Regular WENO application
             if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
                 self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
@@ -450,13 +451,13 @@ class Weno(Scheme, ShockCapturing):
             theta = ConstantObject('sensor_theta')
             theta.value = 4.0
             for L in range(self.k):
-                formula += Abs(GridVariable('omega_%d' % L)/opt_weights[L] - 1.0)**theta
+                formula += Abs(gv('omega_%d' % L)/opt_weights[L] - 1.0)**theta
             denominator = Abs(1.0/numpy.min(opt_weights) - 1.0)**theta + (self.k-1)
-            sensor_equation = OpenSBLIEq(GridVariable('rj'), formula/denominator)          
+            sensor_equation = OpenSBLIEq(gv('rj'), formula/denominator)          
         else:
             for r in range(self.k):
-                formula += Abs(GridVariable('omega_%d' % r)  - opt_weights[r])
-            sensor_equation = OpenSBLIEq(GridVariable('rj'), formula)
+                formula += Abs(gv('omega_%d' % r)  - opt_weights[r])
+            sensor_equation = OpenSBLIEq(gv('rj'), formula)
         return sensor_equation
 
     def generate_reconstruction(self, RV, WenoConfig):
@@ -563,7 +564,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, single_wave=True)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, single_wave=False)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations
