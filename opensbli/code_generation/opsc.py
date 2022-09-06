@@ -108,6 +108,20 @@ class OPSCCodePrinter(C99CodePrinter):
             args_code.append(string_max)
         return str(args_code[0])
 
+    def _print_Min(self, expr):
+        """MINIUM of the arguments, can handle any number of arguments:
+        Min(a,b,c,d) is written as min(a, min(min(b,c),d))"""
+
+        nargs = len(expr.args)
+        args_code = [self._print(a) for a in expr.args]
+        for i in range(nargs-1):
+            # Max of the last 2 arguments in the array
+            string_min = 'fmin(%s, %s)' % (args_code[-2], args_code[-1])
+            # Remove the last 2 entries and append the max of the last 2
+            del args_code[-2:]
+            args_code.append(string_min)
+        return str(args_code[0])
+
     def _print_DataObject(self, expr):
         """Raise error if a DataObject is found in the equation"""
         raise TypeError("Data object found in code generation, convert it to a dataset first, %s" % expr)
@@ -491,7 +505,6 @@ class OPSC(object):
 
         for d in ConstantsToDeclare.constants:
             if isinstance(d, ConstantObject):
-                print(d, d.datatype.opsc())
                 out += ["%s %s;" % (d.datatype.opsc(), d)]
             elif isinstance(d, ConstantIndexed):
                 if not d.inline_array:
