@@ -41,8 +41,9 @@ class iohdf5(opensbliIO):
         ret.algorithm_place = []
         # Check if constants should be written to the HDF5 file
         if 'write_constants' in kwargs:
-            if kwargs['write_constants']:
-                cls.write_constants = True
+            cls.write_constants = kwargs['write_constants']
+        else:
+            cls.write_constants = True # by default always write the constants to HDF5 now
         # Constant for file write frequency
         if save_every:
             cls.save_every = ConstantObject('write_output_file', integer=True)
