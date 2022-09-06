@@ -25,6 +25,7 @@ class WENOFilter(NonSimulationEquations):
         self.residual_kernels = []
         self.flux_type = flux_type
         self.airfoil = airfoil
+        self.Mach = block.location_dataset('Mach_sensor')
         if block.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -47,14 +48,10 @@ class WENOFilter(NonSimulationEquations):
             except:
                 raise ValueError("Please set the metric class on the block before calling the WENO filter in the problem script.")
         self.process_metrics(metrics)
-        optional_subs_dict = metrics.metric_subs
-        # Einstein class to expand equations
         self.EE = EinsteinEquation()
-        self.EE.optional_subs_dict = optional_subs_dict
-        # metric_vel = "Eq(U_i, D_i_j*u_j)"
-        # eqns = self.EE.expand(metric_vel, self.ndim, "x", [], [])
-        # for eq in eqns:
-        #     self.EE.optional_subs_dict[eq.lhs] = eq.rhs
+        if metrics is not None:
+            optional_subs_dict = metrics.metric_subs
+            self.EE.optional_subs_dict = optional_subs_dict
         # Main class to generate the filter
         self.main(order, block)
         return
@@ -222,6 +219,9 @@ class WENOFilter(NonSimulationEquations):
         # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(gamma*p*inv_rho))]
 
+        # Turn shock-capturing off in low-Mach regions
+        CR_eqns += self.evaluate_Yee_Mach_sensor(velocity_components, p, a, block)
+
         CR_halos = []
         for _ in range(self.ndim):
             CR_halos.append([self.halo_type, self.halo_type])
@@ -230,15 +230,29 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(CR_kernel)
         return
 
+    def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
+        """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
+        (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
+        # Evaluate the local Mach number
+        M  = symbols('M', **{'cls' : GridVariable})
+        Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
+        # Evaluation of the kappa parameter to control the amount of dissipaton
+        Mach_equations += [OpenSBLIEq(self.Mach, Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
+        return Mach_equations
+
     def evaluate_Ducros_sensor(self, block):
         # Add a shock sensor for the WENO filter
         SS = ShockSensor()
         output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
+        # Add Mach correction
+        sensor_evaluation = output_eqns[-1]
+        del output_eqns[-1]
+        output_eqns += [OpenSBLIEq(sensor_evaluation.lhs, block.location_dataset('Mach_sensor')*sensor_evaluation.rhs)]
         # # Make the Ducros sensor a binary array of either 0 or 1s    
         kappa_evaluation = output_eqns[-1].rhs
         del output_eqns[-1]
         DT = ConstantObject('Ducros_threshold')
-        DT.value = 0.4
+        DT.value = 0.5
         CTD.add_constant(DT)
         Ducros_condition = [ExprCondPair(1, kappa_evaluation > DT)]
         # # No wall or interface, default condition is the sensor is not turned off
@@ -271,7 +285,12 @@ class WENOFilter(NonSimulationEquations):
 
     def wall_control(self):
         """ Turns off the filter close to any of the walls or block interfaces in the problem."""
-        buffer = 20
+        if self.airfoil:
+            wall_buffer = 30
+            buffer = 5
+        else:
+            wall_buffer = 5
+            buffer = 5
         wall_var = gv('Wall')
         wall_conditions, wall_equations = [], []
         indexes = [OpenSBLIEq(gv('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
@@ -283,9 +302,9 @@ class WENOFilter(NonSimulationEquations):
                 interface = self.interface_boundaries[direction][side]
                 if wall:
                     if side == 0:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= wall_buffer)]
                     else:
-                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (buffer+1))]
+                        wall_conditions += [ExprCondPair(0, indexes[direction].lhs >= self.block.ranges[direction][side] - (wall_buffer+1))]
                 if interface:
                     if side == 0:
                         wall_conditions += [ExprCondPair(0, indexes[direction].lhs <= buffer)]
@@ -309,10 +328,6 @@ class WENOFilter(NonSimulationEquations):
         else:
             q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
         modified_equations += q_vars[:]
-        # Global parameter to control the dissipation to give extra control of the dissipation in the C code
-        FC = ConstantObject('shock_filter_control')
-        FC.value = 1.0 # Default condition has no scaling
-        CTD.add_constant(FC)
 
         # Turn off the sensor at the walls
         wall_detection, wall_equations = self.wall_control()
@@ -346,8 +361,8 @@ class WENOFilter(NonSimulationEquations):
         update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
             q = q_vars[i].lhs
-            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), wall_detection*FC*self.kappa*ConstantObject('dt')*eqn.rhs))
-            update_equations.append(OpenSBLIEq(q, q + block.location_dataset('q%d' % i)))
+            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), wall_detection*self.kappa*ConstantObject('dt')*eqn.rhs))
+            update_equations.append(OpenSBLIEq(q, q - block.location_dataset('q%d' % i)))
 
         # Update the global q arrays
         update_equations.append(OpenSBLIEq(self.solution_vector[0], q_vars[0].lhs))
@@ -418,7 +433,7 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        WS = LFWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
