@@ -200,6 +200,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         eqns = [e for e in eqns if isinstance(e, Equality)]
         eqns = [OpenSBLIEquation(eq.lhs, eq.rhs) for eq in eqns]
         cls.fdequations = eqns
+        cls.grid_der_wks = [ar.lhs for ar in eqns]
         return eqns
 
     def transform_second_derivative(cls, coordinate_symbol, fd_subs, M2):
