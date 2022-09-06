@@ -25,10 +25,12 @@ class ShockSensor(object):
         epsilon.value = 1.0e-12
         # Calculate vorticity
         if block.ndim == 2:
+            dx, dy = block.deltas
             x0, x1 = cartesian_coordinates[0], cartesian_coordinates[1]
             u0, u1 = DataObject('u0'), DataObject('u1')
             vorticity_sq = (CD(u1, x0) - CD(u0, x1))**2
         elif block.ndim == 3:
+            dx, dy, dz = block.deltas
             x0, x1, x2 = cartesian_coordinates[0], cartesian_coordinates[1], cartesian_coordinates[2]
             u0, u1, u2 = DataObject('u0'), DataObject('u1'), DataObject('u2')
             vorticity_sq = (CD(u2, x1) - CD(u1, x2))**2 + (CD(u0, x2) - CD(u2, x0))**2 + (CD(u1, x0) - CD(u0, x1))**2
@@ -43,9 +45,9 @@ class ShockSensor(object):
             vorticity_sq = metrics.apply_transformation(vorticity_sq)
             divergence = metrics.apply_transformation(divergence)
 
-        a = ConstantObject('Ducros_sensitivity')
-        a.value = 0.3
-        CTD.add_constant(a)
-        tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + a*divergence.rhs)))
+        c = ConstantObject('Ducros_sensitivity')
+        c.value = 1.0
+        CTD.add_constant(c)
+        tanh_filter = Rational(1, 2)*(1 - tanh(2.5 + 10*(dx/block.location_dataset('a'))*divergence.rhs))
         output_eqns += [OpenSBLIEq(sensor_array, tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + epsilon))]
         return output_eqns, sensor_array
