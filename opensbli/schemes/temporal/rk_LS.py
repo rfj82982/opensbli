@@ -32,6 +32,7 @@ class RungeKuttaLS(Scheme):
         cls.solution = {}
         cls.schemetype = "Temporal"
         cls.formulation = formulation
+        cls.stages, cls.order = stages, order
         # Create constants
         cls.create_constants(order, stages)
         cls.add_constants()
@@ -164,6 +165,9 @@ class RungeKuttaLS(Scheme):
             type_of_eq.temporalsolution = TemporalSolution()
             type_of_eq.temporalsolution.kernels += kernels
             type_of_eq.temporalsolution.start_kernels += cls.solution[type_of_eq].start_kernels
+        # Re apply the constants for multi-block, deepcopy was clearing them
+        cls.create_constants(cls.order, cls.stages)
+        cls.add_constants()
         return
 
     def convert_to_conservative(cls, equations, block):

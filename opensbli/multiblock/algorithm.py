@@ -180,9 +180,13 @@ class DoLoop(Loop):
 
     @property
     def opsc_start(self):
-        """ Do loop in OPSC is a for loop, and the starting of the for loop is written by this function
-        """
-        return "for(int %s=%s; %s<=%s; %s++)\n{" % (self.loop, str(self.loop.lower), self.loop, str(self.loop.upper), self.loop)
+        """ Do loop in OPSC is a for loop, and the starting of the for loop is written by this function."""
+        if self.loop.restart is not None:
+            out = "for(%s=%s; %s<=%s+%s; %s++)\n{\n" % (self.loop, str(self.loop.restart), self.loop, str(self.loop.restart), str(self.loop.upper), self.loop)
+            out += "simulation_time = tstart + dt*((iter - start_iter)+1);\n" # keep track of the simulation time on the outer loop
+            return out
+        else:
+            return "for(%s=%s; %s<=%s; %s++)\n{" % (self.loop, str(self.loop.lower), self.loop, str(self.loop.upper), self.loop)
 
     @property
     def opsc_end(self):
@@ -468,18 +472,18 @@ class TraditionalAlgorithmRKMB(object):
             # Loop over the multiple blocks in turn
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
-                for scheme in b.get_temporal_schemes:
+                for sc in b.get_temporal_schemes:
                     # Iteration counter for any conditional expressions
-                    temporal_iteration = scheme.temporal_iteration
-                    inner_loop_blocks += [scheme.stage]
-                    tloop_blocks += [scheme.temporal_iteration]
-                    for key, value in iter(scheme.solution.items()):
+                    temporal_iteration = sc.temporal_iteration
+                    inner_loop_blocks += [sc.stage]
+                    tloop_blocks += [sc.temporal_iteration]
+                    for key, value in iter(sc.solution.items()):
                         #print(key, value)
                         if isinstance(key, SimulationEquations):
                             # Solution advancement kernels
-                            temporal_start += scheme.solution[key].start_kernels
-                            temporal_end += scheme.solution[key].end_kernels
-                            inner_temporal_advance_kernels += scheme.solution[key].kernels
+                            temporal_start += sc.solution[key].start_kernels
+                            temporal_end += sc.solution[key].end_kernels
+                            inner_temporal_advance_kernels += sc.solution[key].kernels
                             bc_kernels += key.boundary_kernels
                             spatial_kernels += key.all_spatial_kernels(b)
                         elif isinstance(key, MetricsEquation):

@@ -17,12 +17,13 @@ class RungeKutta(Scheme):
     """ Applies a Runge-Kutta time-stepping scheme.
 
         :arg int order: The order of accuracy of the scheme."""
-    def __init__(cls, order, constant_dt=None):
+    def __init__(cls, order, stages=3, constant_dt=None):
         Scheme.__init__(cls, "RungeKutta", order)
         cls.solution = {}
+        cls.stages, cls.order = stages, order
         cls.schemetype = "Temporal"
         # Create constants
-        cls.create_constants(order)
+        cls.create_constants(stages, order)
         # Update coefficient values
         cls.get_coefficients
         cls.add_constants()
@@ -31,10 +32,10 @@ class RungeKutta(Scheme):
         print("A Runge-Kutta scheme of order %d is being used for time-stepping." % order)
         return
 
-    def create_constants(cls, order):
-        n_stages = 3
+    def create_constants(cls, n_stages, order):
         cls.stage = Idx('stage', n_stages)
         cls.solution_coeffs = ConstantIndexed('rkold', cls.stage)
+        cls.stage.restart = None
         cls.stage_coeffs = ConstantIndexed('rknew', cls.stage)
         cls.niter_symbol = ConstantObject('niter', integer=True)
         cls.niter_symbol.datatype = Int()
@@ -59,7 +60,6 @@ class RungeKutta(Scheme):
         CTD.add_constant(cls.solution_coeffs)
         CTD.add_constant(cls.stage_coeffs)
         CTD.add_constant(cls.time_step)
-        CTD.add_constant(cls.restart)
         CTD.add_constant(cls.start_time)
         CTD.add_constant(cls.start_iter)
         return
@@ -114,6 +114,9 @@ class RungeKutta(Scheme):
             type_of_eq.temporalsolution = TemporalSolution()
             type_of_eq.temporalsolution.kernels += kernels
             type_of_eq.temporalsolution.start_kernels += cls.solution[type_of_eq].start_kernels
+        # Re apply the constants for multi-block, deepcopy was clearing them
+        cls.create_constants(cls.order, cls.stages)
+        cls.add_constants()
         return
 
     def create_discretisation_kernel(cls, zipped, block):
