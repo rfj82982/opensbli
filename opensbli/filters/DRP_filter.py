@@ -13,12 +13,16 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, Mach_sensor=None, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
         self.wall_control = wall_control
+        if Mach_sensor is None:
+            self.Mach_sensor = 1
+        else:
+            self.Mach_sensor = block.location_dataset('Mach_sensor')
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
@@ -99,34 +103,6 @@ class ExplicitFilter(object):
                     self.non_periodic[i][side] = True
                     self.modify_directions[i] = True
         return
-
-    # def apply_wall_control(self):
-    #     """ Turns off the filter close to any of the walls or block interfaces in the problem."""
-    #     buffer = self.depth
-    #     wall_var = GridVariable('Wall')
-    #     wall_conditions, wall_equations = [], []
-    #     indexes = [OpenSBLIEq(GridVariable('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
-    #     wall_equations += indexes
-    #     # Disable the shock filter at any wall boundaries
-    #     for direction in range(self.ndim):
-    #         for side in [0,1]:
-    #             wall = self.wall_boundaries[direction][side]
-    #             interface = self.interface_boundaries[direction][side]
-    #             if wall:
-    #                 if side == 0:
-    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs < buffer)]
-    #                 else:
-    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs > self.block.ranges[direction][side] - (buffer+1))]
-    #             if interface:
-    #                 if side == 0:
-    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs < buffer)]
-    #                 else:
-    #                     wall_conditions += [ExprCondPair(0, indexes[direction].lhs > self.block.ranges[direction][side] - (buffer+1))]
-
-    #     # No wall or interface, default condition is the sensor is not turned off
-    #     wall_conditions += [ExprCondPair(1, True)]
-    #     wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
-    #     return wall_var, wall_equations
 
     def generate_DRP_weights(self):
         """ Weights are symmetric about the central point."""
@@ -217,22 +193,22 @@ class ExplicitFilter(object):
         if block.conservative:
             for dset_id, dset in enumerate(self.q_vector):
                 if self.filter_type == 'DRP':
-                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*self.temp_arrays[dset_id])]
                 else:
-                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id]))]
+                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*(dset - self.temp_arrays[dset_id]))]
         else:
             if self.filter_type == 'DRP':
-                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*self.temp_arrays[0])]
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.Mach_sensor*self.sigma*self.temp_arrays[0])]
                 inv_rho = GridVariable('inv_rho')
                 update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
                 for dset_id, dset in enumerate(self.lhs[1:]):
-                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
+                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
             else:
-                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*(self.lhs[0] - self.temp_arrays[0]))]
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.Mach_sensor*self.sigma*(self.lhs[0] - self.temp_arrays[0]))]
                 inv_rho = GridVariable('inv_rho')
                 update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
                 for dset_id, dset in enumerate(self.lhs[1:]):
-                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
+                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
         return application, update
 
     def create_UDF(self, block, equations, direction, order, UDF_type):
