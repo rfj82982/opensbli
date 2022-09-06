@@ -603,7 +603,7 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
         loc[dire] += -1
         if block.shock_filter:
             # Scale with grid size for the shock filter
-            form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) * ConstantObject('inv_rfact%d' % dire)
+            form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) * ConstantObject('inv_rfact%d_block%d' % (dire, block.blocknumber))
         else:
             form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) / delta
         return form
