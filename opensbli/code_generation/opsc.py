@@ -102,10 +102,10 @@ class OPSCCodePrinter(C99CodePrinter):
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            string_max = 'fmax(%s, %s)' % (args_code[-2], args_code[-1])
+            template = 'fmax(%s, %s)' % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
-            args_code.append(string_max)
+            args_code.append(template)
         return str(args_code[0])
 
     def _print_Min(self, expr):
@@ -116,11 +116,20 @@ class OPSCCodePrinter(C99CodePrinter):
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            string_min = 'fmin(%s, %s)' % (args_code[-2], args_code[-1])
+            template = 'fmin(%s, %s)' % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
-            args_code.append(string_min)
+            args_code.append(template)
         return str(args_code[0])
+
+    def _print_sign(self, expr):
+        """signum function using ternary operators"""
+
+        args = map(ccode, expr.args)
+        args = [x for x in args]
+        result = ','.join(args)
+        result = '(%s > 0) ? 1 : ((%s < 0) ? -1 : 0)' % (result, result)
+        return result
 
     def _print_DataObject(self, expr):
         """Raise error if a DataObject is found in the equation"""
