@@ -129,7 +129,7 @@ boundaries += [DirichletBC(direction, side, initial_equations)]
 block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
-kwargs = {'iotype': "Write"}
+kwargs = {'iotype': "Write", "write_constants" : True}
 h5 = iohdf5(save_every=5000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('Mach_sensor'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
@@ -148,7 +148,7 @@ block.set_equations(SFD.equation_classes)
 
 j = block.grid_indexes[1]
 grid_condition = j >= 778
-BF = BinomialFilter(block, order=4, directions=2, grid_condition=grid_condition, sigma=0.2)
+BF = BinomialFilter(block, order=6, directions=2, grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
 DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', Mach_sensor=True, optimized=True, sigma=0.2, wall_control=True, multi_block=None)
@@ -194,7 +194,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall', 'SuthT', 'RefT', 'inv_rfact0', 'inv_rfact1']
-values = ['300.0', '1.4', '1.5', '0.71', '0.0001', '5000000', '598', '782', '242.2/(block0np0-1)', '242.2/(block0np1-1)', '1.0', '110.4', '273.15', '(block0np0-1)/242.2', '(block0np1-1)/242.2']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0']
+values = ['300.0', '1.4', '1.5', '0.71', '0.0001', '5000000', '598', '782', '242.2/(block0np0-1)', '242.2/(block0np1-1)', '1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho', every=100)

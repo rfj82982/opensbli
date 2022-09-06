@@ -7,13 +7,13 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 # Number of dimensions of the system to be solved
 ndim = 3
 # # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "mu"]
+constants = ["Re", "Pr", "gama", "Minf"]
 # # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = False
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -31,6 +31,7 @@ else:
     pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
 
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
+viscosity = "Eq(mu, (T**(1.5)*(1.4042)/(T+0.40417)))" ## Modified sutherland law
 
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
@@ -45,6 +46,8 @@ eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Expand temperature add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
+eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Write the expanded equations to a Latex file with a given name and titile
@@ -76,7 +79,6 @@ u1 = "Eq(GridVariable(u1),-cos(x0)*sin(x1)*cos(x2))"
 u2 = "Eq(GridVariable(u2), 0.0)"
 p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*x0)+cos(2.0*x1))*(2.0 + cos(2.0*x2)))"
 r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
-
 
 if conservative:
     rho = "Eq(DataObject(rho), r)"
@@ -127,6 +129,10 @@ block.setio(copy.deepcopy(h5))
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
+# WENO filter for shock-capturing
+WF = WENOFilter(block, order=5, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+block.set_equations(WF.equation_classes)
+
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
@@ -152,5 +158,5 @@ OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
 
 # NaN check and iteration counter
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '5000', '128', '128', '128', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
+values = ['1600.0', '1.4', '1.25', '0.71', '0.0003385', '5000', '640', '640', '640', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
 substitute_simulation_parameters(constants, values)

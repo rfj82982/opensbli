@@ -7,7 +7,7 @@ from opensbli.postprocess.airfoil import *
 from sympy.functions.elementary.piecewise import Piecewise, ExprCondPair
 import os
 # Disable the gmpy library for this case to avoid deepcopy issues
-# os.environ['MPMATH_NOGMPY'] = '1'
+os.environ['MPMATH_NOGMPY'] = '1'
 
 import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
@@ -145,7 +145,7 @@ if conservative:
     wall_energy = [Eq(q_vector[-1], Twall*q_vector[0]/((gama-1.0)*gama*Minf*Minf))]
 else:
     wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy))
+block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy, multi_block=True))
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block1_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
 block1_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
@@ -184,7 +184,7 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, airfoil=True, flux_type='LLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
@@ -200,33 +200,32 @@ for no, block in enumerate(multi_block.blocks):
     elif no == 2:
         grid_condition = Or(i >= 769, j >= 470)
 
-    filters[no] += [BinomialFilter(block, order=4, grid_condition=grid_condition).equation_classes]
+    filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
 multi_block.set_filters(filters)
 
 # HDF5 input/output
 x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=1000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays)
-multi_block.setio([h5])
+q_hdf5 = iohdf5(save_every=1000, **kwargs)
+q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
 # Read in the grid file
 kwargs = {'iotype': "Read"}
-h5_read = iohdf5(**kwargs)
-h5_read.add_arrays([x, y, z])
-multi_block.setio([h5_read])
-
+grid_hdf5 = iohdf5(**kwargs)
+grid_hdf5.add_arrays([x, y, z])
 # Stats HDF5 and write metrics to the grid file
+metrics_hdf5 = iohdf5(arrays=metriceq.grid_der_wks, **{'position': "init", 'iotype': 'Write', 'name': "metrics.h5"})
 # HDF5 output of statistics arrays
 kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
 stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
-multi_block.setio([stats_hdf5])
-# Write metrics to the grid file
-kwargs = {'iotype': "Write", 'name': "data.h5"}
-metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')] + [DataObject('SD101'), DataObject('SD100'), DataObject('SD000'), DataObject('SD001'), DataObject('SD010'), DataObject('SD110'), DataObject('SD111'), DataObject('SD011')], **kwargs)
-multi_block.setio([metrics_hdf5])
-
+# Set the I/O on the block
+multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5, stats_hdf5])
 # Perform the discretization
 multi_block.discretise()
+
+for WF in filters:
+    if isinstance(WF, WENOFilter):
+        WF.update_periodic_boundary(block, halos=[-4,4])
+
 # Add the wake treatment kernels
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
 # Sponge zones for outer boundaries
@@ -286,12 +285,12 @@ print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency']
 values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67', '10']
 # Block 0
-constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values += ['799', '480', '50', '4.5/(block0np0 - 1.0)', '7.5/(block0np1 - 1.0)', '0.05/block0np2']
+constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
+values += ['799', '480', '50', '4.5/(block0np0 - 1.0)', '7.5/(block0np1 - 1.0)', '0.05/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
 # Block 1
-constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
-values += ['1495', '480', '50', '7.5/(block1np0 - 1.0)', '7.5/(block1np1 - 1.0)', '0.05/block1np2']
+constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1', 'inv_rfact0_block1', 'inv_rfact1_block1', 'inv_rfact2_block1']
+values += ['1495', '480', '50', '7.5/(block1np0 - 1.0)', '7.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
 # Block 2
-constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
-values += ['799', '480', '50', '4.5/(block2np0 - 1.0)', '7.5/(block2np1 - 1.0)', '0.05/block2np2']
+constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2', 'inv_rfact0_block2', 'inv_rfact1_block2', 'inv_rfact2_block2']
+values += ['799', '480', '50', '4.5/(block2np0 - 1.0)', '7.5/(block2np1 - 1.0)', '0.05/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
 substitute_simulation_parameters(constants, values)

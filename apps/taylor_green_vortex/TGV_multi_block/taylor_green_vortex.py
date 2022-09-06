@@ -114,19 +114,6 @@ constituent.add_equations(eqns)
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
-# # Write the expanded equations to a Latex file with a given name and titile
-# latex = LatexWriter()
-# latex.open('equations.tex', "Einstein Expansion of the simulation equations")
-# latex.write_string("Simulation equations\n")
-# for index, eq in enumerate(flatten(simulation_eq.equations)):
-#     latex.write_expression(eq)
-
-# latex.write_string("Constituent relations\n")
-# for index, eq in enumerate(flatten(constituent.equations)):
-#     latex.write_expression(eq)
-
-# latex.close()
-
 # Set the initial conditions on each of the blocks
 mb_initial_conditions = {0:None, 1:None, 2:None, 3:None}
 for i in range(nblocks):
@@ -138,10 +125,10 @@ multi_block.set_initial_conditions(mb_initial_conditions)
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 fns = 'u0 u1 u2 T'
-cent = StoreSome(4, fns)
+cent = Central(4)#, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3)
+rk = RungeKutta(3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'

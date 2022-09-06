@@ -44,7 +44,7 @@ if conservative:
     velocity = "Eq(u_i, rhou_i/rho)"
     enthalpy = "Eq(H, (rhoE + p) / rho)"
 else:
-    pressure = "Eq(p, rho*(gama-1)*(E - (1/2)*(KD(_i,_j)*u_i*u_j)))"
+    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
     enthalpy = "Eq(H, Et + p / rho)"
 
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
@@ -116,8 +116,8 @@ q_vector = flatten(simulation_eq.time_advance_arrays)
 boundaries = []
 direction = 0
 # Apply a periodic boundary over the shared mesh line
-boundaries += [PeriodicBC(direction, 0)]
-boundaries += [PeriodicBC(direction, 1)]
+boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
@@ -130,8 +130,8 @@ direction, side = 1,1
 boundaries += [DirichletBC(direction, side, initial_equations)]
 # Periodic span
 direction = 2
-boundaries += [PeriodicBC(direction, 0)]
-boundaries += [PeriodicBC(direction, 1)]
+boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
@@ -148,34 +148,30 @@ else:
 block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
 
 # Set the IO class to write out arrays
-kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=5000, **kwargs)
+h5 = iohdf5(save_every=1000, **{'iotype': "Write"})
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('kappa')]) # shock sensor array
-kwargs = {'iotype': "Read"}
-h5_read = iohdf5(**kwargs)
+h5.add_arrays([DataObject('kappa'), DataObject('Mach_sensor')]) # shock sensor array
+# Read grid file
+h5_read = iohdf5(**{'iotype': "Read"})
 h5_read.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
-block.setio([h5, h5_read])
 # HDF5 output of statistics arrays
 kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
 stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
-block.setio([stats_hdf5])
-# Write metrics to the grid file
-kwargs = {'iotype': "Write", 'name': "data.h5"}
-metrics_hdf5 = iohdf5(arrays=[DataObject('D00'), DataObject('D01'), DataObject('D10'), DataObject('D11')], **kwargs)
-block.setio([metrics_hdf5])
+# Write grid metrics to a file
+metrics_hdf5 = iohdf5(arrays=metriceq.grid_der_wks, **{'position': "init", 'iotype': 'Write', 'name': "metrics.h5"})
+block.setio([h5, h5_read, stats_hdf5, metrics_hdf5])
 
 # Various filters and shock capturing
 j = block.grid_indexes[1]
 grid_condition = j >= 642
-BF = BinomialFilter(block, order=6, directions=3, grid_condition=grid_condition, sigma=0.2)
+BF = BinomialFilter(block, order=4, directions=3, grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, Mach_sensor = True, sigma=0.3, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', Mach_correction=False, flux_type='LLF', airfoil=True)
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=True)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
@@ -184,13 +180,15 @@ block.set_discretisation_schemes(schemes)
 # Discretise the equations on the block
 block.discretise()
 
+WF.update_periodic_boundary(block, halos=[-3,4])
+
 # Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
 def create_exchange_calls_codes(block, dsets):
     kernels = []
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0,2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_depth=True)
+            BC = PeriodicBC(direction, side, halos=[-5,5])
             kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -209,7 +207,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT']
-values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '647', '50', '1.0/(block0np0-1)', '1.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT', 'inv_rfact0', 'inv_rfact1', 'inv_rfact2']
+values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '647', '50', '49.0/(block0np0-1)', '49.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4', '(block0np0-1)/49.0', '(block0np1-1)/49.0', '(block0np2)/0.05' ]
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
