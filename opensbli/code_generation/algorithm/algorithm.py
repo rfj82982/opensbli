@@ -442,11 +442,11 @@ class TraditionalAlgorithmRK(object):
                             cond = Condition(t)
                             cond.add_components(key.Kernels)
                             in_time += [cond]
-                        if place.execution_condition is not None:  # boolean condition
+                        elif place.execution_condition is not None:  # boolean condition
                             cond = Condition(place.execution_condition)
                             cond.add_components(key.Kernels)
                             in_time += [cond]
-                        else:
+                        else: # no condition, always evaluate
                             in_time += key.Kernels
 
             # Add optional simulation monitors

@@ -507,13 +507,16 @@ class TraditionalAlgorithmRKMB(object):
                     elif isinstance(place, AfterSimulationEnds):
                         after_time += key.Kernels
                     else:
-                        if place.frequency:
-                            # in_time += key.Kernels
+                        if place.frequency: # iteration frequency condition
                             t = Equality((temporal_iteration + 1) % key._place[0].frequency, 0)
                             cond = Condition(t)
                             cond.add_components(key.Kernels)
                             in_time += [cond]
-                        else:
+                        elif place.execution_condition is not None:  # boolean condition
+                            cond = Condition(place.execution_condition)
+                            cond.add_components(key.Kernels)
+                            in_time += [cond]
+                        else: # no condition, always evaluate
                             in_time += key.Kernels
 
             # Add optional simulation monitors
