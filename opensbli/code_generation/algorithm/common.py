@@ -24,8 +24,9 @@ class InTheSimulation(object):
     example, Output to HDF5, any diagnostics
     """
 
-    def __init__(self, frequency=False):
+    def __init__(self, frequency=False, execution_condition=None):
         self.frequency = frequency
+        self.execution_condition = execution_condition
         from opensbli.core.kernel import ConstantsToDeclare as CTD
         from opensbli.core.opensbliobjects import ConstantObject
         if isinstance(frequency, ConstantObject):

@@ -13,16 +13,12 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, Mach_sensor=None, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
         self.wall_control = wall_control
-        if Mach_sensor is None:
-            self.Mach_sensor = 1
-        else:
-            self.Mach_sensor = block.location_dataset('Mach_sensor')
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
@@ -134,31 +130,36 @@ class ExplicitFilter(object):
         """ Weights are symmetric about the central point. Taken from M. Visbal, D. Gaitonde,
         On the use of higher-order finite-difference schemes on curvilinear and deforming meshes. JoCP 181, 155-185 (2002)."""
         if self.width == 3:
-            self.weights = [Rational(1,2)]
-            self.weights += [Rational(1,2)] + self.weights[::-1]
+            self.weights = [Rational(1,2)] + [Rational(1,2)]
         elif self.width == 5:
-            self.weights = [Rational(-1,8), Rational(1,2)]
-            self.weights += [Rational(5,8)] + self.weights[::-1]
+            self.weights = [Rational(5,8)] + [Rational(-1,8), Rational(1,2)][::-1]
         elif self.width == 7:
-            self.weights = [Rational(1,32), Rational(-3,16), Rational(15,32)]
-            self.weights += [Rational(11,16)] + self.weights[::-1]
+            self.weights = [Rational(11,16)] + [Rational(1,32), Rational(-3,16), Rational(15,32)][::-1]
         elif self.width == 9:
-            self.weights = [Rational(-1,128), Rational(1,16), Rational(-7,32), Rational(7,16)]
-            self.weights += [Rational(93,128)] + self.weights[::-1]
+            self.weights = [Rational(93,128)] + [Rational(-1,128), Rational(1,16), Rational(-7,32), Rational(7,16)][::-1]
         elif self.width == 11:
-            self.weights = [Rational(1,512), Rational(-5,256), Rational(45,512), Rational(-15,64), Rational(105,256)]
-            self.weights += [Rational(193,256)] + self.weights[::-1]        
+            self.weights = [Rational(193,256)] + [Rational(1,512), Rational(-5,256), Rational(45,512), Rational(-15,64), Rational(105,256)][::-1]
         return
 
 
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
         output = []
-        for dset_id, dset in enumerate(self.q_vector):
-            stencil = []
-            for i, location in enumerate(self.locations):
-                stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
-            output += [OpenSBLIEq(self.temp_arrays[dset_id], simplify(sum(stencil)))]
+        if self.filter_type == 'DRP':
+            for dset_id, dset in enumerate(self.q_vector):
+                stencil = []
+                for i, location in enumerate(self.locations):
+                    stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
+                output += [OpenSBLIEq(self.temp_arrays[dset_id], simplify(sum(stencil)))]
+        elif self.filter_type == 'Visbal':
+            for dset_id, dset in enumerate(self.q_vector):
+                stencil = []
+                total = 0
+                for i in range(len(self.weights)):
+                    total += Rational(1,2)*self.weights[i]*(increment_dataset(dset, direction, +i) + increment_dataset(dset, direction, -i))
+                output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(total))]
+        else:
+            raise ValueError("Wrong type of explicit filter specified.")
         # Restrict the filter if close to the wall, in the wall normal direction
         eqns = []
         buffer = self.depth
@@ -193,22 +194,24 @@ class ExplicitFilter(object):
         if block.conservative:
             for dset_id, dset in enumerate(self.q_vector):
                 if self.filter_type == 'DRP':
-                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*self.temp_arrays[dset_id])]
+                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id])]
+                elif self.filter_type == 'Visbal':
+                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id]))]
                 else:
-                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*(dset - self.temp_arrays[dset_id]))]
+                    raise ValueError("Wrong type of explicit filter specified.")
         else:
             if self.filter_type == 'DRP':
-                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.Mach_sensor*self.sigma*self.temp_arrays[0])]
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*self.temp_arrays[0])]
                 inv_rho = GridVariable('inv_rho')
                 update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
                 for dset_id, dset in enumerate(self.lhs[1:]):
-                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
+                    update += [OpenSBLIEq(dset, dset - self.sigma*self.temp_arrays[dset_id+1]*inv_rho)]
             else:
-                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.Mach_sensor*self.sigma*(self.lhs[0] - self.temp_arrays[0]))]
+                update += [OpenSBLIEq(self.lhs[0], self.lhs[0] - self.sigma*(self.lhs[0] - self.temp_arrays[0]))]
                 inv_rho = GridVariable('inv_rho')
                 update += [OpenSBLIEq(inv_rho, 1.0/self.lhs[0])]
                 for dset_id, dset in enumerate(self.lhs[1:]):
-                    update += [OpenSBLIEq(dset, dset - self.Mach_sensor*self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
+                    update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
         return application, update
 
     def create_UDF(self, block, equations, direction, order, UDF_type):
