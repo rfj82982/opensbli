@@ -66,14 +66,14 @@ class BinomialFilter(object):
             output += [OpenSBLIEquation(u_f, sum(rhs))]
         return output
 
-    def conditional_expression(self, filter_equations):
-        """ Only applies the filter in certain regions of the domain. Based on the 
-        grid_condition input to the class, which should be a boolean expression built from the coordinate arrays."""
-        output_equations = []
-        for i, eqn in enumerate(filter_equations):
-            condition = ExprCondPair(eqn.rhs, self.grid_condition)
-            output_equations += [OpenSBLIEquation(eqn.lhs, Piecewise(condition, (eqn.lhs, True)))]
-        return output_equations
+    # def conditional_expression(self, filter_equations):
+    #     """ Only applies the filter in certain regions of the domain. Based on the 
+    #     grid_condition input to the class, which should be a boolean expression built from the coordinate arrays."""
+    #     output_equations = []
+    #     for i, eqn in enumerate(filter_equations):
+    #         condition = ExprCondPair(eqn.rhs, self.grid_condition)
+    #         output_equations += [OpenSBLIEquation(eqn.lhs, Piecewise(condition, (eqn.lhs, True)))]
+    #     return output_equations
 
     def create_equations(self, block):
         ndim = block.ndim
@@ -93,23 +93,24 @@ class BinomialFilter(object):
         q_ystencil = self.create_stencil(block, q, 1)
         q_fx = [GridVariable(u + "_xfiltered") for u in q]
         q_fy = [GridVariable(u + "_yfiltered") for u in q]
-        if self.directions == 3:
+        if len(self.directions) == 3:
             q_zstencil = self.create_stencil(block, q, 2)
             q_fz = [GridVariable(u + "_zfiltered") for u in q]
         
         # Create the filter equations
         output_equations = self.filtered_equations(q_fx, q_xstencil)
         output_equations += self.filtered_equations(q_fy, q_ystencil)
-        if self.directions == 3:
+        if len(self.directions) == 3:
             output_equations += self.filtered_equations(q_fz, q_zstencil)
         # Average the filter
         q_f = [GridVariable(u + "_filtered") for u in q]
         if ndim == 2:
             for u_f, u_fx, u_fy in zip(q_f, q_fx, q_fy):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy)/2.0)]
-        elif self.directions == 3:
+        elif ndim == 3:
             for u_f, u_fx, u_fy, u_fz in zip(q_f, q_fx, q_fy, q_fz):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy + u_fz)/3.0)]
+
         # Blend the filter
         blended_equations = []
         for u, u_f in zip(q, q_f):
