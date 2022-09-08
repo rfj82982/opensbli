@@ -158,8 +158,8 @@ class iohdf5(opensbliIO):
 
         # generate the block name
         code += ['ops_fetch_block_hdf5_file(%s, %s);' % (block_name, filename)] + dataset_write
-        # Write constants to the HDF5 output file
-        if cls.write_constants:
+        # Write constants to the HDF5 output file, once per file (not per block)
+        if cls.write_constants and cls.block_number == 0:
             # Generate the OPS API calls
             user_constants = [x for x in CTD.constants if isinstance(x, ConstantObject)]
             user_constants = [x for x in user_constants if not x.rational]
