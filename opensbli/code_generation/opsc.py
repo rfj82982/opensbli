@@ -603,7 +603,27 @@ class OPSC(object):
             f.close()
             output += [WriteString("#include \"bc_exchanges.h\"")]  # Include statement in the code
         output += self.ops_partition()
+        # Restart simulation time and iteration number
+        # This MUST be done after the partition command to avoid MPI HDF5 errors
+        output += self.restart_simulation()
         return output
+
+    def restart_simulation(self):
+        """ Initialises the simulation time and iteration number from file if restarting the simulation."""
+        out = [WriteString('// Constants from HDF5 restart file')]
+        out += [WriteString('if (restart == 1){')]
+        for c in self.restarted_constants:
+            if c.name == 'start_iter':
+                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % ('iter', c.datatype.opsc(), c.name))]
+            else:
+                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % (c.name, c.datatype.opsc(), c.name))]
+        out += [WriteString('}')]
+        out += [WriteString('else {')]
+        for c in self.restarted_constants:
+            out += [WriteString("%s = %s;" % (str(c), c.value))]
+        out += [WriteString('}')]
+        out += [WriteString('tstart = simulation_time;\n')]
+        return out
 
     def ops_stencils_declare(self, s):
         out = []
@@ -723,21 +743,8 @@ class OPSC(object):
         out += [WriteString("%s = %s;" % (str(restart), restart.value))]
         constants.remove(restart)
         # Find which constants to restart
-        restarted_constants = [x for x in constants if x.restart]
+        self.restarted_constants = [x for x in constants if x.restart]
         init_constants = [x for x in constants if not x.restart]
-        out += [WriteString('// Constants from HDF5 restart file')]
-        out += [WriteString('if (restart == 1){')]
-        for c in restarted_constants:
-            if c.name == 'start_iter':
-                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % ('iter', c.datatype.opsc(), c.name))]
-            else:
-                out += [WriteString('ops_get_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, "restart.h5");' % (c.name, c.datatype.opsc(), c.name))]
-        out += [WriteString('}')]
-        out += [WriteString('else {')]
-        for c in restarted_constants:
-            out += [WriteString("%s = %s;" % (str(c), c.value))]
-        out += [WriteString('}')]
-        out += [WriteString('tstart = simulation_time;')]
         out += [WriteString('// User defined constant values')]
         # Write the rest of the constants
         for c in init_constants:
