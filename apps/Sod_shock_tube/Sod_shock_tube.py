@@ -84,14 +84,14 @@ for direction in range(ndim):
 pprint
 schemes = {}
 # Local LaxFredirich scheme for weno
-weno_order = 3
+weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
 Avg = RoeAverage([0, 1])
 # LF scheme
-LF = LFWeno(weno_order, averaging=Avg, flux_type='GLF')
+LF = LFWeno(weno_order, averaging=Avg, flux_type='LLF')
 # Add to schemes
 schemes[LF.name] = LF
-rk = RungeKuttaLS(3)
+rk = RungeKuttaLS(3, stages=5)
 schemes[rk.name] = rk
 
 block.set_block_boundaries(boundaries)
@@ -114,4 +114,4 @@ OPSC(alg)
 constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT']
 values = ['1.4', '0.0002', 'ceil(0.2/0.0002)', '200', '1.0/(block0np0-1)', '1.0e-16', '1.0e-5']
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho')

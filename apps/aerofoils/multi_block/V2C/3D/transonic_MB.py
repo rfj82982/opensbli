@@ -194,13 +194,19 @@ for no, block in enumerate(multi_block.blocks):
 for no, block in enumerate(multi_block.blocks):
     i, j, k = block.grid_indexes[0], block.grid_indexes[1], block.grid_indexes[2]
     if no == 0:
-        grid_condition = Or(i >= 769, j >= 470)
+        grid_condition = i >= 794
+        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        grid_condition = j >= 475
+        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
     elif no == 1:
-        grid_condition = j >= 470
+        grid_condition = j >= 475
+        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
     elif no == 2:
-        grid_condition = Or(i >= 769, j >= 470)
-
-    filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        grid_condition = i >= 794
+        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        grid_condition = j >= 475
+        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+    
 multi_block.set_filters(filters)
 
 # HDF5 input/output

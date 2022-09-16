@@ -151,11 +151,11 @@ grid_condition = j >= 778
 BF = BinomialFilter(block, order=6, directions=2, grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
-DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', Mach_sensor=True, optimized=True, sigma=0.2, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.1, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes

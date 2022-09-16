@@ -12,9 +12,14 @@ class Monitor(object):
         self.probe_no = numbering
         return
 
+class ScalarMonitor(object):
+    def __init__(self, scalar):
+        self.scalar = scalar
+        return
+
 
 class SimulationMonitor(object):
-    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=10, NaNcheck=True, output_file=None):
+    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=15, NaNcheck=True, output_file=None):
         """ Class to enable access of dataset values during the simulation.
         :arg list arrays: A list of DataSets to monitor during the simulation.
         :arg list probe_locations: A list of tuples giving the (i,j,k) grid index location of the probe.
@@ -27,7 +32,9 @@ class SimulationMonitor(object):
         # Check number of probes equals the number of input arrays
         if len(arrays) != len(probe_locations):
             raise ValueError("The number of arrays must equal the number of probe locations.")
-        self.monitors = [Monitor(var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations))]
+        # Check whether monitoring an array or a single value from a reduction already performed
+        self.array_monitors = [Monitor(var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if isinstance(loc, tuple)]
+        self.scalar_monitors = [ScalarMonitor(arrays[index]) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if not isinstance(loc, tuple)]
         if OPS_V2:
             self.ops_headers = {'input': "const ACC<%s> &%s", 'output': 'ACC<%s> &%s', 'inout': 'ACC<%s> &%s'}
         else:
@@ -119,7 +126,7 @@ class SimulationMonitor(object):
 
     @property
     def add_NaN_check(self):
-        return ['ops_NaNcheck(%s);' % str(self.monitors[0].flow_var)]
+        return ['ops_NaNcheck(%s);' % str(self.array_monitors[0].flow_var)]
 
     @property
     def write_reductions_file(self):
@@ -127,7 +134,7 @@ class SimulationMonitor(object):
         f = open(self.filename, 'w')
         f.write("#ifndef REDUCTIONS_H\n")
         f.write("#define REDUCTIONS_H\n")
-        for M in self.monitors:
+        for M in self.array_monitors:
             f.write(''.join(self.generate_kernel_code(M)))
         f.write('#endif\n')
         f.close()
@@ -136,9 +143,11 @@ class SimulationMonitor(object):
     @property
     def format_output(self):
         """ Controls the printing format for the output."""
-        placeholders = ', '.join(["%d"] + ["%%.%df" % self.fp_precision for _ in range(len(self.monitors)+1)])
+        placeholders = ', '.join(["%d"] + ["%%.%df" % self.fp_precision for _ in range(len(self.array_monitors)+1)])
         iterations = ['iter+1', '(iter+1)*dt']
-        variables = ["%s_%d_output" % (str(M.flow_var), M.probe_no) for M in self.monitors]
+        variables = ["%s_%d_output" % (str(M.flow_var), M.probe_no) for M in self.array_monitors]
+        # Scalar variables
+        variables += ["%s_out" % str(M.scalar) for M in self.scalar_monitors]
         # Normalise mean quantities by the number of iterations
         for i, var in enumerate(variables):
             if 'mean' in var:
@@ -155,7 +164,7 @@ class SimulationMonitor(object):
     def generate_reduction_loops(self):
         """ Creates a block of code for each flow variable being monitored."""
         output_code = []
-        for index, M in enumerate(self.monitors):
+        for index, M in enumerate(self.array_monitors):
             output_code += self.initial_declarations(M)
             output_code += self.reduction_range(M, index)
             output_code += self.par_loop_declaration(M)
@@ -165,7 +174,8 @@ class SimulationMonitor(object):
     @property
     def initial_print(self):
         """ Prints the headers at the top of the output once at the start."""
-        headers = ['Iteration', 'Time'] + ['%s%s' % (str(M.flow_var), str(M.probe_loc)) for M in self.monitors]
+        headers = ['Iteration', 'Time'] + ['%s%s' % (str(M.flow_var), str(M.probe_loc)) for M in self.array_monitors if len(self.array_monitors) > 0]
+        headers += ['%s' % (str(M.scalar)) for M in self.scalar_monitors if len(self.scalar_monitors) > 0]
         headers = ', '.join(headers)
         if self.output_file:
             output_code = ["if (iter == 0){\nops_fprintf(f, \"%s\\n\");}" % (headers)]

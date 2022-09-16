@@ -92,12 +92,10 @@ for direction in range(ndim):
 
 
 schemes = {}
-# Local LaxFredirich scheme for weno
-weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
 Avg = SimpleAverage([0, 1])
 # LF scheme
-LF = LFWeno(weno_order, formulation='Z', averaging=Avg,flux_type='GLF')
+LF = LFWeno(order=7, formulation='Z', averaging=Avg,flux_type='LLF')
 # Add to schemes
 schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
