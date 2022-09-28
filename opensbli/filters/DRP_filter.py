@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, airfoil=True, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -23,6 +23,7 @@ class ExplicitFilter(object):
         self.block = block
         self.filter_directions = filter_directions
         self.wall_boundaries = [[False, False] for _ in range(self.ndim)]
+        self.airfoil = airfoil
         if multi_block:
             self.nblocks = multi_block.nblocks
         else:
@@ -231,7 +232,20 @@ class ExplicitFilter(object):
         # Ordering of the filter operations to fix the order of the kernel calls in the code
         UDF.order = order
         UDF.add_equations(equations)
+        # Turn off filtering in the boundary-layer if required for airfoil cases
+        if self.airfoil and self.wall_boundaries[1][0]:
+            self.reduce_grid_range(block, UDF)
         return UDF
+
+    def reduce_grid_range(self, block, filt_class):
+        original = copy.deepcopy(block.ranges)
+        direction = 1
+        start = 5
+        # original_start = original[direction][0]
+        # Edit the start_index, currently assumes the filter should be applied to the end of the iteration range in that direction
+        original[direction][0] = start
+        filt_class.custom_grid_range = original
+        return
 
     def create_filter(self, block):
         self.equation_classes = []
