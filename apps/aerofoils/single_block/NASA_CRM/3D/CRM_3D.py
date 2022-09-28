@@ -10,14 +10,14 @@ stats = True
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (True, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
 # symbol for the coordinate system in the equations
-conservative = False
+conservative = True
 # NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
 
@@ -80,17 +80,31 @@ simulation_eq.apply_metrics(metriceq)
 local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
 
 # Initial conditions as strings
-u0 = "Eq(GridVariable(u0), 1.0)"
-u1 = "Eq(GridVariable(u1), 0.0)"
-u2 = "Eq(GridVariable(u2), 0.0)"
-p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
-r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
+if conservative:
+    u0 = "Eq(GridVariable(u0), 1.0)"
+    u1 = "Eq(GridVariable(u1), 0.0)"
+    u2 = "Eq(GridVariable(u2), 0.0)"
+    p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
+    r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
 
-rho = "Eq(DataObject(rho), r)"
-rhou0 = "Eq(DataObject(u0), u0)"
-rhou1 = "Eq(DataObject(u1), u1)"
-rhou2 = "Eq(DataObject(u2), u2)"
-rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"
+    rho = "Eq(DataObject(rho), r)"
+    rhou0 = "Eq(DataObject(rhou0), r*u0)"
+    rhou1 = "Eq(DataObject(rhou1), r*u1)"
+    rhou2 = "Eq(DataObject(rhou2), r*u2)"
+    rhoE = "Eq(DataObject(rhoE), p/((gama-1)) + 0.5*r*(u0**2+ u1**2 + u2**2))"
+
+else:
+    u0 = "Eq(GridVariable(u0), 1.0)"
+    u1 = "Eq(GridVariable(u1), 0.0)"
+    u2 = "Eq(GridVariable(u2), 0.0)"
+    p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
+    r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
+
+    rho = "Eq(DataObject(rho), r)"
+    rhou0 = "Eq(DataObject(u0), u0)"
+    rhou1 = "Eq(DataObject(u1), u1)"
+    rhou2 = "Eq(DataObject(u2), u2)"
+    rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"
 temp_eq = "Eq(GridVariable('temp'), DataObject(x2))"
 eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE, temp_eq]
 
@@ -121,7 +135,10 @@ boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Energy on the wall is set
-wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
+if conservative:
+    wall_energy = [Eq(q_vector[-1], q_vector[0]*Twall / (gama * Minf**2.0 * (gama - S.One)))]
+else:
+    wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
 direction = 1
 lower_wall_eq = wall_energy[:]
 boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
@@ -164,10 +181,10 @@ block.setio([h5, h5_read, stats_hdf5, metrics_hdf5])
 # Various filters and shock capturing
 j = block.grid_indexes[1]
 grid_condition = j >= 642
-BF = BinomialFilter(block, order=4, directions=3, grid_condition=grid_condition, sigma=0.2)
+BF = BinomialFilter(block, order=6, directions=[0,1,2], grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, Mach_sensor = True, sigma=0.3, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.2, wall_control=True, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
@@ -180,7 +197,7 @@ block.set_discretisation_schemes(schemes)
 # Discretise the equations on the block
 block.discretise()
 
-WF.update_periodic_boundary(block, halos=[-3,4])
+WF.update_periodic_boundary(block, halos=[-4,4])
 
 # Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
 def create_exchange_calls_codes(block, dsets):
@@ -193,7 +210,8 @@ def create_exchange_calls_codes(block, dsets):
     return kernels
 
 # Make some full swaps for interfaces before filtering
-filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
+# filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
+filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):
         if eq.full_swap:
@@ -207,7 +225,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT', 'inv_rfact0', 'inv_rfact1', 'inv_rfact2']
-values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '647', '50', '49.0/(block0np0-1)', '49.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4', '(block0np0-1)/49.0', '(block0np1-1)/49.0', '(block0np2)/0.05' ]
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
+values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '647', '50', '49.0/(block0np0-1)', '49.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0' ]
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

@@ -101,7 +101,7 @@ fns = 'u0 u1 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, formulation='SSP', stages=5)
+rk = RungeKuttaLS(3, formulation='SSP', stages=3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension
@@ -130,7 +130,7 @@ block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write", "write_constants" : True}
-h5 = iohdf5(save_every=5000, **kwargs)
+h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('Mach_sensor'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
 kwargs = {'iotype': "Read"}
@@ -148,7 +148,7 @@ block.set_equations(SFD.equation_classes)
 
 j = block.grid_indexes[1]
 grid_condition = j >= 778
-BF = BinomialFilter(block, order=6, directions=2, grid_condition=grid_condition, sigma=0.2)
+BF = BinomialFilter(block, order=6, directions=[0,1], grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
 DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.1, wall_control=True, multi_block=None)
@@ -161,10 +161,14 @@ block.set_equations(WF.equation_classes)
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 
+# Monitor residuals within the domain
+RM = ResidualMonitor(block, frequency=100)
+block.set_equations(RM.equation_classes)
+
 # Discretise the equations on the block
 block.discretise()
 
-WF.update_periodic_boundary(block, halos=[-4,4])
+WF.update_periodic_boundary(block, halos=[-5,5])
 
 # Full 5 swaps for the filter over the interface
 # Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
@@ -173,7 +177,7 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, halos=[-4,4])
+            BC = PeriodicBC(direction, side, halos=[-5,5])
             kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -188,7 +192,14 @@ for no, eq in enumerate(block.list_of_equation_classes):
         if eq.full_swap:
             eq.Kernels += filter_swaps
 
-alg = TraditionalAlgorithmRK(block)
+# Monitor the residuals
+# Simulation monitor
+arrays = ['R0max', 'R1max', 'R2max', 'R3max', 'u1_B0']
+probe_locations = ['scalar', 'scalar', 'scalar', 'scalar', (0, 100)]
+SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
+
+# Create algorithm
+alg = TraditionalAlgorithmRK(block, SM)
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm

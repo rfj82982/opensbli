@@ -29,7 +29,7 @@ constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (True, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 Einstein_expansion = EinsteinEquation()
@@ -39,9 +39,7 @@ eqns = Einstein_expansion.expand(metric_vel, ndim, coordinate_symbol, [], consta
 for eq in eqns:
     Einstein_expansion.optional_subs_dict[eq.lhs] = eq.rhs
 
-
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Expand the simulation equations, for this create a simulation equations class
@@ -57,12 +55,13 @@ if conservative:
     eqns = Einstein_expansion.expand(velocity, ndim, coordinate_symbol, [], constants)
     constituent.add_equations(eqns)
     pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+    enthalpy = "Eq(H, (rhoE + p) / rho)"
 else:
     pressure = "Eq(p, (gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
+    enthalpy = "Eq(H, Et + p / rho)"
+
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-# viscosity = "Eq(mu, T**0.7)"
 viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
-# divV = "Eq(divV, Der(u_j, x_j))"
 
 eqns = Einstein_expansion.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
@@ -70,9 +69,8 @@ eqns = Einstein_expansion.expand(temperature, ndim, coordinate_symbol, [], const
 constituent.add_equations(eqns)
 eqns = Einstein_expansion.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-# eqns = Einstein_expansion.expand(divV, ndim, coordinate_symbol, [], constants)
-# eqns = metriceq.apply_transformation(eqns)
-# constituent.add_equations(eqns)
+eqns = Einstein_expansion.expand(enthalpy, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
 
 # Transform the equations into curvilinear form
 simulation_eq.apply_metrics(metriceq)
@@ -124,20 +122,20 @@ mb_bcs = {0:None, 1:None, 2:None}
 block0_bc = []
 direction = 0
 side = 0
-block0_bc.append(InterfaceBC(direction=0, side=0,  name="block0_to_block1", match=(1, 0, 0, True)))
+block0_bc.append(InterfaceBC(direction=0, side=0,  halos=[-2,2], name="block0_to_block1", match=(1, 0, 0, True)))
 block0_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block0_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block0_to_block2", match=(2, 1, 0, True)))
+block0_bc.append(SharedInterfaceBC(direction=1, side=0, halos=[-4,4], name="block0_to_block2", match=(2, 1, 0, True)))
 block0_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block0_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
-block0_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
+block0_bc.append(PeriodicBC(direction=2, side=0, halos=[-2,2], corners=False))
+block0_bc.append(PeriodicBC(direction=2, side=1, halos=[-2,2], corners=False))
 mb_bcs[0] = block0_bc
 
 # Boundary conditions for block 1
 #The boundary conditions are [InterfaceBC, InterfaceBC] in x0 direction and [wall, Inflow]  in x1 direction 
 # Matching boundaries are located at are [0,0,0] and [2, 0, 0]
 block1_bc = []
-block1_bc.append(InterfaceBC(direction=0, side=0,  name="block1_to_block0", match=(0, 0, 0, True)))
-block1_bc.append(InterfaceBC(direction=0, side=1,  name="block1_to_block2", match=(2, 0, 0, False)))
+block1_bc.append(InterfaceBC(direction=0, side=0, halos=[-2,2], name="block1_to_block0", match=(0, 0, 0, True)))
+block1_bc.append(InterfaceBC(direction=0, side=1, halos=[-2,2], name="block1_to_block2", match=(2, 0, 0, False)))
 # Wall temperature is required for halo points
 Twall = ConstantObject('Twall')
 Twall.value = 1.0
@@ -147,20 +145,20 @@ else:
     wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
 block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy, multi_block=True))
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block1_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
-block1_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
+block1_bc.append(PeriodicBC(direction=2, side=0, halos=[-2,2], corners=False))
+block1_bc.append(PeriodicBC(direction=2, side=1, halos=[-2,2], corners=False))
 mb_bcs[1] = block1_bc
 
 # Boundary conditions for block 2
 # The boundary conditions are [InterfaceBC, outflow] in x0 direction and  SharedInterfaceBC, Inflow]  in x1 direction 
 # Matching boundaries are located at are [1,0,1] and [0, 1, 0]
 block2_bc = []
-block2_bc.append(InterfaceBC(direction=0, side=0,  name="block2_to_block1", match=(1, 0, 1, False)))
+block2_bc.append(InterfaceBC(direction=0, side=0,  halos=[-2,2], name="block2_to_block1", match=(1, 0, 1, False)))
 block2_bc.append(ExtrapolationBC(direction=0, side=1, order=0))
-block2_bc.append(SharedInterfaceBC(direction=1, side=0,  name="block2_to_block0", match=(0, 1, 0, True)))
+block2_bc.append(SharedInterfaceBC(direction=1, side=0,  halos=[-4,4], name="block2_to_block0", match=(0, 1, 0, True)))
 block2_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
-block2_bc.append(PeriodicBC(direction=2, side=0, full_depth=True))
-block2_bc.append(PeriodicBC(direction=2, side=1, full_depth=True))
+block2_bc.append(PeriodicBC(direction=2, side=0, halos=[-2,2], corners=False))
+block2_bc.append(PeriodicBC(direction=2, side=1, halos=[-2,2], corners=False))
 mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
@@ -183,12 +181,12 @@ multi_block.set_equations(stat_equation_classes)
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
-    if no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+    if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
         filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=True, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
@@ -214,6 +212,7 @@ x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 q_hdf5 = iohdf5(save_every=1000, **kwargs)
 q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
+q_hdf5.add_arrays([DataObject('kappa')])
 # Read in the grid file
 kwargs = {'iotype': "Read"}
 grid_hdf5 = iohdf5(**kwargs)
@@ -266,7 +265,7 @@ def create_periodic_BCs(multi_block, dsets):
         arrays = [block.location_dataset(a) for a in flatten(dsets)]
         for direction in [2]:
             for side in [0,1]:
-                BC = PeriodicBC(direction, side, full_depth=True, corners=True)
+                BC = PeriodicBC(direction, side, full_depth=True, corners=False)
                 kernels += [BC.apply(arrays, block)]
     return kernels
 
