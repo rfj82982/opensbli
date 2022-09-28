@@ -12,16 +12,23 @@ def generate_outlet_sponge(q_vector, block, Lx, npoints):
     block_number = block.blocknumber
     sponge_length, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
     gama, Minf = symbols("gama Minf", **{'cls':ConstantObject})
-    residual = symbols("Residual0:5", **{'cls':DataObject})
+    residual = symbols("Residual0:%d" % (block.ndim+2), **{'cls':DataObject})
     x0 = symbols("x0", **{'cls':DataObject})
     equations = []
     equations += [Eq(sponge_length, 0.85)]
     # Characteristic length
     equations += [Eq(lc, x0 - (Lx - sponge_length)), Eq(sigma,  0.5*(1.0 + cos(pi* lc/sponge_length)))]
     # Freestream values to enforce
-    rho_inf, u_inf, v_inf, w_inf, p_inf = 1.0, 1.0, 0.0, 0.0, 1.0/(gama*Minf*Minf)
-    rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2 + w_inf**2)
-    boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rho_inf*w_inf, rhoE_inf]
+    if block.ndim == 2:
+        rho_inf, u_inf, v_inf, p_inf = 1.0, 1.0, 0.0, 1.0/(gama*Minf*Minf)
+        rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2)
+        boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rhoE_inf]
+    else:
+        rho_inf, u_inf, v_inf, w_inf, p_inf = 1.0, 1.0, 0.0, 0.0, 1.0/(gama*Minf*Minf)
+        rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2 + w_inf**2)
+        boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rho_inf*w_inf, rhoE_inf]
+
+    # Application
     for residual_array, qvec, freestream in zip(residual, q_vector, boundary_values):
         equations += [Eq(residual_array, residual_array - sigma * (qvec - freestream))]
     eqns = block.dataobjects_to_datasets_on_block(equations)
@@ -29,8 +36,6 @@ def generate_outlet_sponge(q_vector, block, Lx, npoints):
     ker.kernelname = "outlet_sponge_block%d" % block_number
     ker.add_equation(eqns)
     ranges = copy.deepcopy(block.ranges)
-    # for eqn in ker.equations:
-    #     pprint(eqn)
     ker.ranges = ranges
     # Reduce the evaluation range
     ker.ranges[0][0] =  ranges[0][1] - npoints
@@ -43,7 +48,7 @@ def generate_farfield_sponge(q_vector, block, Ly, npoints):
     block_number = block.blocknumber
     sponge_length, lc, sigma = symbols("spongel, lc, sigma", **{'cls':GridVariable})
     gama, Minf = symbols("gama Minf", **{'cls':ConstantObject})
-    residual = symbols("Residual0:5", **{'cls':DataObject})
+    residual = symbols("Residual0:%d" % (block.ndim+2), **{'cls':DataObject})
     equations = []
     equations += [Eq(sponge_length, 0.85)]
     # Characteristic length
@@ -57,9 +62,15 @@ def generate_farfield_sponge(q_vector, block, Ly, npoints):
     else:
         raise ValueError("Sponge zones are configured for three blocks.")
     # Freestream values to enforce
-    rho_inf, u_inf, v_inf, w_inf, p_inf = 1.0, 1.0, 0.0, 0.0, 1.0/(gama*Minf*Minf)
-    rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2 + w_inf**2)
-    boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rho_inf*w_inf, rhoE_inf]
+    if block.ndim == 2:
+        rho_inf, u_inf, v_inf, p_inf = 1.0, 1.0, 0.0, 1.0/(gama*Minf*Minf)
+        rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2)
+        boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rhoE_inf]
+    else:
+        rho_inf, u_inf, v_inf, w_inf, p_inf = 1.0, 1.0, 0.0, 0.0, 1.0/(gama*Minf*Minf)
+        rhoE_inf = p_inf / (gama - 1.0) + 0.5*rho_inf*(u_inf**2 + v_inf**2 + w_inf**2)
+        boundary_values = [rho_inf, rho_inf*u_inf, rho_inf*v_inf, rho_inf*w_inf, rhoE_inf]
+    # Application
     for residual_array, qvec, freestream in zip(residual, q_vector, boundary_values):
         equations += [Eq(residual_array, residual_array - sigma * (qvec - freestream))]
     eqns = block.dataobjects_to_datasets_on_block(equations)
@@ -104,7 +115,7 @@ def generate_wake_kernel(q_vector, multi_block, wall_energy):
     application_kernel.halo_ranges[1][0] = set()
     # Wake exchanges from block2 wakeline (q_vector) to blokck0 work_arrays
     block2 = multi_block.get_block(2)
-    bc = InterfaceBC(direction, side,  match=(0, 1, 0, False))
+    bc = InterfaceBC(direction, side,  halos=[-4, 4], match=(0, 1, 0, False))
     arrays = [block2.work_array(str(a)) for a in flatten(q_vector)]
     other_arrays = [block.work_array(str(a)) for a in flatten(wk)]
     wake_transfer1 = bc.apply_interface(arrays, block2, multi_block, other_arrays=other_arrays)
@@ -113,7 +124,7 @@ def generate_wake_kernel(q_vector, multi_block, wall_energy):
     wake_transfer1.transfer_to[1] = 0
     wake_transfer1.computation_name = "wake_block0_to_block2_"
     
-    bc = InterfaceBC(direction, side,  match=(2, 1, 0, False))
+    bc = InterfaceBC(direction, side,  halos=[-4, 4], match=(2, 1, 0, False))
     arrays = [block.work_array(str(a)) for a in flatten(q_vector)]
     wake_transfer2 = bc.apply_interface(arrays, block, multi_block)
     wake_transfer2.transfer_size[1] = 1
