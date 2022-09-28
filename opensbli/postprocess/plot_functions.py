@@ -11,19 +11,24 @@ class OpenSBLIPreProcess(object):
         self.gamma = 1.4
         return
 
-    def read_block(self, file_name, blocknumber):
-        print("Reading from file: %s" % file_name)
+    def read_block(self, file_name, blocknumber, verbose=False):
+        if verbose:
+            print("Reading from file: %s" % file_name)
         f = h5py.File(file_name, 'r')
         block_name = 'opensbliblock0%d' % blocknumber
-        print(block_name)
-        print(f[block_name].__dict__)
         dsets = [x for x in f[block_name].keys()]
-        print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
+        if verbose:
+            print("Found %d datasets: %s, with dimensions: %s" % (len(dsets), dsets, f[block_name][dsets[0]].shape[::-1]))
         f, block_name, dsets
         nhalos = np.abs(f[block_name][dsets[0]].attrs['d_m'])
         shape = list(f[block_name][dsets[0]].shape)
         shape = tuple([x-10 for x in shape])
-        return f, block_name, dsets, shape
+        # Get the constants
+        constants = {}
+        for k in f.keys():
+            if 'opensbli' not in k: # ignore the simulation blocks
+                constants[k] = f[k][0]
+        return f, block_name, dsets, shape, constants
 
     def domain_size(self, f, block_name, blocknumber):
         Lx = np.max(self.remove_halos(f[block_name]['x0'+'_B%d' % blocknumber]))
@@ -62,8 +67,7 @@ class OpenSBLIPreProcess(object):
         file_list = sorted(glob.glob(directory + '/opensbli_output_*.h5'))
         iteration_numbers = [re.findall("\d+", s)[0].lstrip('0') for s in file_list]
         print("Found {:} OpenSBLI output files:".format(len(file_list)))
-        for f in file_list:
-            print(f)
+        print(file_list[0], ",......,", file_list[-1])
         return file_list, iteration_numbers
 
     def NaN_check(self, dset):
@@ -92,7 +96,7 @@ class OpenSBLIPreProcess(object):
             read_data = dataset[read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
         return read_data
 
-    def read_full_dset(self, f, block_name, dset, remove_halos=True, min_max=True, partial_slice=None):
+    def read_full_dset(self, f, block_name, dset, remove_halos=True, min_max=True, partial_slice=None, verbose=False):
         if remove_halos:
             halos = np.abs(f[block_name][dset].attrs['d_p'])
             if partial_slice is not None:
@@ -101,7 +105,8 @@ class OpenSBLIPreProcess(object):
                 data = self.remove_halos(f[block_name][dset], halos)
         else:
             data = f[block_name][dset][partial_slice]
-        print("Reading dataset: {:}, Min: {:.3f}, Max: {:.3f}".format(dset, np.min(data), np.max(data)))
+        if verbose:
+            print("Reading dataset: {:}, Min: {:.3f}, Max: {:.3f}".format(dset, np.min(data), np.max(data)))
         return data
 
     def add_flow_attributes(self):
