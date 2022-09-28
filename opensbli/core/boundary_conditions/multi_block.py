@@ -9,13 +9,14 @@ class MultiBlockBoundary(object):
 
 
 class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
-    def __init__(self, direction, side, name=None, match=(None, None, None), plane=True):
+    def __init__(self, direction, side, halos=None, name=None, match=(None, None, None), plane=True):
         # check if the match is a boundary type
         BoundaryConditionBase.__init__(self, direction, side, plane)
         # Check the match input is correct
         for x in match[0:3]:
             assert type(x) is int
         self.match = match
+        self.halos = halos
         if name is None:
             self.bc_name = "interface"
         else:
@@ -52,14 +53,18 @@ class InterfaceBC(BoundaryConditionBase, MultiBlockBoundary):
         else:
             other_block_arrays = [other_block.work_array(str(a.base.label)) for a in flatten(arrays)]
 
-        # From corresponds to the block
-        halos_block1 = self.get_halo_values(block)
-        halos_block2 = self.get_halo_values(other_block)
         # Swap all 5 halos if required, for wide stencil filters
         if full_halo_swap:
             halos_block1 = [[-5, 5] for _ in range(block.ndim)]
             halos_block2 = [[-5, 5] for _ in range(block.ndim)]
+        elif self.halos is None: # User specified halo depth
+            halos_block1 = [self.halos for _ in range(block.ndim)]
+            halos_block2 = [self.halos for _ in range(block.ndim)]
+        else:
+            halos_block1 = self.get_halo_values(block)
+            halos_block2 = self.get_halo_values(other_block)
 
+        print(halos_block2)
         # Get the number of halos requred for block 2
         from_location = [d[0] for d in halos_block2]
         to_location = [d[0] for d in halos_block2]
@@ -120,6 +125,8 @@ class SharedInterfaceBC(InterfaceBC, BoundaryConditionBase, MultiBlockBoundary):
             halos_block1 = [[-5, 5] for _ in range(block.ndim)]
             halos_block2 = [[-5, 5] for _ in range(block.ndim)]
 
+        halos_block1 = [[-4, 4] for _ in range(block.ndim)] ## HARDCODED WHILE TESTING
+        halos_block2 = [[-4, 4] for _ in range(block.ndim)]
         # Get the number of halos requred for block 2
         from_location = [d[0] for d in halos_block2]
         to_location = [d[0] for d in halos_block2]
