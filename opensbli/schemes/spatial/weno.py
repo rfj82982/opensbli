@@ -449,7 +449,7 @@ class Weno(Scheme, ShockCapturing):
         import numpy
         if normalised:
             theta = ConstantObject('sensor_theta')
-            theta.value = 4.0
+            theta.value = 0.5
             for L in range(self.k):
                 formula += Abs(gv('omega_%d' % L)/opt_weights[L] - 1.0)**theta
             denominator = Abs(1.0/numpy.min(opt_weights) - 1.0)**theta + (self.k-1)
