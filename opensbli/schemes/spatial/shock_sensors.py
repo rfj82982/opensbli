@@ -1,15 +1,17 @@
-from sympy import Rational, Min, Abs, sqrt, tanh, pprint
+from sympy import Rational, Min, Abs, sqrt, tanh, pprint, Max
 from opensbli.core.opensblifunctions import CentralDerivative as CD
 from opensbli.core.parsing import EinsteinEquation as EE
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import ConstantsToDeclare as CTD
+from opensbli.utilities.helperfunctions import increment_dataset
+
 
 class ShockSensor(object):
     def __init__(self):
         return
 
-    def ducros_equations(self, block, coordinate_symbol, metrics=None, name='theta'):
+    def ducros_equations(self, block, coordinate_symbol, metrics=None, name='theta', Mach=None):
         """ Create the non-discretized equations for the modified Ducros shock sensor and applies a metric transformation if required.
         :arg object block: OpenSBLI simulation block.
         :arg string coordinate_symbol: Coordinate symbol to perform the derivatives with.
@@ -20,9 +22,9 @@ class ShockSensor(object):
         cart = CoordinateObject('x_i')
         cartesian_coordinates = [cart.apply_index(cart.indices[0], dim) for dim in range(ndim)]
 
-        epsilon, Minf = ConstantObject('epsilon'), ConstantObject('Minf')
+        self.epsilon, Minf = ConstantObject('epsilon'), ConstantObject('Minf')
         sensor_array = block.location_dataset('%s' % name)
-        epsilon.value = 1.0e-12
+        self.epsilon.value = 1.0e-12
         # Calculate vorticity
         if block.ndim == 2:
             dx, dy = block.deltas
@@ -46,8 +48,41 @@ class ShockSensor(object):
             divergence = metrics.apply_transformation(divergence)
 
         c = ConstantObject('Ducros_sensitivity')
-        c.value = 1.0
+        c.value = 0.1
         CTD.add_constant(c)
-        tanh_filter = Rational(1, 2)*(1 - tanh(2.5 + 10*(dx/block.location_dataset('a'))*divergence.rhs))
-        output_eqns += [OpenSBLIEq(sensor_array, tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + epsilon))]
+        tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + c*divergence.rhs)))
+        # tanh_filter = 1.0
+        # # Add a pressure gradient term
+        # a = ConstantObject('Jameson_sensitivity')
+        # a.value = 1.0
+        # CTD.add_constant(a)
+        # pressure_term = a*self.Jameson_sensor(block)
+        output_eqns += [OpenSBLIEq(sensor_array, Min(1, Mach*tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + self.epsilon)))]
         return output_eqns, sensor_array
+
+    def Ren_sensor(self, block):
+        output = 0
+        # r_j
+        base_loc = 0
+        pm, p, pp = increment_dataset(block.location_dataset('p'), 0, base_loc -1), increment_dataset(block.location_dataset('p'), 0, base_loc), increment_dataset(block.location_dataset('p'), 0, base_loc + 1)
+        ph, mh = pp - p, p - pm
+        rj1 = (Abs(2*ph*mh) + self.epsilon) / (ph**2 + mh**2 + self.epsilon)
+        # r_(j+1)
+        base_loc = 1
+        pm, p, pp = increment_dataset(block.location_dataset('p'), 0, base_loc -1), increment_dataset(block.location_dataset('p'), 0, base_loc), increment_dataset(block.location_dataset('p'), 0, base_loc + 1)
+        ph, mh = pp - p, p - pm
+        rj2 = (Abs(2*ph*mh) + self.epsilon) / (ph**2 + mh**2 + self.epsilon)
+
+        rj_half = Min(rj1, rj2)
+        return
+
+
+    def Jameson_sensor(self, block):
+        pm, p, pp = increment_dataset(block.location_dataset('p'), 0, -1), block.location_dataset('p'), increment_dataset(block.location_dataset('p'), 0, 1)
+        output = Abs((pp - 2*p + pm) / (pp + 2*p + pm))
+        for dire in range(1, block.ndim):
+            pm, p, pp = increment_dataset(block.location_dataset('p'), dire, -1), block.location_dataset('p'), increment_dataset(block.location_dataset('p'), dire, 1)
+            output = Max(output, Abs((pp - 2*p + pm) / (pp + 2*p + pm)))
+        return output
+
+
