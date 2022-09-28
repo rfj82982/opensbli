@@ -165,8 +165,8 @@ class iohdf5(opensbliIO):
             user_constants = [x for x in user_constants if not x.rational]
             for c in user_constants: # Write only user input constants, not rational factors and inverses
                 code += ['ops_write_const_hdf5(\"%s\", 1, \"%s\", (char*)&%s, %s);' % (c.name, c.datatype.opsc(), c.name, filename)]
-        # Constants to always write to HDF5
-        code += ['ops_write_const_hdf5(\"iter\", 1, \"int\", (char*)&iter, %s);' % (filename)]
+            # Constants to always write to HDF5
+            code += ['ops_write_const_hdf5(\"iter\", 1, \"int\", (char*)&iter, %s);' % (filename)]
         return code
 
     def hdf5read_opsc_code(cls):
