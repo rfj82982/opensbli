@@ -531,7 +531,7 @@ class OPSC(object):
         if algorithm.simulation_monitor:
             out += ['#include \"%s\"' % algorithm.simulation_monitor.filename]
             if algorithm.simulation_monitor.output_file:
-                out += ['FILE *f = fopen(\"%s\", \"w\");' % str(algorithm.simulation_monitor.output_file)]
+                out += ['FILE *f = fopen(\"%s\", \"a\");' % str(algorithm.simulation_monitor.output_file)]
         return out
 
     def opsc_def_decs(self, algorithm):
