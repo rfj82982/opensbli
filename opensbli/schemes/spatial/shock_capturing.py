@@ -4,12 +4,12 @@
    @details
 """
 
-from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor
+from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min
 from sympy.core.numbers import Zero
 from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel, ConstantsToDeclare
-from opensbli.core.grid import GridVariable
+from opensbli.core.grid import GridVariable as gv
 from opensbli.utilities.helperfunctions import increment_dataset
 from opensbli.physical_models.euler_eigensystem import EulerEquations
 from sympy import factor, pprint
@@ -69,12 +69,14 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives, single_wave=False):
+    def interpolate_reconstruction_variables(self, derivatives, single_wave=False, MP_limiter=False):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
         :arg object kernel: The current computational kernel."""
         output_eqns = []
+        # Extract info from the RVs
+        self.process_rv(derivatives)
         for no, d in enumerate(derivatives):
             for rv in d.reconstructions:
                 if isinstance(rv, type(self.reconstruction_classes[1])):
@@ -87,28 +89,79 @@ class ShockCapturing(object):
                 rv.evaluate_quantities()
                 # Apply a sensor to each characteristic wave if using filtering methods
                 if self.sensor_evaluation is not None:
-                    output_eqns += [rv.final_equations[0:-1]]
                     if single_wave:
+                        output_eqns += [rv.final_equations[0:-1]]
                         if no == 0:
                             if isinstance(rv, type(self.reconstruction_classes[0])):
-                                # output_eqns += [OpenSBLIEq(GridVariable('rj_right'), self.sensor_evaluation[0].rhs)]
-                                output_eqns += [OpenSBLIEq(GridVariable('rj_right'), 0.0)]
-
+                                output_eqns += [OpenSBLIEq(gv('rj_right'), self.sensor_evaluation[0].rhs)]
                             elif isinstance(rv, type(self.reconstruction_classes[1])):
-                                # output_eqns += [OpenSBLIEq(GridVariable('rj_left'), self.sensor_evaluation[0].rhs)]
-                                output_eqns += [OpenSBLIEq(GridVariable('rj_left'), 0.0)]
-                        # else:
-                        #     output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), GridVariable('rj0'))]
+                                output_eqns += [OpenSBLIEq(gv('rj_left'), self.sensor_evaluation[0].rhs)]
+                        else:
+                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), gv('rj0'))]
                         output_eqns += [rv.final_equations[-1]]
                     else:
-                        # Add all of the current equations
-                        output_eqns += [rv.final_equations]
+                        output_eqns += [rv.final_equations[0:-1]]
                         if isinstance(rv, type(self.reconstruction_classes[0])):
-                            output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), self.sensor_evaluation[0].rhs)]
+                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[0].rhs)]
                         elif isinstance(rv, type(self.reconstruction_classes[1])):
-                            output_eqns += [OpenSBLIEq(GridVariable('rj%d' % no), Max(GridVariable('rj%d' % no),self.sensor_evaluation[1].rhs))]
+                            # output_eqns += [OpenSBLIEq(gv('rj%d' % no), Max(gv('rj%d' % no),self.sensor_evaluation[1].rhs))]
+                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[1].rhs)]
+                        output_eqns += [rv.final_equations[-1]]
                 else:
                     output_eqns += [rv.final_equations]
+                if MP_limiter:
+                    output_eqns += self.monotonicity_limiter(rv)
+        return output_eqns
+
+    def minmod(self, x, y):
+        return 0.5*(sign(x, evaluate=False) + sign(y, evaluate=False))*Min(Abs(x), Abs(y))
+
+    def median(self, x, y, z):
+        return x + self.minmod(y-x, z-x)
+
+    def process_rv(self, derivatives):
+        # Collects the flux terms used for the reconstructions, per derivative
+        for no, d in enumerate(derivatives):
+            fn = {}
+            for rv in d.reconstructions:
+                for key, value in rv.function_stencil_dictionary.items():
+                    for term in value.atoms(gv):
+                        if 'CF' in str(term):
+                            fn[key] = term
+            # Add to both RV
+            for rv in d.reconstructions:
+                rv.fluxes = fn
+        return
+
+
+    def monotonicity_limiter(self, rv):
+        from opensbli.schemes.spatial.weno import RightWenoReconstructionVariable, LeftWenoReconstructionVariable
+        output_eqns = []
+        # Original reconstructed value
+        original = rv.reconstructed_symbol
+        # Variable to control CFL number that can be used, default alpha=2
+        alpha = ConstantObject('alpha_MP')
+        alpha.value = 2.0
+        ConstantsToDeclare.add_constant(alpha)
+        # Function values required to take the limits
+        fn = rv.fluxes
+        # dj = u_(j+1) - 2*u_(j) + u_(j-1) curvature measure
+        if isinstance(rv, RightWenoReconstructionVariable): # upwind
+            # f(i), f(i+1), f(i+1/2)^MD
+            dj = fn[1]-2*fn[0]+fn[-1]
+            djp1 = fn[2]-2*fn[1]+fn[0]
+            MM1, MM2 = gv('MM1'), gv('MM2')
+            output_eqns += [OpenSBLIEq(MM1, self.minmod(dj, djp1))]
+            c_1 = [fn[0], fn[1], 0.5*(fn[0] + fn[1]) - 0.5*MM1]
+            # f(i), f(i+1/2)^UL, f(i+1/2)^LC
+            djm1 = fn[0]-2*fn[-1]+fn[-2]
+            output_eqns += [OpenSBLIEq(MM2, self.minmod(djm1, dj))]
+            c_2 = [fn[0], fn[0] + alpha*(fn[0] - fn[-1]), fn[0] + 0.5*(fn[0] - fn[-1]) + Rational(4,3)*MM2]
+            u_min = Max(Min(c_1[0], Min(c_1[1], c_1[2])), Min(c_2[0], Min(c_2[1], c_2[2])))
+            u_max = Min(Max(c_1[0], Max(c_1[1], c_1[2])), Max(c_2[0], Max(c_2[1], c_2[2])))
+            # rv.limiter = gv('limiter')
+            output_eqns += [OpenSBLIEq(original, self.median(original, u_min, u_max))]
+
         return output_eqns
 
     def update_constituent_relation_symbols(self, sym, direction):
@@ -227,7 +280,7 @@ class EigenSystem(object):
         for i in range(shape[0]):
             for j in range(shape[1]):
                 if mat[i, j]:
-                    symbolic_matrix[i, j] = GridVariable('%s_%d%d' % (name, i, j))
+                    symbolic_matrix[i, j] = gv('%s_%d%d' % (name, i, j))
         return symbolic_matrix
 
     def convert_matrix_to_grid_variable(self, mat, name):
@@ -237,11 +290,11 @@ class EigenSystem(object):
         :arg str name: Base name to use for the GridVariables
         :returns: mat: The matrix updated to contain GridVariables."""
         syms = list(mat.atoms(EinsteinTerm).difference(mat.atoms(ConstantObject)))
-        new_syms = [GridVariable('%s_%s' % (name, str(sym))) for sym in syms]
+        new_syms = [gv('%s_%s' % (name, str(sym))) for sym in syms]
         substitutions = dict(zip(syms, new_syms))
         # Find Metric terms which are datasets
         dsets = list(mat.atoms(DataSet).difference(mat.atoms(ConstantObject)))
-        new_dsets = [GridVariable('%s_%s' % (name, d.base.simplelabel())) for d in dsets]
+        new_dsets = [gv('%s_%s' % (name, d.base.simplelabel())) for d in dsets]
         substitutions.update(dict(zip(dsets, new_dsets)))
         mat = mat.subs(substitutions)
         return mat
@@ -360,10 +413,10 @@ class Characteristic(EigenSystem):
 
     def create_LEV_inverses(self, direction, avg_LEV_values):
         """ Optimizations to avoid repeated divides."""
-        inverses = [GridVariable('inv_AVG_a'), GridVariable('inv_AVG_rho')]
-        to_be_replaced = [1/GridVariable('AVG_%d_a' % direction), 1/GridVariable('AVG_%d_rho' % direction)]
-        if len(self.inv_metric.atoms(GridVariable)) > 0:  # Don't substitute if there are no metrics
-            inverses += [GridVariable('inv_AVG_met_fact')]
+        inverses = [gv('inv_AVG_a'), gv('inv_AVG_rho')]
+        to_be_replaced = [1/gv('AVG_%d_a' % direction), 1/gv('AVG_%d_rho' % direction)]
+        if len(self.inv_metric.atoms(gv)) > 0:  # Don't substitute if there are no metrics
+            inverses += [gv('inv_AVG_met_fact')]
             to_be_replaced += [1/self.inv_metric]
         inverse_evals = [OpenSBLIEq(a, b) for (a, b) in zip(inverses, to_be_replaced)]
         for i, term in enumerate(avg_LEV_values):
@@ -466,15 +519,8 @@ class LFCharacteristic(Characteristic):
                 reductions += [OpenSBLIEq(global_EV_reductions[0,0], Abs(u))]
                 reductions += [OpenSBLIEq(global_EV_reductions[ndim,ndim], Abs(upa))]
                 reductions += [OpenSBLIEq(global_EV_reductions[ndim+1,ndim+1], Abs(uma))]
-                # pprint(reductions)
-                # exit()
-
         # Assign the max wave speed to the correct reduced variables for this direction
         grid_vars, reduction_vars = self.generate_grid_variable_ev(direction, 'max'), self.global_eigenvalue_reductions[direction]
-        # print(grid_vars)
-        # grid_vars[0,0] = '*'+str(self.global_eigenvalue_reductions[direction][0,0])
-        # pprint(str(self.global_eigenvalue_reductions[0][0,0]))
-        # exit()
         pre_process_equations += [x for x in self.generate_equations_from_matrices(grid_vars, reduction_vars) if x != 0]
         return grid_vars, reductions, pre_process_equations
 
@@ -490,7 +536,7 @@ class LFCharacteristic(Characteristic):
         else:
             raise NotImplementedError("Only 4th, 6th, and 8th order Central are implemented for the WENO-Filter.")
         # Take a central difference of the characteristic fluxes
-        terms = [GridVariable('CF_%d%d' % (component, j)) for j in range(len(weights))]
+        terms = [gv('CF_%d%d' % (component, j)) for j in range(len(weights))]
         formula = factor(sum([x*y for (x,y) in zip(weights, terms)]))
         output_equation = [OpenSBLIEq(reconstruction_variable, (reconstruction_variable - formula))]
         return output_equation
@@ -505,10 +551,10 @@ class LFCharacteristic(Characteristic):
         averaged_suffix_name = self.averaged_suffix_name
         avg_REV_values = self.convert_matrix_to_grid_variable(self.right_eigen_vector[self.direction], averaged_suffix_name)
         # Manually remove the divides
-        inverses = [GridVariable('inv_AVG_a'), GridVariable('inv_AVG_rho')]
-        to_be_replaced = [1/GridVariable('AVG_%d_a' % direction), 1/GridVariable('AVG_%d_rho' % direction)]
-        if len(self.inv_metric.atoms(GridVariable)) > 0:  # Don't substitute if there are no metrics
-            inverses += [GridVariable('inv_AVG_met_fact')]
+        inverses = [gv('inv_AVG_a'), gv('inv_AVG_rho')]
+        to_be_replaced = [1/gv('AVG_%d_a' % direction), 1/gv('AVG_%d_rho' % direction)]
+        if len(self.inv_metric.atoms(gv)) > 0:  # Don't substitute if there are no metrics
+            inverses += [gv('inv_AVG_met_fact')]
             to_be_replaced += [1/self.inv_metric]
 
         for i, term in enumerate(avg_REV_values):
@@ -519,7 +565,6 @@ class LFCharacteristic(Characteristic):
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i, recon in enumerate(reconstructed_characteristics):
-                # pass
                 post_process_equations += flatten([self.central_diff_formula(i, recon)])
 
         reconstructed_flux = avg_REV_values*reconstructed_characteristics
@@ -548,7 +593,7 @@ class LFCharacteristic(Characteristic):
         for j, val in enumerate(stencil_points):  # j in fv stencil matrix
             for i, flux in enumerate(solution_vector):
                 solution_vector_stencil[i, j] = increment_dataset(flux, direction, val)
-                CS_matrix[i, j] = GridVariable('CS_%d%d' % (i, j))
+                CS_matrix[i, j] = gv('CS_%d%d' % (i, j))
         grid_LEV = self.generate_grid_variable_LEV(direction, name)
         characteristic_solution_stencil = grid_LEV*solution_vector_stencil
         characteristic_solution_stencil.stencil_points = stencil_points
@@ -569,9 +614,15 @@ class LFCharacteristic(Characteristic):
                 reordered.append(CF_evaluations[j+i*n_cols])
             for i in range(n_rows):
                 reordered.append(CS_evaluations[j+i*n_cols])
+
         # for eqn in reordered:
-        #     pprint(eqn)
+        #     pprint(eqn.rhs)
+        #     print(count_ops(eqn.rhs))
+        #     new = factor(eqn.rhs)
+        #     pprint(new)
+        #     print(count_ops(new))
         # exit()
+
         return reordered, CS_matrix, CF_matrix
 
     def characteristic_flux_splitting(self, ev_matrix, CS_matrix, CF_matrix, derivatives):
@@ -597,7 +648,7 @@ class LFCharacteristic(Characteristic):
         for j, val in enumerate(stencil_points):  # j in fv stencil matrix
             for i, flux in enumerate(fv):
                 flux_stencil[i, j] = increment_dataset(flux, direction, val)
-                CF_matrix[i, j] = GridVariable('CF_%d%d' % (i, j))
+                CF_matrix[i, j] = gv('CF_%d%d' % (i, j))
         grid_LEV = self.generate_grid_variable_LEV(direction, name)
         characteristic_flux_stencil = grid_LEV*flux_stencil
         characteristic_flux_stencil.stencil_points = stencil_points
@@ -607,19 +658,23 @@ class LFCharacteristic(Characteristic):
     def create_max_characteristic_wave_speed(self, pre_process_equations, direction, block):
         """ Creates the equations for local Lax-Friedrich wave speeds, maximum eigenvalues over the local
         WENO/TENO stencils are found."""
-        # stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
+        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
         ev = self.eigen_value[direction]
         out = zeros(*ev.shape)
-        stencil_points = [0,1]
+        # stencil_points = [0,1]
         for p in stencil_points:
             location_ev = self.convert_symbolic_to_dataset(ev, p, direction, block)
             for no, val in enumerate(location_ev):
                 out[no] = Max(out[no], Abs(val))
         max_wave_speed = self.generate_grid_variable_ev(direction, 'max')
         ev_equations = self.generate_equations_from_matrices(max_wave_speed, out)
+        # pprint(ev_equations)
+        FC = ConstantObject('shock_filter_control')
+        FC.value = 1.0 # Default condition has no scaling
+        ConstantsToDeclare.add_constant(FC)
         ev_equations = [x for x in ev_equations if x != 0]
         ev_lhs = [x.lhs for x in ev_equations]
-        ev_rhs = [x.rhs for x in ev_equations]
+        ev_rhs = [FC*x.rhs for x in ev_equations]
         # If there are repeated eigenvalues we don't compute them multiple times
         for no, eqn in enumerate(ev_rhs):
             if no > 0:
