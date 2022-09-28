@@ -116,21 +116,18 @@ class BinomialFilter(object):
         for u, u_f in zip(q, q_f):
             u = block.location_dataset(u)
             blended_equations += [OpenSBLIEquation(u, (1-self.sigma)*u + self.sigma*u_f)]
-        # Apply the spatial condition
-        # if self.grid_condition is not None:
-            # output_equations += self.conditional_expression(blended_equations)
-        # else:
-        ## Always enforce the grid condition just on the evaluation range
         output_equations += blended_equations
         return output_equations
 
     def reduce_grid_range(self, block, filt_class):
         original = copy.deepcopy(block.ranges)
-        start_index = list(self.grid_condition.atoms(Integer))[0]
+        # start_index = list(self.grid_condition.atoms(Integer))[0]
         direction = list(self.grid_condition.atoms(Grididx))[0].number
-        assert isinstance(start_index, Integer) and isinstance(direction, int)
+        # assert isinstance(start_index, Integer) and isinstance(direction, int)
+        boundary = 5
+        np = original[direction][-1]
         # Edit the start_index, currently assumes the filter should be applied to the end of the iteration range in that direction
-        original[direction][0] = start_index
+        original[direction][0] = np - boundary
         filt_class.custom_grid_range = original
         return
 
