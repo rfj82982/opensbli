@@ -425,9 +425,9 @@ class MetricInterfaceBC(object):
                 direction, side = bc.direction, bc.side
                 MBC_kernel = MetricBoundaryCondition(direction, side, plane=True).apply(arrays, block)
                 inner_block_interface_kernels += [MBC_kernel]
-                from sympy import pprint
-                for eqn in MBC_kernel.equations:
-                    pprint(eqn)
+                # from sympy import pprint
+                # for eqn in MBC_kernel.equations:
+                    # pprint(eqn)
                 # # print(bc.__dict__)
                 # exit()
             else:

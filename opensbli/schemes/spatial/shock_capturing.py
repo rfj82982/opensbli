@@ -104,8 +104,8 @@ class ShockCapturing(object):
                         if isinstance(rv, type(self.reconstruction_classes[0])):
                             output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[0].rhs)]
                         elif isinstance(rv, type(self.reconstruction_classes[1])):
-                            # output_eqns += [OpenSBLIEq(gv('rj%d' % no), Max(gv('rj%d' % no),self.sensor_evaluation[1].rhs))]
-                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[1].rhs)]
+                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), Max(gv('rj%d' % no),self.sensor_evaluation[1].rhs))]
+                            # output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[1].rhs)]
                         output_eqns += [rv.final_equations[-1]]
                 else:
                     output_eqns += [rv.final_equations]
@@ -538,7 +538,7 @@ class LFCharacteristic(Characteristic):
         # Take a central difference of the characteristic fluxes
         terms = [gv('CF_%d%d' % (component, j)) for j in range(len(weights))]
         formula = factor(sum([x*y for (x,y) in zip(weights, terms)]))
-        output_equation = [OpenSBLIEq(reconstruction_variable, (reconstruction_variable - formula))]
+        output_equation = [OpenSBLIEq(reconstruction_variable, gv('rj%d' % component)*(reconstruction_variable - formula))]
         return output_equation
 
     def post_process(self, direction, derivatives, block):

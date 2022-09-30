@@ -29,7 +29,7 @@ constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (True, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 Einstein_expansion = EinsteinEquation()
@@ -76,7 +76,7 @@ constituent.add_equations(eqns)
 simulation_eq.apply_metrics(metriceq)
 # Specify the numerical schemes
 schemes = {}
-rk = RungeKuttaLS(4)
+rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
 # cent = Central(4)
 cent = StoreSome(4, 'u0 u1 u2 T')
@@ -180,9 +180,12 @@ multi_block.set_equations(stat_equation_classes)
 
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
+shock_filters = []
 for no, block in enumerate(multi_block.blocks):
     if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF').equation_classes]
+        WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF')
+        shock_filters.append(WF)
+        filters[no] += [WF.equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
@@ -227,9 +230,9 @@ multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5, stats_hdf5])
 # Perform the discretization
 multi_block.discretise()
 
-for WF in filters:
-    if isinstance(WF, WENOFilter):
-        WF.update_periodic_boundary(block, halos=[-4,4])
+# Add a periodic boundary condition call for WENO filters
+for i, block in enumerate(multi_block.blocks):
+    shock_filters[i].update_periodic_boundary(block, halos=[-4,4])
 
 # Add the wake treatment kernels
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
@@ -265,21 +268,21 @@ def create_periodic_BCs(multi_block, dsets):
         arrays = [block.location_dataset(a) for a in flatten(dsets)]
         for direction in [2]:
             for side in [0,1]:
-                BC = PeriodicBC(direction, side, full_depth=True, corners=False)
+                BC = PeriodicBC(direction, side, halos=[-5,5], corners=False)
                 kernels += [BC.apply(arrays, block)]
     return kernels
 
-# Make some full swaps for interfaces before filtering
-# if conservative:
-#     dsets = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
-# else:
-#     dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
-# filter_swaps = create_periodic_BCs(multi_block, dsets)
-# for block in multi_block.blocks:
-#     for no, eq in enumerate(block.list_of_equation_classes):
-#         if isinstance(eq, UserDefinedEquations):
-#             if eq.order == 0:
-#                 eq.Kernels += filter_swaps
+# Periodic boundary condition for DRP filters
+if conservative:
+    dsets = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+else:
+    dsets = ['rho', 'u0', 'u1', 'u2', 'Et']
+DRP_periodic = create_periodic_BCs(multi_block, dsets)
+for block in multi_block.blocks:
+    for no, eq in enumerate(block.list_of_equation_classes):
+        if isinstance(eq, UserDefinedEquations):
+            if eq.order == 0:
+                eq.Kernels += DRP_periodic
 
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
@@ -288,14 +291,14 @@ OPSC(alg, OPS_diagnostics=1)
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency']
-values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67', '10']
+values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67', '100']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
-values += ['799', '480', '50', '4.5/(block0np0 - 1.0)', '7.5/(block0np1 - 1.0)', '0.05/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
+values += ['1099', '980', '50', '11.5/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '0.05/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
 # Block 1
 constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1', 'inv_rfact0_block1', 'inv_rfact1_block1', 'inv_rfact2_block1']
-values += ['1495', '480', '50', '7.5/(block1np0 - 1.0)', '7.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
+values += ['1495', '980', '50', '11.5/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
 # Block 2
 constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2', 'inv_rfact0_block2', 'inv_rfact1_block2', 'inv_rfact2_block2']
-values += ['799', '480', '50', '4.5/(block2np0 - 1.0)', '7.5/(block2np1 - 1.0)', '0.05/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
+values += ['1099', '980', '50', '11.5/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '0.05/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
 substitute_simulation_parameters(constants, values)

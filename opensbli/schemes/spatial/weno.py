@@ -257,10 +257,8 @@ class WenoReconstructionVariable(object):
         rv = self.reconstructed_symbol
         if self.settings["shock_filter"]: # Apply WENO once at the end of a full time-step as a filter
             number = int(str(self.reconstructed_symbol).split('_')[-1]) # get the index
-            if self.settings['single_wave']:
-                self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
-            else:
-                self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
+            # self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
+            self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
         else: # Regular WENO application
             if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
                 self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]

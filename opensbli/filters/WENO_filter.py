@@ -412,16 +412,13 @@ class WENOFilter(NonSimulationEquations):
         return kernel
 
     def update_periodic_boundary(self, block, halos):
+        print("Applying periodic boundary for WENO")
         bc_kernels = []
         for direction in range(block.ndim):
             for side in [0, 1]:
-                # Apply Metric BC only if that direction and side is not periodic
                 if isinstance(block.boundary_types[direction][side], PeriodicBC):
                     bc_kernels.append(PeriodicBC(direction, side, halos=halos, corners=False).apply(self.solution_vector, block))
         # Swap periodic boundary before applying WENO filter method
-        for eqn in self.equation_classes:
-            pprint(eqn.computation_name)
-            pprint(eqn.Kernels)
         self.equation_classes[0].Kernels = bc_kernels + self.equation_classes[0].Kernels
         return
 

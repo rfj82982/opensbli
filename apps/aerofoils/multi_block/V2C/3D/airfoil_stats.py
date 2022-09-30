@@ -171,6 +171,7 @@ def favre_averaged_stats(ndim, q_vector, conservative=True):
     nsamples.datatype = Int()
     # Divide at the end
     normalisation = UserDefinedEquations()
+    normalisation.order = 1000000
     normalisation.algorithm_place = AfterSimulationEnds()
     # Left hand side, names to be written by the HDF5 class
     storage_arrays = []
