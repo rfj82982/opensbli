@@ -194,8 +194,8 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Monitor the residuals
 # Simulation monitor
-arrays = ['R0max', 'R1max', 'R2max', 'R3max', 'u1_B0']
-probe_locations = ['scalar', 'scalar', 'scalar', 'scalar', (0, 100)]
+arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'u1_B0']
+probe_locations = ['residual', 'residual', 'residual', 'residual', (0, 100)]
 SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
 
 # Create algorithm
