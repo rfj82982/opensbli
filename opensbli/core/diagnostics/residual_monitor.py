@@ -11,6 +11,7 @@ from opensbli.equation_types.opensbliequations import OpenSBLIEq
 
 
 class ResidualMonitor(object):
+    """ Calculates the L2 norm of each of the residuals (dQ). The scaling is done before the SimulationMonitoring printing, separately."""
     def __init__(self, block, frequency=100):
         self.block = block
         self.ndim = block.ndim
@@ -31,10 +32,10 @@ class ResidualMonitor(object):
             if isinstance(eqn_class, SimulationEquations):
                 no_residuals = len(eqn_class.equations) + 1
         reduction_dsets = [block.location_dataset('Residual%d' % (i)) for i in range(no_residuals)]
-        reduction_names = ['R%dmax' % i for i in range(no_residuals)]
-        reduction_vars = [ReductionVariable(x, 'max') for x in reduction_names]
+        reduction_names = ['L2_R%d' % i for i in range(no_residuals)]
+        reduction_vars = [ReductionVariable(x, 'sum') for x in reduction_names]
         # Create reduction equations
-        output_equations = [OpenSBLIEq(x, reduction_dsets[i]) for i, x in enumerate(reduction_vars)]
+        output_equations = [OpenSBLIEq(x, reduction_dsets[i]**2) for i, x in enumerate(reduction_vars)]
         filter_class.add_equations(output_equations)
         self.equation_classes.append(filter_class)
         return

@@ -13,8 +13,12 @@ class Monitor(object):
         return
 
 class ScalarMonitor(object):
-    def __init__(self, scalar):
+    def __init__(self, scalar, output=None):
         self.scalar = scalar
+        if output == None:
+            self.output = scalar + '_out'
+        else:
+            self.output = output
         return
 
 
@@ -34,7 +38,12 @@ class SimulationMonitor(object):
             raise ValueError("The number of arrays must equal the number of probe locations.")
         # Check whether monitoring an array or a single value from a reduction already performed
         self.array_monitors = [Monitor(var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if isinstance(loc, tuple)]
-        self.scalar_monitors = [ScalarMonitor(arrays[index]) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if not isinstance(loc, tuple)]
+        self.scalar_monitors = [ScalarMonitor(arrays[index], output=loc) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if not isinstance(loc, tuple)]
+        # Check if the scalar monitors have to be scaled before printing
+        for SM in self.scalar_monitors:
+            if SM.output == 'residual':
+                grid_factor = '*'.join([str(block.ranges[i][1]) for i in range(block.ndim)])
+                SM.output = 'sqrt(%s_out/(%s))' % (SM.scalar, grid_factor)
         if OPS_V2:
             self.ops_headers = {'input': "const ACC<%s> &%s", 'output': 'ACC<%s> &%s', 'inout': 'ACC<%s> &%s'}
         else:
@@ -147,7 +156,7 @@ class SimulationMonitor(object):
         iterations = ['iter+1', '(iter+1)*dt']
         variables = ["%s_%d_output" % (str(M.flow_var), M.probe_no) for M in self.array_monitors]
         # Scalar variables
-        variables += ["%s_out" % str(M.scalar) for M in self.scalar_monitors]
+        variables += ["%s" % str(M.output) for M in self.scalar_monitors]
         # Normalise mean quantities by the number of iterations
         for i, var in enumerate(variables):
             if 'mean' in var:
