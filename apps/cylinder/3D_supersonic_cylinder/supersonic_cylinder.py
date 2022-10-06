@@ -6,13 +6,13 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import pi, sin, cos, Abs, sqrt
 
 # Problem dimension
-ndim = 2
+ndim = 3
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 # symbol for the coordinate system in the equations
@@ -72,7 +72,9 @@ local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataOb
 
 # Initial conditions as strings
 u0 = "Eq(GridVariable(u0),1.0)"
-u1 = "Eq(GridVariable(u1), 0.0,)"
+u1 = "Eq(GridVariable(u1), 0.0)"
+u2 = "Eq(GridVariable(u2), 0.0)"
+
 p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
 r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
 
@@ -80,12 +82,14 @@ if conservative:
     rho = "Eq(DataObject(rho), r)"
     rhou0 = "Eq(DataObject(rhou0), r*u0)"
     rhou1 = "Eq(DataObject(rhou1), r*u1)"
-    rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2))"
+    rhou2 = "Eq(DataObject(rhou2), r*u2)"
+    rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2 + u1**2 + u2**2))"
 else:
     rho = "Eq(DataObject(rho), r)"
     rhou0 = "Eq(DataObject(u0), u0)"
     rhou1 = "Eq(DataObject(u1), u1)"
-    rhoE = "Eq(DataObject(Et), p/(rho*(gama-1)) + 0.5*(u0**2+ u1**2))"
+    rhou2 = "Eq(DataObject(u2), u2)"
+    rhoE = "Eq(DataObject(Et), p/(rho*(gama-1)) + 0.5*(u0**2 + u1**2 + u2**2))"
 eqns = [u0, u1, p, r, rho, rhou0, rhou1, rhoE]
 
 # parse the initial conditions
@@ -97,7 +101,7 @@ initial.add_equations(initial_equations)
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
-fns = 'u0 u1 T'
+fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
@@ -125,6 +129,11 @@ boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
 # Far field boundary
 direction, side = 1,1
 boundaries += [DirichletBC(direction, side, initial_equations)]
+# Periodic span
+direction = 2
+# Apply a periodic boundary over the shared mesh line
+boundaries += [PeriodicBC(direction, 0, halos=[-2,2], corners=False)]
+boundaries += [PeriodicBC(direction, 1, halos=[-2,2], corners=False)]
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
 
@@ -148,7 +157,7 @@ block.set_equations(SFD.equation_classes)
 
 j = block.grid_indexes[1]
 grid_condition = j >= 778
-BF = BinomialFilter(block, order=6, directions=[0,1], grid_condition=grid_condition, sigma=0.2)
+BF = BinomialFilter(block, order=6, directions=[0,1,2], grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
 DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.1, wall_control=True, multi_block=None)
@@ -175,7 +184,7 @@ WF.update_periodic_boundary(block, halos=[-5,5])
 def create_exchange_calls_codes(block, dsets):
     kernels = []
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
-    for direction in [0]:
+    for direction in [0,2]:
         for side in [0,1]:
             BC = PeriodicBC(direction, side, halos=[-5,5], corners=False)
             kernels += [BC.apply(arrays, block)]
@@ -183,9 +192,9 @@ def create_exchange_calls_codes(block, dsets):
 
 # Make some full swaps for interfaces before filtering
 if conservative:
-    filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhoE'])
+    filter_swaps = create_exchange_calls_codes(block, ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE'])
 else:
-    filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'Et'])
+    filter_swaps = create_exchange_calls_codes(block, ['rho', 'u0', 'u1', 'u2', 'Et'])
 
 for no, eq in enumerate(block.list_of_equation_classes):
     if isinstance(eq, UserDefinedEquations):
@@ -194,8 +203,8 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Monitor the residuals
 # Simulation monitor
-arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'u1_B0']
-probe_locations = ['residual', 'residual', 'residual', 'residual', (0, 100)]
+arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'L2_R4', 'u1_B0']
+probe_locations = ['residual', 'residual', 'residual', 'residual', 'residual', (0, 100, 50)]
 SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
 
 # Create algorithm
@@ -205,7 +214,7 @@ SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg)
 # Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'shock_fact']
-values = ['300.0', '1.4', '1.5', '0.71', '0.0001', '5000000', '598', '782', '242.2/(block0np0-1)', '242.2/(block0np1-1)', '1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '500.0']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0',  'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'shock_factor']
+values = ['250.0', '1.4', '1.2', '0.71', '0.00005', '5000000', '598', '782', '100', '242.2/(block0np0-1)', '242.2/(block0np1-1)', '5.0/(block0np2)','1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '500.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho', every=100)
