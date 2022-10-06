@@ -6,9 +6,10 @@ from opensbli.core.datatypes import SimulationDataType
 
 
 class Monitor(object):
-    def __init__(self, flow_var, probe_loc, numbering):
+    def __init__(self, block, flow_var, probe_loc, numbering):
         self.flow_var = flow_var
         self.probe_loc = probe_loc
+        assert len(probe_loc) == block.ndim
         self.probe_no = numbering
         return
 
@@ -37,7 +38,7 @@ class SimulationMonitor(object):
         if len(arrays) != len(probe_locations):
             raise ValueError("The number of arrays must equal the number of probe locations.")
         # Check whether monitoring an array or a single value from a reduction already performed
-        self.array_monitors = [Monitor(var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if isinstance(loc, tuple)]
+        self.array_monitors = [Monitor(block, var, loc, index) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if isinstance(loc, tuple)]
         self.scalar_monitors = [ScalarMonitor(arrays[index], output=loc) for index, (var, loc) in enumerate(zip(arrays, probe_locations)) if not isinstance(loc, tuple)]
         # Check if the scalar monitors have to be scaled before printing
         for SM in self.scalar_monitors:
