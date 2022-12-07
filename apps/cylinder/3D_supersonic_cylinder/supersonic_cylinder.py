@@ -90,7 +90,7 @@ else:
     rhou1 = "Eq(DataObject(u1), u1)"
     rhou2 = "Eq(DataObject(u2), u2)"
     rhoE = "Eq(DataObject(Et), p/(rho*(gama-1)) + 0.5*(u0**2 + u1**2 + u2**2))"
-eqns = [u0, u1, p, r, rho, rhou0, rhou1, rhoE]
+eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]
 
 # parse the initial conditions
 initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
@@ -141,8 +141,7 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write", "write_constants" : True}
 h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('Mach_sensor'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
-kwargs = {'iotype': "Read"}
+h5.add_arrays([DataObject('kappa')])
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([h5, h5_read])
@@ -205,7 +204,7 @@ for no, eq in enumerate(block.list_of_equation_classes):
 # Simulation monitor
 arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'L2_R4', 'u1_B0']
 probe_locations = ['residual', 'residual', 'residual', 'residual', 'residual', (0, 100, 50)]
-SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
+SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=1000, output_file='residuals.log')
 
 # Create algorithm
 alg = TraditionalAlgorithmRK(block, SM)
