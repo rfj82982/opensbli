@@ -9,6 +9,8 @@ from opensbli.utilities.helperfunctions import increment_dataset
 
 class ShockSensor(object):
     def __init__(self):
+        self.epsilon = ConstantObject('epsilon')
+        self.epsilon.value = 1.0e-12
         return
 
     def ducros_equations(self, block, coordinate_symbol, metrics=None, name='theta', Mach=None):
@@ -22,9 +24,9 @@ class ShockSensor(object):
         cart = CoordinateObject('x_i')
         cartesian_coordinates = [cart.apply_index(cart.indices[0], dim) for dim in range(ndim)]
 
-        self.epsilon, Minf = ConstantObject('epsilon'), ConstantObject('Minf')
+        # Minf = ConstantObject('Minf')
         sensor_array = block.location_dataset('%s' % name)
-        self.epsilon.value = 1.0e-12
+
         # Calculate vorticity
         if block.ndim == 2:
             dx, dy = block.deltas
@@ -48,7 +50,7 @@ class ShockSensor(object):
             divergence = metrics.apply_transformation(divergence)
 
         c = ConstantObject('Ducros_sensitivity')
-        c.value = 0.1
+        c.value = 0.2
         CTD.add_constant(c)
         tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + c*divergence.rhs)))
         # tanh_filter = 1.0
@@ -61,20 +63,30 @@ class ShockSensor(object):
         return output_eqns, sensor_array
 
     def Ren_sensor(self, block):
-        output = 0
+        eps = 0.001
         # r_j
         base_loc = 0
         pm, p, pp = increment_dataset(block.location_dataset('p'), 0, base_loc -1), increment_dataset(block.location_dataset('p'), 0, base_loc), increment_dataset(block.location_dataset('p'), 0, base_loc + 1)
         ph, mh = pp - p, p - pm
-        rj1 = (Abs(2*ph*mh) + self.epsilon) / (ph**2 + mh**2 + self.epsilon)
+        rj1 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
         # r_(j+1)
         base_loc = 1
         pm, p, pp = increment_dataset(block.location_dataset('p'), 0, base_loc -1), increment_dataset(block.location_dataset('p'), 0, base_loc), increment_dataset(block.location_dataset('p'), 0, base_loc + 1)
         ph, mh = pp - p, p - pm
-        rj2 = (Abs(2*ph*mh) + self.epsilon) / (ph**2 + mh**2 + self.epsilon)
-
-        rj_half = Min(rj1, rj2)
-        return
+        rj2 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
+        output = 1 - Min(rj1, rj2)
+        for dire in range(1, block.ndim):
+            base_loc = 0
+            pm, p, pp = increment_dataset(block.location_dataset('p'), dire, base_loc -1), increment_dataset(block.location_dataset('p'), dire, base_loc), increment_dataset(block.location_dataset('p'), dire, base_loc + 1)
+            ph, mh = pp - p, p - pm
+            rj1 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
+            # r_(j+1)
+            base_loc = 1
+            pm, p, pp = increment_dataset(block.location_dataset('p'), dire, base_loc -1), increment_dataset(block.location_dataset('p'), dire, base_loc), increment_dataset(block.location_dataset('p'), dire, base_loc + 1)
+            ph, mh = pp - p, p - pm
+            rj2 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
+            output = Max(output, 1 - Min(rj1, rj2))
+        return output
 
 
     def Jameson_sensor(self, block):

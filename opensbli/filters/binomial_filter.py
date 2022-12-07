@@ -88,6 +88,8 @@ class BinomialFilter(object):
                     q = ['rho', 'u0', 'u1', 'Et']
             elif ndim == 3:
                 q = ['rho', 'u0', 'u1', 'u2', 'Et']
+        # Average only on the given directions
+
         # Create the three point stencils
         q_xstencil = self.create_stencil(block, q, 0)
         q_ystencil = self.create_stencil(block, q, 1)
@@ -104,10 +106,10 @@ class BinomialFilter(object):
             output_equations += self.filtered_equations(q_fz, q_zstencil)
         # Average the filter
         q_f = [GridVariable(u + "_filtered") for u in q]
-        if ndim == 2:
+        if len(self.directions) == 2:
             for u_f, u_fx, u_fy in zip(q_f, q_fx, q_fy):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy)/2.0)]
-        elif ndim == 3:
+        elif len(self.directions) == 3:
             for u_f, u_fx, u_fy, u_fz in zip(q_f, q_fx, q_fy, q_fz):
                 output_equations += [OpenSBLIEquation(u_f, (u_fx + u_fy + u_fz)/3.0)]
 
