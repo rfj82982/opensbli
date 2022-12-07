@@ -10,7 +10,7 @@ stats = True
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (True, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 
@@ -125,6 +125,9 @@ schemes[cent.name] = cent
 rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 
+# set the discretisation schemes
+block.set_discretisation_schemes(schemes)
+
 # Create boundaries, one for each side per dimension
 q_vector = flatten(simulation_eq.time_advance_arrays)
 boundaries = []
@@ -134,14 +137,44 @@ boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
 boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
-# Energy on the wall is set
-if conservative:
-    wall_energy = [Eq(q_vector[-1], q_vector[0]*Twall / (gama * Minf**2.0 * (gama - S.One)))]
+# Boundary-layer tripping
+tripped = True
+if tripped:
+    Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
+    # Time dependence
+    current_iter = block.get_temporal_schemes[0].iteration_number # Current iteration number
+    dt, omega0, omega1, omega2 = symbols('dt omega_0 omega_1 omega_2', **{'cls': ConstantObject})
+    t = dt*current_iter 
+    # Spatial Modes
+    k0, k1, k2 = symbols('k_0 k_1 k_2', **{'cls': ConstantObject})
+    phi0, phi1, phi2 = symbols('phi_0 phi_1 phi_2', **{'cls': ConstantObject})
+    # Coordinate arrays
+    x0, z0 = DataObject('x0'), DataObject('x2')
+    conditional_expressions = []
+    # Suction side trip
+    SS_trip = Amp*(exp(-(x0 - xts)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    # Pressure side trip
+    PS_trip = Amp*(exp(-(x0 - xtp)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    # Index in x direction, assuming anti-clockwise grid configuration here
+    idx = block.grid_indexes[0]
+    expr_condition_pairs = Piecewise((SS_trip, idx > ConstantObject('block0np0')/2), (PS_trip, idx < ConstantObject('block0np0')/2),  (0, True))
+    v = OpenSBLIEq(GridVariable('v'), expr_condition_pairs)
+    rhov_wall = OpenSBLIEq(DataObject('rhou1'), DataObject('rho')*GridVariable('v'))
+    # Adding the non-zero V component to the calculation of rhoE at the wall
+    rhoE_wall = OpenSBLIEq(DataObject('rhoE'), DataObject('rho')*Twall/(gama*(gama-1.0)*Minf**2.0) + 0.5*DataObject('rho')*GridVariable('v')**2)
+    # Equations to set rhov and rhoE on the wall
+    wall_eqns = [rhov_wall, rhoE_wall]
+    boundaries += [ForcingStripBC(direction, 0, v, wall_eqns)]
 else:
-    wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
-direction = 1
-lower_wall_eq = wall_energy[:]
-boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
+    # Energy on the wall is set
+    if conservative:
+        wall_energy = [Eq(q_vector[-1], q_vector[0]*Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    else:
+        wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    direction = 1
+    lower_wall_eq = wall_energy[:]
+
+    boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
 # Far field boundary
 direction, side = 1,1
 boundaries += [DirichletBC(direction, side, initial_equations)]
@@ -165,9 +198,9 @@ else:
 block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
 
 # Set the IO class to write out arrays
-h5 = iohdf5(save_every=1000, **{'iotype': "Write"})
+h5 = iohdf5(save_every=2500, **{'iotype': "Write"})
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('kappa'), DataObject('Mach_sensor')]) # shock sensor array
+h5.add_arrays([DataObject('kappa'), DataObject('Ren_sensor')]) # shock sensor array
 # Read grid file
 h5_read = iohdf5(**{'iotype': "Read"})
 h5_read.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
@@ -190,9 +223,6 @@ block.set_equations(DRP.equation_classes)
 # WENO filter for shock-capturing
 WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=True)
 block.set_equations(WF.equation_classes)
-
-# set the discretisation schemes
-block.set_discretisation_schemes(schemes)
 
 # Discretise the equations on the block
 block.discretise()
@@ -226,6 +256,10 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_diagnostics=1)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
-values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '647', '50', '49.0/(block0np0-1)', '49.0/(block0np1-1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0' ]
+values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '2607', '562', '50', '2.0461756979465546/(block0np0-1)', '49.0/(block0np1)', '0.05/(block0np2-1)', '1.0', '10', '273.15', '110.4', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0' ]
+
+# Add forcing modes
+constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
+values += ['0.05', '0.00833', '0.2', '0.5', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
