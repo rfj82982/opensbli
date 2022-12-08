@@ -1,4 +1,4 @@
-from opensbli.core.boundary_conditions.bc_core import BoundaryConditionBase, ModifyCentralDerivative
+from opensbli.core.boundary_conditions.bc_core import BoundaryConditionBase, ModifyCentralDerivative, WallBC
 from opensbli.core.boundary_conditions.Carpenter_scheme import Carpenter
 from opensbli.utilities.helperfunctions import increment_dataset
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
@@ -9,7 +9,7 @@ from opensbli.schemes.spatial.weno import ShockCapturing
 from opensbli.core.grid import GridVariable
 
 
-class ForcingStripBC(ModifyCentralDerivative, BoundaryConditionBase):
+class ForcingStripBC(ModifyCentralDerivative, BoundaryConditionBase, WallBC):
     """ Navier-Stokes specific boundary condition. Applies a no-slip viscous wall condition,
     velocity components are zero on the wall. Temperature is fixed with a prescribed wall temperature,
     given as the rhoE equation passed to this BC. A wall normal velocity is set based on the equation passed by the user.

@@ -1,7 +1,7 @@
 """ David J. Lusher 09/21. Dispersion Relation Preserving (DRP) explicit filters."""
 
 from opensbli import *
-from sympy import pprint, Piecewise, factor, Or, simplify
+from sympy import pprint, Piecewise, factor, Or, simplify, And
 from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation
 from opensbli.postprocess.post_process_eq import *
@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.2, wall_control=False, airfoil=True, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.3333333, wall_control=False, airfoil=True, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -146,19 +146,41 @@ class ExplicitFilter(object):
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
         output = []
+        # Spatially control the strength to reduce filter in the boundary-layer
+        st = GridVariable('strength')
+        error_indicator = ConstantObject('error_indicator')
+        error_indicator.value = 0.5
+        CTD.add_constant(error_indicator)
+        cases = []
+        # Create conditions for adaptive filtering strength
+        # Apply filtering if needed over the entire [-5, 5] range in this direction
+        locations = self.locations
+        fmax = increment_dataset(self.Ren, direction, locations[0])
+        for loc in locations[1:]:
+            fmax = Max(increment_dataset(self.Ren, direction, loc), fmax)
+        
+        output += [OpenSBLIEq(gv('Ren'), fmax)]
+        # Case 1: inside the boundary-layer, strong filtering region where sensor active
+        cases += [ExprCondPair(3, And(Equality(self.filter_mask, 0), gv('Ren') >= error_indicator))]
+        # Case 2: inside the boundary-layer, very weak filtering
+        cases += [ExprCondPair(0.01, And(Equality(self.filter_mask, 0), gv('Ren') < error_indicator))]
+        # Case 3: Outside of the boundary-layer, regular uniform filtering
+        cases += [ExprCondPair(1, True)]
+        output += [OpenSBLIEq(st, Piecewise(*cases))]
+
         if self.filter_type == 'DRP':
             for dset_id, dset in enumerate(self.q_vector):
                 stencil = []
                 for i, location in enumerate(self.locations):
                     stencil.append(self.weights[i]*increment_dataset(dset, direction, location))
-                output += [OpenSBLIEq(self.temp_arrays[dset_id], simplify(sum(stencil)))]
+                output += [OpenSBLIEq(self.temp_arrays[dset_id], st*simplify(sum(stencil)))]
         elif self.filter_type == 'Visbal':
             for dset_id, dset in enumerate(self.q_vector):
                 stencil = []
                 total = 0
                 for i in range(len(self.weights)):
                     total += Rational(1,2)*self.weights[i]*(increment_dataset(dset, direction, +i) + increment_dataset(dset, direction, -i))
-                output += [OpenSBLIEq(self.temp_arrays[dset_id], factor(total))]
+                output += [OpenSBLIEq(self.temp_arrays[dset_id], st*factor(total))]
         else:
             raise ValueError("Wrong type of explicit filter specified.")
         # Restrict the filter if close to the wall, in the wall normal direction
@@ -215,6 +237,26 @@ class ExplicitFilter(object):
                     update += [OpenSBLIEq(dset, dset - self.sigma*(dset - self.temp_arrays[dset_id+1]*inv_rho))]
         return application, update
 
+
+    def pressure_correction(self, block, order=0):
+        # Pressure gradient sensor
+        SS = ShockSensor()
+        Ren_output = SS.Ren_sensor(block)
+        self.Ren = block.location_dataset('Ren_sensor')
+        output_eqns = [OpenSBLIEq(self.Ren, Ren_output)]
+        # Combine with Ducros sensor
+        # grid_halos = []
+        # for _ in range(self.ndim):
+        #     grid_halos.append([set(), set()])
+        # pressure_kernel = self.create_kernel('Pressure gradient sensor', flatten(output_eqns), grid_halos, block)
+        # self.add_kernel(pressure_kernel)
+
+        UDF = UserDefinedEquations()
+        UDF.algorithm_place = InTheSimulation(frequency=self.freq)
+        UDF.order = order
+        UDF.add_equations(output_eqns)
+        return UDF
+
     def create_UDF(self, block, equations, direction, order, UDF_type):
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=self.freq)
@@ -240,18 +282,40 @@ class ExplicitFilter(object):
     def reduce_grid_range(self, block, filt_class):
         original = copy.deepcopy(block.ranges)
         direction = 1
-        start = 5
+        start = 1
         # original_start = original[direction][0]
         # Edit the start_index, currently assumes the filter should be applied to the end of the iteration range in that direction
         original[direction][0] = start
         filt_class.custom_grid_range = original
         return
 
+    def airfoil_mask(self, block):
+        """ Mask the spatial areas to apply filtering to."""
+        UDF = UserDefinedEquations()
+        UDF.algorithm_place = BeforeSimulationStarts()
+        UDF.computation_name = 'Airfoil_filter_mask'
+        # Filter regions
+        x, y = block.location_dataset('x0'), block.location_dataset('x1')
+        filter_condition = [ExprCondPair(0, And(Abs(y) < 0.1, x > 0.2))]
+        filter_condition += [ExprCondPair(1, True)]
+        self.filter_mask = block.location_dataset('filter_mask')
+        output_eqns = [OpenSBLIEq(self.filter_mask, Piecewise(*filter_condition))]
+        UDF.add_equations(output_eqns)
+        UDF.order = 10000
+        return UDF
+
     def create_filter(self, block):
         self.equation_classes = []
+        # Create a mask if airfoil problem
+        if self.airfoil:
+            mask_UDF = self.airfoil_mask(block)
+            # Error indicator
+            error_UDF = self.pressure_correction(block)
+            self.equation_classes += [mask_UDF, error_UDF]
         # Zero the arrays
         zeroed = self.zero_temp_arrays() #### TODO: zero before each direction one by one
         self.equation_classes += [self.create_UDF(block, zeroed, 0, 0+block.blocknumber, 'Zeroing')]
+
         # Check for non-periodic boundaries
         if self.wall_control:
             self.detect_wall_boundaries()
