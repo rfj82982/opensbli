@@ -79,8 +79,7 @@ class MainPrg(Loop):
 
 
 class Condition(object):
-    """ Used for setting the conditions in the program, example
-    """
+    """ Used for setting the conditions in the program, example."""
 
     def __init__(self, condition):
         self.condition = condition
@@ -113,8 +112,7 @@ class Condition(object):
 
     @property
     def opsc_code(self):
-        """ Writes the OPS C version of the code by looping over the components
-        """
+        """ Writes the OPS C version of the code by looping over the components."""
         code = self.opsc_condition_start
         for c in self.components:
             code += c.opsc_code
@@ -123,8 +121,7 @@ class Condition(object):
 
     @property
     def opsc_condition_start(self):
-        """ The starting loop for a if condition in OPS C
-        """
+        """ The starting loop for a if condition in OPS C."""
         from opensbli.code_generation.opsc import OPSCCodePrinter
         code = OPSCCodePrinter().doprint(self.condition)
         code = 'if (' + code + '){'
@@ -132,9 +129,8 @@ class Condition(object):
 
     @property
     def opsc_condition_end(self):
-        """ The loop end for an if condition in OPS C
-        """
-        return ['}']
+        """ The loop end for an if condition in OPS C."""
+        return ['}\n']
 
 
 class DoLoop(Loop):
@@ -322,7 +318,7 @@ class Timers(object):
         code = []
         code += ["ops_printf(\"\\nTimings are:\\n\");"]
         code += ["ops_printf(\"-----------------------------------------\\n\");"]
-        code += ["ops_printf(\"Total Wall time %%lf\\n\",%s-%s);" % (self._end_variables[1], self._start_variables[1])]
+        code += ["ops_printf(\"Total Wall time %%lf\\n\",%s-%s);\n" % (self._end_variables[1], self._start_variables[1])]
         return code
 
 

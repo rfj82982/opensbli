@@ -238,21 +238,15 @@ class ExplicitFilter(object):
         return application, update
 
 
-    def pressure_correction(self, block, order=0):
-        # Pressure gradient sensor
+    def pressure_correction(self, block, order):
+        # Pressure gradient sensor for targeted filtering
         SS = ShockSensor()
         Ren_output = SS.Ren_sensor(block)
         self.Ren = block.location_dataset('Ren_sensor')
         output_eqns = [OpenSBLIEq(self.Ren, Ren_output)]
-        # Combine with Ducros sensor
-        # grid_halos = []
-        # for _ in range(self.ndim):
-        #     grid_halos.append([set(), set()])
-        # pressure_kernel = self.create_kernel('Pressure gradient sensor', flatten(output_eqns), grid_halos, block)
-        # self.add_kernel(pressure_kernel)
-
         UDF = UserDefinedEquations()
         UDF.algorithm_place = InTheSimulation(frequency=self.freq)
+        UDF.computation_name = 'Block %d: pressure sensor evaluation' % (block.blocknumber)
         UDF.order = order
         UDF.add_equations(output_eqns)
         return UDF
@@ -296,7 +290,7 @@ class ExplicitFilter(object):
         UDF.computation_name = 'Airfoil_filter_mask'
         # Filter regions
         x, y = block.location_dataset('x0'), block.location_dataset('x1')
-        filter_condition = [ExprCondPair(0, And(Abs(y) < 0.1, x > 0.2))]
+        filter_condition = [ExprCondPair(0, And(Abs(y) < 0.1, x > 0.1))]
         filter_condition += [ExprCondPair(1, True)]
         self.filter_mask = block.location_dataset('filter_mask')
         output_eqns = [OpenSBLIEq(self.filter_mask, Piecewise(*filter_condition))]
@@ -306,15 +300,16 @@ class ExplicitFilter(object):
 
     def create_filter(self, block):
         self.equation_classes = []
+        # Zero the arrays
+        zeroed = self.zero_temp_arrays() #### TODO: zero before each direction one by one
+        self.equation_classes += [self.create_UDF(block, zeroed, 0, 0+block.blocknumber, 'Zeroing')]
+
         # Create a mask if airfoil problem
         if self.airfoil:
             mask_UDF = self.airfoil_mask(block)
             # Error indicator
-            error_UDF = self.pressure_correction(block)
+            error_UDF = self.pressure_correction(block, order=block.blocknumber*10 + self.nblocks - 1) # evaluate before the filters
             self.equation_classes += [mask_UDF, error_UDF]
-        # Zero the arrays
-        zeroed = self.zero_temp_arrays() #### TODO: zero before each direction one by one
-        self.equation_classes += [self.create_UDF(block, zeroed, 0, 0+block.blocknumber, 'Zeroing')]
 
         # Check for non-periodic boundaries
         if self.wall_control:
