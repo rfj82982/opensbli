@@ -76,7 +76,7 @@ constituent.add_equations(eqns)
 simulation_eq.apply_metrics(metriceq)
 # Specify the numerical schemes
 schemes = {}
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
 cent = StoreSome(4, 'u0 u1 u2 T')
@@ -136,14 +136,54 @@ mb_bcs[0] = block0_bc
 block1_bc = []
 block1_bc.append(InterfaceBC(direction=0, side=0, halos=[-2,2], name="block1_to_block0", match=(0, 0, 0, True)))
 block1_bc.append(InterfaceBC(direction=0, side=1, halos=[-2,2], name="block1_to_block2", match=(2, 0, 0, False)))
-# Wall temperature is required for halo points
-Twall = ConstantObject('Twall')
-Twall.value = 1.0
-if conservative:
-    wall_energy = [Eq(q_vector[-1], Twall*q_vector[0]/((gama-1.0)*gama*Minf*Minf))]
+
+## Wall condition
+# Isothermal wall in x1 direction
+gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
+# Boundary-layer tripping
+tripped = True
+direction, side = 1, 0
+if tripped:
+    Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
+    # Time dependence
+    # current_iter = multi_block.get_block(nblocks-1).get_temporal_schemes[0].iteration_number # Current iteration number
+    current_iter = Globalvariable("iter", integer=True)
+    dt, omega0, omega1, omega2 = symbols('dt omega_0 omega_1 omega_2', **{'cls': ConstantObject})
+    t = dt*current_iter 
+    # Spatial Modes
+    k0, k1, k2 = symbols('k_0 k_1 k_2', **{'cls': ConstantObject})
+    phi0, phi1, phi2 = symbols('phi_0 phi_1 phi_2', **{'cls': ConstantObject})
+    # Coordinate arrays
+    x0, z0 = DataObject('x0'), DataObject('x2')
+    conditional_expressions = []
+    # Suction side trip
+    SS_trip = Amp*(exp(-(x0 - xts)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    # Pressure side trip
+    PS_trip = Amp*(exp(-(x0 - xtp)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    # Index in x direction, assuming anti-clockwise grid configuration here
+    idx = multi_block.get_block(1).grid_indexes[0] # x index on block 1 (airfoil block)
+    expr_condition_pairs = Piecewise((SS_trip, idx > ConstantObject('block1np0')/2), (PS_trip, idx < ConstantObject('block1np0')/2),  (0, True))
+    v = OpenSBLIEq(GridVariable('v'), expr_condition_pairs)
+    rhov_wall = OpenSBLIEq(DataObject('rhou1'), DataObject('rho')*GridVariable('v'))
+    # Adding the non-zero V component to the calculation of rhoE at the wall
+    rhoE_wall = OpenSBLIEq(DataObject('rhoE'), DataObject('rho')*Twall/(gama*(gama-1.0)*Minf**2.0) + 0.5*DataObject('rho')*GridVariable('v')**2)
+    # Equations to set rhov and rhoE on the wall
+    wall_eqns = [rhov_wall, rhoE_wall]
+    wall_energy = [rhoE_wall]
+    block1_bc.append(ForcingStripBC(direction, 0, v, wall_eqns, corners=False, multi_block=True))
 else:
-    wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy, multi_block=True))
+    # Energy on the wall is set
+    if conservative:
+        wall_energy = [Eq(q_vector[-1], q_vector[0]*Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    else:
+        wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    direction = 1
+    lower_wall_eq = wall_energy[:]
+
+    block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=lower_wall_eq, multi_block=True))
+
+
+## Farfield
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 block1_bc.append(PeriodicBC(direction=2, side=0, halos=[-2,2], corners=False))
 block1_bc.append(PeriodicBC(direction=2, side=1, halos=[-2,2], corners=False))
@@ -183,13 +223,13 @@ filters = {0:[], 1:[], 2:[]}
 shock_filters = []
 for no, block in enumerate(multi_block.blocks):
     if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF')
+        WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF')
         shock_filters.append(WF)
         filters[no] += [WF.equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.3333333, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
@@ -268,7 +308,7 @@ def create_periodic_BCs(multi_block, dsets):
         arrays = [block.location_dataset(a) for a in flatten(dsets)]
         for direction in [2]:
             for side in [0,1]:
-                BC = PeriodicBC(direction, side, halos=[-5,5], corners=False)
+                BC = PeriodicBC(direction, side, halos=[-4,4], corners=False)
                 kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -290,15 +330,20 @@ OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency']
-values = ['1.4', '0.70', '0.72', '5.0e5', '1.0e-4', '1000000', '0.01', '110.4', '268.67', '100']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor', 'Twall']
+values = ['1.4', '0.70', '0.72', '5.0e5', '4.0e-5', '1000000', '0.01', '110.4', '268.67', '100', '1.0', '1.0']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
 values += ['1099', '980', '50', '11.5/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '0.05/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
 # Block 1
 constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1', 'inv_rfact0_block1', 'inv_rfact1_block1', 'inv_rfact2_block1']
-values += ['1495', '980', '50', '11.5/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
+values += ['1495', '980', '50', '2.0461756979465546/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
 # Block 2
 constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2', 'inv_rfact0_block2', 'inv_rfact1_block2', 'inv_rfact2_block2']
 values += ['1099', '980', '50', '11.5/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '0.05/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
+
+# Add forcing modes
+constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
+values += ['0.05', '0.00833', '0.2', '0.5', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
+
 substitute_simulation_parameters(constants, values)

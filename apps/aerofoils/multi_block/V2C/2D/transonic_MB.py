@@ -179,31 +179,31 @@ for no, block in enumerate(multi_block.blocks):
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.2, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1], width=11, filter_type='Visbal', optimized=False, sigma=0.05, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
     i, j = block.grid_indexes[0], block.grid_indexes[1]
     if no == 0:
         grid_condition = i >= 794
-        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        filters[no] += [BinomialFilter(block, order=6, sigma=0.8, grid_condition=grid_condition).equation_classes]
         grid_condition = j >= 475
-        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        filters[no] += [BinomialFilter(block, order=6, sigma=0.8, grid_condition=grid_condition).equation_classes]
     elif no == 1:
         grid_condition = j >= 475
-        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        filters[no] += [BinomialFilter(block, order=6, sigma=0.8, grid_condition=grid_condition).equation_classes]
     elif no == 2:
         grid_condition = i >= 794
-        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        filters[no] += [BinomialFilter(block, order=6, sigma=0.8, grid_condition=grid_condition).equation_classes]
         grid_condition = j >= 475
-        filters[no] += [BinomialFilter(block, order=6, grid_condition=grid_condition).equation_classes]
+        filters[no] += [BinomialFilter(block, order=6, sigma=0.8, grid_condition=grid_condition).equation_classes]
 multi_block.set_filters(filters)
 
 # HDF5 input/output
 kwargs = {'iotype': "Write"}
 q_hdf5 = iohdf5(save_every=1000, **kwargs)
 q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
-q_hdf5.add_arrays([DataObject('kappa'), DataObject('Mach_sensor'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
+q_hdf5.add_arrays([DataObject('kappa'), DataObject('q0')])
 # Read in the grid file
 kwargs = {'iotype': "Read"}
 x,y = symbols("x0, x1", **{'cls':DataObject})
@@ -253,8 +253,8 @@ OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency']
-values = ['1.4', '0.70', '0.72', '5.0e5', '3.0e-5', '1000000', '0.01', '110.4', '268.67', '10']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor']
+values = ['1.4', '0.70', '0.72', '5.0e5', '3.0e-5', '1000000', '0.01', '110.4', '268.67', '10', '50.0']
 # Block 0
 constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'inv_rfact0_block0', 'inv_rfact1_block0']
 values += ['1099', '980', '11.5/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '1.0/Delta0block0', '1.0/Delta1block0']
