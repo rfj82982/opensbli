@@ -333,9 +333,6 @@ class WENOFilter(NonSimulationEquations):
         # Turn off the sensor at the walls
         wall_detection, wall_equations = self.wall_control()
         modified_equations += wall_equations
-        # detJ if needed
-        modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
-
         # check = self.kappa
         # for direction in range(self.ndim):
         #     for loc in [-2, -1, 0, 1, 2]:
@@ -348,13 +345,20 @@ class WENOFilter(NonSimulationEquations):
         kappa_fact = self.kappa
 
         shock_factor = ConstantObject('shock_factor')
-        # shock_factor.value = 500.0
+        shock_factor.value = 1
         CTD.add_constant(shock_factor)
+
+        # detJ if needed
+        if self.curvilinear and self.airfoil:
+            modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            detJ_term = gv('inv_detJ')
+        else:
+            detJ_term = 1
         # Apply the filter
         update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
             q = q_vars[i].lhs
-            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), shock_factor*wall_detection*kappa_fact*ConstantObject('dt')*eqn.rhs * gv('inv_detJ')))
+            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), shock_factor*wall_detection*kappa_fact*ConstantObject('dt')*eqn.rhs * detJ_term))
             update_equations.append(OpenSBLIEq(q, q + block.location_dataset('q%d' % i)))
 
         # Update the global q arrays

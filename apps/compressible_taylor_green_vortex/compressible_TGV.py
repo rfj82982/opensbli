@@ -8,60 +8,54 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 ndim = 3
 # # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf"]
-# # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
-conservative = False
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
-# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
+conservative = True
+# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
+NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# pprint(-1*debug_equation(ndim, energy, 0))
+
 # Expand the simulation equations, for this create a simulation equations class
 simulation_eq = SimulationEquations()
 simulation_eq.add_equations(mass)
 simulation_eq.add_equations(momentum)
 simulation_eq.add_equations(energy)
 
-# Constituent relations used in the system
-velocity = "Eq(u_i, rhou_i/rho)"
+einstein_eq = EinsteinEquation()
+# Constituent relations
 if conservative:
     pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
     velocity = "Eq(u_i, rhou_i/rho)"
+    enthalpy = "Eq(H, (rhoE + p) / rho)"
 else:
     pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
+    enthalpy = "Eq(H, Et + p / rho)"
 
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**(1.5)*(1.4042)/(T+0.40417)))" ## Modified sutherland law
 
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
-einstein_eq = EinsteinEquation()
-
-# Expand momentum add the expanded equations to the constituent relations
+# Expand momentum and add the expanded equations to the constituent relations
 if conservative:
+    velocity = "Eq(u_i, rhou_i/rho)"
     eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
     constituent.add_equations(eqns)
-# Expand pressure add the expanded equations to the constituent relations
+
+# Expand pressure and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-# Expand temperature add the expanded equations to the constituent relations
+# Expand temperature and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
+# Expand enthalpy and add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(enthalpy, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
+# # Expand viscosity and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-
-# Write the expanded equations to a Latex file with a given name and titile
-latex = LatexWriter()
-latex.open('equations.tex', "Einstein Expansion of the simulation equations")
-latex.write_string("Simulation equations\n")
-for index, eq in enumerate(flatten(simulation_eq.equations)):
-    latex.write_expression(eq)
-
-latex.write_string("Constituent relations\n")
-for index, eq in enumerate(flatten(constituent.equations)):
-    latex.write_expression(eq)
-
-latex.close()
 
 # Create a simulation block
 block = SimulationBlock(ndim, block_number=0, conservative=conservative)
@@ -113,8 +107,8 @@ schemes[rk.name] = rk
 boundaries = []
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
 for direction in range(ndim):
-    boundaries += [PeriodicBC(direction, 0, full_depth=True)]
-    boundaries += [PeriodicBC(direction, 1, full_depth=True)]
+    boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
+    boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
@@ -126,11 +120,11 @@ block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
 
 # Dispersion relation preserving filters
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
-block.set_equations(DRP.equation_classes)
+# DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
+# block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=5, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
 block.set_equations(WF.equation_classes)
 
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
@@ -140,23 +134,21 @@ block.set_discretisation_schemes(schemes)
 # Discretise the equations on the block
 block.discretise()
 
+WF.update_periodic_boundary(block, halos=[-5,5])
+
 # create an algorithm from the discretised computations
 alg = TraditionalAlgorithmRK(block)
 
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
 
-# Simulation monitor
-arrays = ['p_B0']
-probe_locations = [(30, 30, 30)]
-SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100)
 # Add the simulation monitor to the algorithm
-alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
+alg = TraditionalAlgorithmRK(block)
 
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
 
 # NaN check and iteration counter
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values = ['1600.0', '1.4', '1.25', '0.71', '0.0003385', '5000', '640', '640', '640', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'shock_factor', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
+values = ['1600.0', '1.4', '1.25', '0.71', '0.0003385', '59085', '256', '256', '256', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2', '1', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
 substitute_simulation_parameters(constants, values)

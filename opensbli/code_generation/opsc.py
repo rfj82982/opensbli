@@ -527,6 +527,8 @@ class OPSC(object):
         out += ['#include \"ops_seq.h\"']
         for b in algorithm.block_descriptions:
             out += ['#include \"%s_kernels.h\"' % b.block_name]
+        # IO and constant functions
+        out += ['#include "io.h"']
         # Include optional simulation monitoring reductions file
         if algorithm.simulation_monitor:
             out += ['#include \"%s\"' % algorithm.simulation_monitor.filename]
@@ -611,7 +613,7 @@ class OPSC(object):
             output += [WriteString("#include \"bc_exchanges.h\"")]  # Include statement in the code
         # Write HDF5 I/O calls to a separate file
         io_file = open('io.h', 'w')
-        output += [WriteString("#include \"io.h\"")]
+        io_file.close()
         output += self.ops_partition()
         # Restart simulation time and iteration number
         # This MUST be done after the partition command to avoid MPI HDF5 errors
