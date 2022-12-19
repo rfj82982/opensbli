@@ -584,8 +584,15 @@ class OPSC(object):
         f.close()
         # Declare stencils
         output += [WriteString("// Define and declare stencils")]
+        f = open('stencils.h', 'w')
+        output += [WriteString("#include \"stencils.h\"")]
+        stencil_declarations = []
         for d in store_stencils:
-            output += self.ops_stencils_declare(d)
+            stencil_declarations += self.ops_stencils_declare(d)
+        f.write('\n'.join(flatten([x.opsc_code for x in stencil_declarations])))
+        f.close()
+
+        # Define reduction operation handles (global min, max reductions ...)
         if len(store_reductions) > 0:
             output += [WriteString("// Define and declare OPS reduction handles")]
             for rv in store_reductions:
@@ -602,6 +609,9 @@ class OPSC(object):
             f.write('\n'.join(flatten(exchange_code)))
             f.close()
             output += [WriteString("#include \"bc_exchanges.h\"")]  # Include statement in the code
+        # Write HDF5 I/O calls to a separate file
+        io_file = open('io.h', 'w')
+        output += [WriteString("#include \"io.h\"")]
         output += self.ops_partition()
         # Restart simulation time and iteration number
         # This MUST be done after the partition command to avoid MPI HDF5 errors
