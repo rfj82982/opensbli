@@ -110,12 +110,14 @@ for direction in range(ndim):
     boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
     boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
 
+
+q_vector = simulation_eq.time_advance_arrays
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
 # set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays)
+h5.add_arrays(q_vector)
 block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
 
@@ -124,26 +126,92 @@ block.setio(copy.deepcopy(h5))
 # block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
-block.set_equations(WF.equation_classes)
+# WF = WENOFilter(block, order=3, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+# block.set_equations(WF.equation_classes)
 
-block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
+## Post-processing for TGV case, kinetic energy and enstrophy reductions
+
+# Velocity in 2D
+vel = symbols("u0:%d"%ndim,  **{'cls':DataObject})
+# Vorticity-z
+wx, wy, wz = symbols("wx wy wz",  **{'cls':GridVariable})
+# coordinates
+coord = symbols("x0:%d"%ndim,  **{'cls':CoordinateObject})
+
+# Matrix of derivatives
+der_matrix = Matrix(ndim,ndim,[CentralDerivative(u,x) for u in vel for x in coord])
+
+post = UserDefinedEquations()
+post.algorithm_place = InTheSimulation(frequency=100)
+post.computation_name = 'Taylor-Green vortex post-processing'
+post.order = 10000000
+# Add the halo type to extend the range of evaluation
+# # X vorticity
+vortx = der_matrix[2,1] - der_matrix[1,2]
+# vortx = metriceq.apply_transformation(vortx)
+vortx = Eq(wx, vortx)
+post.add_equations(vortx)
+# Y vorticity
+vorty = der_matrix[0,2] - der_matrix[2,0]
+# vorty = metriceq.apply_transformation(vorty)
+vorty = Eq(wy, vorty)
+post.add_equations(vorty)
+# Z vorticity
+vortz = der_matrix[1,0] - der_matrix[0,1]
+# vortz = metriceq.apply_transformation(vortz)
+vortz = Eq(wz, vortz)
+post.add_equations(vortz)
+
+# # Dilatation
+divV = symbols("divV", **{'cls':GridVariable})
+dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
+post.add_equations(dil)
+
+# Evaluate quantities required for dissipation measures
+rho_m, KE, eps_D, eps_S = ReductionVariable('rho_m', 'sum'), ReductionVariable('KE', 'sum'), ReductionVariable('dilatation_dissipation', 'sum'), ReductionVariable('enstrophy_dissipation', 'sum')
+rho_eqn = OpenSBLIEq(rho_m, rho_m + DataObject('rho'))
+ke_eqn = OpenSBLIEq(KE, KE + 0.5*DataObject('rho')*sum([u**2 for u in vel]))
+dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*DataObject('mu')*divV)
+enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + DataObject('mu')*(wx**2 + wy**2 + wz**2))
+
+post.add_equations([rho_eqn, ke_eqn, dilatation_eqn, enstrophy_eqn])
+# Q criterion
+# Q = "Eq(Q, (1/2)*(Der(u_i,x_i)**2 - Der(u_i,x_j)*Der(u_j,x_i)))"
+# pprint(Q)
+# Q = einstein_expasion.expand(Q, ndim, coordinate_symbol, [], constants)
+# Q = metriceq.apply_transformation(Q)
+# Q_lhs = DataObject('Q')
+# Q = Eq(Q_lhs, Q.rhs)
+# pprint(Q)
+# post.add_equations(Q)
+
+# Density gradients
+# rho_dset = DataObject('rho')
+# der_rho = sum([CentralDerivative(rho_dset,x)**2 for x in coord])
+# rho_grad = DataObject('rho_grad')
+# eqn = Eq(rho_grad, der_rho)
+# eqn = metriceq.apply_transformation(eqn)
+# post.add_equations(eqn)
+# pprint(eqn)
+
+block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial, post])
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 
 # Discretise the equations on the block
 block.discretise()
 
-WF.update_periodic_boundary(block, halos=[-5,5])
+# WF.update_periodic_boundary(block, halos=[-5,5])
 
-# create an algorithm from the discretised computations
-alg = TraditionalAlgorithmRK(block)
+# Simulation monitor
+arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rho_m']
+probe_locations = [(None), (None), (None), (None)]
+SM = SimulationMonitor(arrays, probe_locations, block, output_file='TGV_out.log', print_frequency=100)
+# Add the simulation monitor to the algorithm
+alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
 
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
-
-# Add the simulation monitor to the algorithm
-alg = TraditionalAlgorithmRK(block)
 
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
