@@ -136,7 +136,7 @@ class SimulationMonitor(object):
 
     @property
     def add_NaN_check(self):
-        return ['ops_NaNcheck(%s);' % str(self.array_monitors[0].flow_var)]
+        return ['ops_NaNcheck(%s);' % str(self.block.block_datasets['rho_B%d' % self.block.blocknumber])] # check density for now
 
     @property
     def write_reductions_file(self):
@@ -154,7 +154,7 @@ class SimulationMonitor(object):
     def format_output(self):
         """ Controls the printing format for the output."""
         placeholders = ', '.join(["%d"] + ["%%.%df" % self.fp_precision for _ in range(len(self.array_monitors)+1)] + ["%%.%df" % self.fp_precision for _ in range(len(self.scalar_monitors))])
-        iterations = ['iter+1', '(iter+1)*dt']
+        iterations = ['iter+1', '%s' % 'simulation_time']
         variables = ["%s_%d_output" % (str(M.flow_var), M.probe_no) for M in self.array_monitors]
         # Scalar variables
         variables += ["%s" % str(M.output) for M in self.scalar_monitors]
