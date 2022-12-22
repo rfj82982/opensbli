@@ -61,7 +61,6 @@ class OPSCCodePrinter(C99CodePrinter):
         C99CodePrinter.__init__(self, settings={})
 
     def _print_ReductionVariable(self, expr):
-        print(expr.__dict__)
         # if expr.usage == 'lhs':
             # return '*%s' % str(expr)
         # elif expr.usage == 'rhs':

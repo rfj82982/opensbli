@@ -141,7 +141,11 @@ coord = symbols("x0:%d"%ndim,  **{'cls':CoordinateObject})
 # Matrix of derivatives
 der_matrix = Matrix(ndim,ndim,[CentralDerivative(u,x) for u in vel for x in coord])
 
+kwargs = {'kernel_merge': True}
+kwargs = {'iotype': "Write"}
+
 post = UserDefinedEquations()
+post.kernel_merge = True
 post.algorithm_place = InTheSimulation(frequency=100)
 post.computation_name = 'Taylor-Green vortex post-processing'
 post.order = 10000000
