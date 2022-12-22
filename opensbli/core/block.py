@@ -98,6 +98,7 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
         # will be added to these sets depending on the derivatives in the governing equations.
         self.boundary_halos = [[set(), set()] for d in range(self.ndim)]
         # Place holders to store various block parameters
+        self.MB = False
         self.block_datasets = {}
         self.constants = {}
         self.Rational_constants = {}

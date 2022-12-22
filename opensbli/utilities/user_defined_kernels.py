@@ -1,4 +1,5 @@
 from opensbli.equation_types.opensbliequations import NonSimulationEquations, Discretisation, Solution
+from opensbli.schemes.spatial.scheme import CentralDerivative
 from opensbli.core.kernel import Kernel
 from sympy import flatten, pprint, Equality
 from opensbli.core.opensbliobjects import GroupedPiecewise
@@ -18,6 +19,7 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         ret.computation_name = None
         # Optional halo type
         ret.halos = None
+        ret.kernel_merge = False # by default don't merge the kernels
         cls._full_swap = False
         ret.custom_grid_range = None
         return ret
@@ -50,6 +52,26 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         cls._full_swap = full_swap
         return
 
+    def merge_kernels(cls, kernel_list, no_derivatives, block):
+        """ Merges the multiple kernels provided by discretize into a single evaluation to evaluate the entire UDF in a single kernel.
+        Currently assumes the grid range on all computations is the same. May need to change later."""
+        UDF_equations = cls.equations
+        derivative_evaluations = []
+        for ker in kernel_list:
+            for eqn in ker.equations:
+                derivative_evaluations.append(eqn)
+        
+        merged_kernel = Kernel(block, computation_name=cls.computation_name)
+        # Derivative evaluations
+        merged_kernel.add_equation(derivative_evaluations)
+        # Equations that depend on these derivative evaluations
+        merged_kernel.add_equation(no_derivatives)
+        merged_kernel.ranges = block.ranges[:]
+        for eqn in merged_kernel.equations:
+            pprint(eqn)
+        return [merged_kernel]
+
+
     def spatial_discretisation(cls, block):
         """ Applies the spatial discretisation of the equations by calling the discretisation of each spatial scheme provided on the block
 
@@ -67,18 +89,27 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
             if schemes[sc].schemetype == "Spatial":
                 spatialschemes += [sc]
         # Perform spatial Discretisation if any in constituent relations evaluation
+        cls.equations = flatten(cls.equations)
+        # Input equations are saved here, before discretisation
         equations = cls.equations
 
         UDF_derivative_kernels = []
-        evaluations = []
+        evaluations = [] # these evaluations are never used here
+        no_derivatives = []
 
         for eq in flatten(equations):
-            cls.equations = [eq]
-            for sc in spatialschemes:
-                evaluations.append(schemes[sc].discretise(cls, block))
-            UDF_derivative_kernels.append(cls.Kernels[:])
-
-            cls.Kernels = []
+            if not isinstance(eq, GroupedPiecewise):
+                if len(eq.rhs.atoms(CentralDerivative)) == 0: # checking for equations requiring derivative evaluation
+                    no_derivatives += [eq]
+                else: # Need to compute the derivative
+                    cls.equations = [eq]
+                for sc in spatialschemes:
+                    # Constituent relations are returned
+                    evaluations.append(schemes[sc].discretise(cls, block))
+                UDF_derivative_kernels.append(cls.Kernels[:])
+                cls.Kernels = []
+        UDF_derivative_kernels = flatten(UDF_derivative_kernels)
+        # Original input equations are restored here
         cls.equations = equations
 
         # No discretisation required
@@ -96,6 +127,9 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
             cls.Kernels += [user_defined_kernel]
         else:
             cls.Kernels += flatten(UDF_derivative_kernels)
+
+        if cls.kernel_merge: # merge kernels to evaluate all within one kernel
+            cls.Kernels = cls.merge_kernels(cls.Kernels, no_derivatives, block)
 
         # Process the kernels to update parameters on the block
         cls.process_kernels(block)
