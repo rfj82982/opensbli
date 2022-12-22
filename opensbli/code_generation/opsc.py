@@ -61,12 +61,7 @@ class OPSCCodePrinter(C99CodePrinter):
         C99CodePrinter.__init__(self, settings={})
 
     def _print_ReductionVariable(self, expr):
-        # if expr.usage == 'lhs':
-            # return '*%s' % str(expr)
-        # elif expr.usage == 'rhs':
         return '*%s' % str(expr)
-        # else:
-            # raise ValueError("The reduction variable does not have a status in the equation.")
 
     def _print_Rational(self, expr):
         """ Settings: if rational is True then rational numbers are printed as they are.
@@ -363,7 +358,9 @@ class OPSC(object):
             elif str(key) == 'iter': # current iteration counter
                 code += ['const int *%s' % key]
             elif isinstance(key, ReductionVariable):
-                if val is 'input':
+                if key.intent is 'OPS_INC': # summation reduction variables
+                    code += ['%s *%s' % (key.datatype.opsc(), key)]
+                elif val is 'input':
                     code += ['const %s *%s' % (key.datatype.opsc(), key)]
                 else:
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
@@ -402,8 +399,8 @@ class OPSC(object):
             for i in kernel.IndexedConstants:
                 header_dictionary += [tuple([(i.base), 'input'])]
         other_inputs = ""
+        # Local i, j, k index object (ignores MPI)
         if kernel.grid_indices_used:
-            # print kernel.grid_index_name
             other_inputs += ", const int *idx"  # WARNING hard coded here
         else:
             other_inputs = ''

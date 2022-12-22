@@ -199,7 +199,10 @@ class Kernel(object):
     @property
     def reduction_variables(self):
         reductions_lhs = self.lhs_reduction_variables
-        reductions_rhs = self.rhs_reduction_variables    
+        reductions_rhs = self.rhs_reduction_variables
+        # # Remove summation reduction variables from the right-hand side as they are not an input
+        reductions_rhs = filter(lambda x:x.intent!='OPS_INC', reductions_rhs)
+        reductions_rhs = set(reductions_rhs)
         return reductions_rhs, reductions_lhs
     
 
@@ -311,7 +314,8 @@ class Kernel(object):
         for r in rvs_out:
             code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, r.intent)]
         for r in rvs_in:
-            code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, 'OPS_READ')]
+            if r.intent != 'OPS_INC': # summation reduction variables are not an input
+                code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, 'OPS_READ')]
         code = [',\n'.join(code) + ');\n\n']  # WARNING dtype
 
         # Write out the reduction result if required
