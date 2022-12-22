@@ -67,8 +67,9 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         # Equations that depend on these derivative evaluations
         merged_kernel.add_equation(no_derivatives)
         merged_kernel.ranges = block.ranges[:]
-        for eqn in merged_kernel.equations:
-            pprint(eqn)
+        # for eqn in merged_kernel.equations:
+        #     pprint(eqn)
+        # exit()
         return [merged_kernel]
 
 
@@ -89,7 +90,6 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
             if schemes[sc].schemetype == "Spatial":
                 spatialschemes += [sc]
         # Perform spatial Discretisation if any in constituent relations evaluation
-        cls.equations = flatten(cls.equations)
         # Input equations are saved here, before discretisation
         equations = cls.equations
 
@@ -98,17 +98,19 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         no_derivatives = []
 
         for eq in flatten(equations):
-            if not isinstance(eq, GroupedPiecewise):
-                if len(eq.rhs.atoms(CentralDerivative)) == 0: # checking for equations requiring derivative evaluation
-                    no_derivatives += [eq]
-                else: # Need to compute the derivative
-                    cls.equations = [eq]
-                for sc in spatialschemes:
-                    # Constituent relations are returned
-                    evaluations.append(schemes[sc].discretise(cls, block))
-                UDF_derivative_kernels.append(cls.Kernels[:])
-                cls.Kernels = []
-        UDF_derivative_kernels = flatten(UDF_derivative_kernels)
+            if isinstance(eq, GroupedPiecewise):
+                pass
+            elif len(eq.rhs.atoms(CentralDerivative)) == 0: # checking for equations requiring derivative evaluation
+                no_derivatives += [eq]
+            else: # Need to compute the derivative
+                cls.equations = [eq]
+            for sc in spatialschemes:
+                # Constituent relations are returned
+                evaluations.append(schemes[sc].discretise(cls, block))
+            UDF_derivative_kernels.append(cls.Kernels[:])
+            # Reset discretized Kernels and equations for this equation
+            cls.Kernels = []
+            cls.equations = []
         # Original input equations are restored here
         cls.equations = equations
 
