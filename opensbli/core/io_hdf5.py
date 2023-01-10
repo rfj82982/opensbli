@@ -212,7 +212,7 @@ class iohdf5(opensbliIO):
         code += ['double cpu_end0, elapsed_end0;']
         code += ['ops_timers(&cpu_end0, &elapsed_end0);']
         code += ['ops_printf("-----------------------------------------\\n");']
-        code += ['ops_printf("Time to write HDF5 file: %s:  %lf\n", {}, elapsed_end0-elapsed_start0);'.format(filename)]
+        code += ['ops_printf("Time to write HDF5 file: %s: %lf\\n", {}, elapsed_end0-elapsed_start0);'.format(filename)]
         code += ['ops_printf("-----------------------------------------\\n");\n}']
 
         # Create a function template
