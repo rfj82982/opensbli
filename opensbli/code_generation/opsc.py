@@ -566,15 +566,7 @@ class OPSC(object):
         # Define and declare datasets on each block
         f = open('defdec_data_set.h', 'w')
         datasets_dec = []
-        # Add timer to declarations
-        output += [WriteString('double declaration_start0, elapsed_declaration_start0;')]
-        output += [WriteString('ops_timers(&declaration_start0, &elapsed_declaration_start0);')]
         output += [WriteString("#include \"defdec_data_set.h\"")]
-        output += [WriteString('double declaration_end0, elapsed_declaration_end0;')]
-        output += [WriteString('ops_timers(&declaration_end0, &elapsed_declaration_end0);')]
-        output += [WriteString('ops_printf("-----------------------------------------\\n");')]
-        output += [WriteString('ops_printf("Array declaration time: %lf\\n", elapsed_declaration_end0-elapsed_declaration_start0);')]
-        output += [WriteString('ops_printf("-----------------------------------------\\n");\n')]
         # Sort the declarations alphabetically before writing out
         store_stencils, store_dsets, store_reductions = [], [], []
         for d in algorithm.defnitionsdeclarations.components:
@@ -670,7 +662,7 @@ class OPSC(object):
         output += [WriteString('double partition_end0, elapsed_partition_end0;')]
         output += [WriteString('ops_timers(&partition_end0, &elapsed_partition_end0);')]
         output += [WriteString('ops_printf("-----------------------------------------\\n");')]
-        output += [WriteString('ops_printf("MPI partition time: %lf\\n", elapsed_partition_end0-elapsed_partition_start0);')]
+        output += [WriteString('ops_printf("MPI partition and reading input file time: %lf\\n", elapsed_partition_end0-elapsed_partition_start0);')]
         output += [WriteString('ops_printf("-----------------------------------------\\n");\n')]
         return output
 
