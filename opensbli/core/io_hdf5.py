@@ -60,7 +60,7 @@ class iohdf5(opensbliIO):
         HDF5_timer.value = 1
         HDF5_timer.datatype = Int()
         CTD.add_constant(HDF5_timer)
-        
+
         ret.get_algorithm_location()
         ret.arrays = []
         if arrays:
@@ -212,7 +212,7 @@ class iohdf5(opensbliIO):
         code += ['double cpu_end0, elapsed_end0;']
         code += ['ops_timers(&cpu_end0, &elapsed_end0);']
         code += ['ops_printf("-----------------------------------------\\n");']
-        code += ['ops_printf("Time to write HDF5 file: %s:  %lf", {}, elapsed_end0-elapsed_start0);'.format(filename)]
+        code += ['ops_printf("Time to write HDF5 file: %s:  %lf\n", {}, elapsed_end0-elapsed_start0);'.format(filename)]
         code += ['ops_printf("-----------------------------------------\\n");\n}']
 
         # Create a function template
