@@ -221,13 +221,20 @@ def ccode(expr, settings={}):
     :returns: The expression in OPSC code.
     :rtype: str."""
     if isinstance(expr, Equality):
+        if 'boolean_equality' in settings.keys():
+            if settings['boolean_equality']:
+                equals = ' == '
+            else:
+                equals = ' = '
+        else:
+            equals = ' = '
         if 'rational' in settings.keys():
             pass
         else:
             expr = pow_to_constant(expr)
         code_print = OPSCCodePrinter(settings)
         code = code_print.doprint(expr.lhs) \
-            + ' = ' + OPSCCodePrinter(settings).doprint(expr.rhs)
+            + equals + OPSCCodePrinter(settings).doprint(expr.rhs)
         if isinstance(expr.lhs, GridVariable):
             code = code
         return code
@@ -426,7 +433,7 @@ class OPSC(object):
             elif isinstance(eq, GroupedPiecewise):
                 for i, (expr, condition) in enumerate(eq.args):
                     if i == 0:
-                        out += ['if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + '{\n']
+                        out += ['if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'boolean_equality' : True}) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
                                 out += [ccode(eqn, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
@@ -434,7 +441,7 @@ class OPSC(object):
                             out += [ccode(expr, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
                         out += ['}\n']
                     elif condition != True:
-                        out += ['else if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + '{\n']
+                        out += ['else if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'boolean_equality' : True}) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
                                 out += [ccode(eqn, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
