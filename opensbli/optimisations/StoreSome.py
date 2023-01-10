@@ -1,35 +1,40 @@
-from sympy import flatten, simplify, symbols, factor, count_ops, pprint
-from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet
+from sympy import flatten, simplify, symbols, factor, count_ops, pprint, Piecewise, Equality
+from sympy.functions.elementary.piecewise import ExprCondPair
+from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet, GroupedPiecewise, ConstantIndexed
 from opensbli.core.grid import GridVariable
 from opensbli.core.opensblifunctions import CentralDerivative
 from opensbli.core.kernel import Kernel
 from opensbli.schemes.spatial import Central
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations, ConstituentRelations
 from opensbli.equation_types.metric import MetricsEquation
+from collections import OrderedDict
 
 
 class StoreSome(Central):
     """ Low-storage algorithms to reduce memory intensity and the number of global storage arrays.
         S.P. Jammy et al. Journal of Computational Science. Vol 36, September 2019 10.015."""
 
-    def __init__(self, order, der_fns_to_store, level=1):
+    def __init__(self, order, der_fns_to_store, merged=True, group_stored=False, level=1):
         """ Set up the scheme.
         :arg int order: The order of accuracy of the scheme."""
         Central.__init__(self, order)
         self.fns = der_fns_to_store
+        self.merged = merged
+        self.group_stored = group_stored
         return
 
-    def derivatives_to_store(self, coordinates, block):
+    def generate_derivatives_to_store(self, coordinates, block):
         """ Creates CentralDerivative objects of the derivatives to be stored."""
         data_objects = flatten([symbols('%s' % self.fns, **{'cls': DataObject})])
         data_sets = [block.location_dataset(str(d)) for d in data_objects]
         # coords = [c for c in coordinates if not c.get_coordinate_type()]
         # Fix for Neil's issue with multiple passive scalars
         coords = [c for c in coordinates if not str(c) == 't']
-        self.derivatives_to_store = []
+        coords = sorted(coords, key=lambda x: x.direction)
+        self.derivatives_to_store = dict(zip([i for i in range(block.ndim)], [[] for _ in range(block.ndim)]))
         for a in data_sets:
-            for b in coords:
-                self.derivatives_to_store += [CentralDerivative(a, b)]
+            for i, b in enumerate(coords):
+                self.derivatives_to_store[i] += [CentralDerivative(a, b)]
         return
 
     def discretise(self, type_of_eq, block):
@@ -42,6 +47,7 @@ class StoreSome(Central):
         else:
             discretised_eq = self.SS(type_of_eq, block, None, group=False)
             if discretised_eq:
+                # discretised_eq = self.merge_conditionals(discretised_eq)
                 discretisation_kernel = Kernel(block, computation_name="%s evaluation" % type_of_eq.__class__.__name__)
                 discretisation_kernel.set_grid_range(block)
                 for eq in discretised_eq:
@@ -71,8 +77,57 @@ class StoreSome(Central):
                 self.required_constituent_relations[dset].set_grid_range(block)
         return
 
+    def generate_first_derivatives(self, equations, block):
+
+        self.local_kernels = OrderedDict()
+        self.required_constituent_relations = {}
+        work_arrays = {}
+        derivatives = []
+
+        for dire in range(block.ndim):
+            derivatives += self.derivatives_to_store[dire]
+
+        for no, der in enumerate(derivatives):
+            der.update_work(block)
+            work_arrays[der] = der.work
+            ker = Kernel(block)
+            ker.set_computation_name("Derivative evaluation %s " % (der))
+            self.update_range_of_constituent_relations(der, block)
+            v = der
+            expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
+            ker.add_equation(expr)
+            ker.set_grid_range(block)
+            self.local_kernels[v] = ker
+            derivatives[no] = v
+
+        # Get all the derivatives and traverse them to update the range of already evaluated derivatives
+        for d in self.get_local_function(equations):
+            if d.atoms(CentralDerivative).intersection(derivatives):
+                expr, self.local_kernels = self.traverse(d, self.local_kernels, block)
+
+        # Combine the kernels per direction?
+        if self.group_stored:
+            store_local = self.local_kernels
+            self.local_kernels = {}
+            for dire in range(block.ndim):
+                # Get the kernels in this direction
+                kernels = [store_local[d] for d in self.derivatives_to_store[dire]]
+                equations = flatten([ker.equations for ker in kernels])
+                # Group conditionals if needed
+                equations = flatten(self.merge_conditionals(equations))
+                # Create new merged kernel
+                ker = Kernel(block)
+                ker.set_computation_name("StoreSome evaluations direction %d" % (dire))
+                ker.add_equation(equations)
+                # self.update_range_of_constituent_relations(der, block)
+                ker.set_grid_range(block)
+                self.local_kernels[dire] = ker       
+
+        return work_arrays
+
+
     def sbli_rhs_discretisation(self, type_of_eq, block):
-        """ Function that performs the discretisation to the convective and viscous terms."""
+        """ Function that performs the discretisation to the convective and viscous terms for the Navier-Stokes equations."""
         block.reset_work_index
         equations = flatten(type_of_eq.equations)
         residual_arrays = [eq.residual for eq in equations]
@@ -80,34 +135,19 @@ class StoreSome(Central):
         coordinates = set()
         for e in equations:
             coordinates = coordinates.union(e.atoms(CoordinateObject))
-        self.derivatives_to_store(coordinates, block)
-        self.local_kernels = {}
-        self.required_constituent_relations = {}
-        subs_dict = {}
-        for no, der in enumerate(self.derivatives_to_store):
-            der.update_work(block)
-            subs_dict[der] = der.work
-            ker = Kernel(block)
-            ker.set_computation_name("Derivative evaluation %s " % (der))
-            self.update_range_of_constituent_relations(der, block)
-            v = der
-            expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
-            # pprint(expr)
-            ker.add_equation(expr)
-            ker.set_grid_range(block)
-            self.local_kernels[v] = ker
-            self.derivatives_to_store[no] = v
+        # User-specified first derivatives to store to global 2D/3D arrays
+        self.generate_derivatives_to_store(coordinates, block)
 
-        # Get all the derivatives and traverse them to update the range of
-        # already evaluated derivatives
-        for d in self.get_local_function(equations):
-            if d.atoms(CentralDerivative).intersection(self.derivatives_to_store):
-                expr, self.local_kernels = self.traverse(d, self.local_kernels, block)
-        equations = [e.subs(subs_dict) for e in equations]
-        classify_parameter = ConstantObject("Re")
+        # Compute the first derivatives to store
+        work_arrays = self.generate_first_derivatives(equations, block)
+
+        # Update the main equations to solve using the local evaluation grid variables
+        equations = [e.subs(work_arrays) for e in equations]
         rhs_eq = [e.rhs for e in equations]
         discretised_eq = [OpenSBLIEq(x, y) for x, y in zip(residual_arrays, rhs_eq)]
 
+        # Distinguish between convective and viscous terms using Reynolds number parameter. Is there a better way?
+        classify_parameter = ConstantObject("Re")
         viscous, convective = self.classify_equations_on_parameter(discretised_eq, classify_parameter)
         # Apply to the convective terms
         convective = [OpenSBLIEq(x, y) for x, y in zip(residual_arrays, convective)]
@@ -115,11 +155,17 @@ class StoreSome(Central):
         # Apply to the viscous terms
         viscous = [OpenSBLIEq(x, x+y) for x, y in zip(residual_arrays, viscous)]
         viscous_equations = self.SS(viscous, block, 'Viscous')
-        
+        # Remove any non equations
+        viscous_equations = [x for x in viscous_equations if isinstance(x, OpenSBLIEq)]
+        # Group conditionals for vectorisation into a grouped piecewise object instead
+        if self.merged:
+            convective_equations = self.merge_conditionals(convective_equations)
+            viscous_equations = self.merge_conditionals(viscous_equations)
+
         if convective_equations or viscous_equations:
-            for ker in self.local_kernels:
-                eval_ker = self.local_kernels[ker]
-                type_of_eq.Kernels += [eval_ker]
+            for der, ker in self.local_kernels.items():
+                type_of_eq.Kernels += [ker]
+
         if convective_equations:
             convective_kernel = Kernel(block, computation_name="Convective terms")
             convective_kernel.set_grid_range(block)
@@ -138,6 +184,59 @@ class StoreSome(Central):
         # Check for missing constituent relation kernels
         self.check_missing_constituent_relations(block, equations)
         return self.required_constituent_relations
+
+    def merge_conditionals(self, input_equations):
+        """ Optimisation to enable vectorisation by grouping the conditional expressions."""
+        no_condition = dict()
+        conditionals = dict()
+        factor_dict = dict()
+        grouped_conditions = set()
+        output_equations = []
+
+        for order, eqn in enumerate(input_equations):
+            # Find conditional expressions and group them together based on their if condition
+            if len(eqn.rhs.atoms(Piecewise)) > 0:
+                for const in eqn.rhs.atoms(ConstantObject):
+                    if not isinstance(const, ConstantIndexed):
+                        if const.rational:
+                            factor = const
+                lhs = eqn.lhs
+                pw = list(eqn.rhs.atoms(Piecewise))[0]
+                factor_dict[lhs] = factor
+                for pair in pw.args:
+                    expr, cond = pair.args[0], pair.args[1]
+                    if cond in conditionals:
+                        conditionals[cond].append((lhs, expr, order))
+                    else:
+                        conditionals[cond] = [(lhs, expr, order)]
+            else:
+                no_condition[order] = eqn
+
+        if len(conditionals) > 0:
+            # Construct the grouped equations
+            conditions_to_evaluate = []
+            for cond, exprs in conditionals.items():
+                evaluations = []
+                if str(cond) != 'True': # avoid true condition until the end
+                    for triple_value in exprs:
+                        lhs, rhs, order = triple_value
+                        factor = factor_dict[lhs]
+                        evaluations.append(OpenSBLIEq(lhs, factor*rhs))
+                    conditions_to_evaluate.append(ExprCondPair(evaluations, Equality(cond.lhs, cond.rhs)))
+            # Add the default condition
+            evaluations = []
+            for triple_value in conditionals[True]:
+                lhs, rhs, order = triple_value
+                factor = factor_dict[lhs]
+                evaluations.append(OpenSBLIEq(lhs, factor*rhs))
+            conditions_to_evaluate.append(ExprCondPair(evaluations, True))
+            # Create a GroupedPiecewise evalation object
+            grouped = GroupedPiecewise(*conditions_to_evaluate)
+            output_equations += [grouped]
+        # Add the equations which have no branching conditions
+        for key, val in no_condition.items():
+            output_equations.append(val)
+        return output_equations
 
     def SS(self, type_of_eq, block, equation_type, group=True, level=1):
         """ Generates the GridVariables to store the local derivatives. Also sorts the
