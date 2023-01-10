@@ -55,6 +55,12 @@ class iohdf5(opensbliIO):
             CTD.add_constant(cls.save_every)
         else:
             cls.save_every = None
+        # HDF5 timing switch
+        HDF5_timer = ConstantObject('HDF5_timing', integer=True)
+        HDF5_timer.value = 1
+        HDF5_timer.datatype = Int()
+        CTD.add_constant(HDF5_timer)
+        
         ret.get_algorithm_location()
         ret.arrays = []
         if arrays:
@@ -166,6 +172,10 @@ class iohdf5(opensbliIO):
         """ Generates the OPS C code to write data to disk as HDF5 files."""
         code = []
         var_name = 'name%s' % cls.block_number
+        # Add HDF5 timers to check I/O cost
+        code += ['double cpu_start0, elapsed_start0;']
+        code += ['if (HDF5_timing == 1){']
+        code += ['ops_timers(&cpu_start0, &elapsed_start0);\n}']
         code += ['// Writing OPS datasets']
         if "name" in cls.kwargs:
             if '.h5' in cls.kwargs["name"]:
@@ -197,6 +207,14 @@ class iohdf5(opensbliIO):
             code += ['// Writing simulation constants']
             code += ['write_constants(%s);' % filename]
 
+
+        code += ['if (HDF5_timing == 1){']
+        code += ['double cpu_end0, elapsed_end0;']
+        code += ['ops_timers(&cpu_end0, &elapsed_end0);']
+        code += ['ops_printf("-----------------------------------------\\n");']
+        code += ['ops_printf("Time to write HDF5 file: %s:  %lf", {}, elapsed_end0-elapsed_start0);'.format(filename)]
+        code += ['ops_printf("-----------------------------------------\\n");\n}']
+
         # Create a function template
         fname = cls.func_name + '_' + block_name
         # Array list
@@ -204,11 +222,11 @@ class iohdf5(opensbliIO):
         header_list = ', '.join(['ops_dat& ' + str(x) for x in cls.arrays])
 
         if cls.dynamic_fname:
-            header = ['void %s_dynamic(ops_block& %s, int iter, %s){' % (fname, block_name, header_list)]
-            function_call = ['%s_dynamic(%s, iter, %s);' % (fname, block_name, ar_list)]
+            header = ['void %s_dynamic(ops_block& %s, int iter, %s, int HDF5_timing){' % (fname, block_name, header_list)]
+            function_call = ['%s_dynamic(%s, iter, %s, HDF5_timing);' % (fname, block_name, ar_list)]
         else:
-            header = ['void %s(ops_block& %s, %s){' % (fname, block_name, header_list)]
-            function_call = ['%s(%s, %s);' % (fname, block_name, ar_list)]
+            header = ['void %s(ops_block& %s, %s, int HDF5_timing){' % (fname, block_name, header_list)]
+            function_call = ['%s(%s, %s, HDF5_timing);' % (fname, block_name, ar_list)]
         # Populate the function
         code = header + code 
         code += ['}\n\n']
