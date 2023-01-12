@@ -64,12 +64,15 @@ class Kernel(object):
     mulfactor = {0: 1, 1: 1}
     opsc_access = {'ins': "OPS_READ", "outs": "OPS_WRITE", "inouts": "OPS_RW"}
 
-    def __init__(self, block, computation_name=None):
+    def __init__(self, block, kernel_name=None, computation_name=None):
         """ Set up the computational kernel"""
         copy_block_attributes(block, self)
         self.computation_name = computation_name
         self.kernel_no = block.kernel_counter
-        self.kernelname = self.block_name + "Kernel%03d" % self.kernel_no
+        if kernel_name is None:
+            self.kernelname = self.block_name + "Kernel%03d" % self.kernel_no
+        else:
+            self.kernelname = kernel_name
         block.increase_kernel_counter
         self.equations = []
         self.halo_ranges = [[set(), set()] for d in range(block.ndim)]
