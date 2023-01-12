@@ -586,6 +586,7 @@ class OPSC(object):
             d = dsets_to_declare[name]
             datasets_dec += self.declare_dataset(d, algorithm.time_advance_arrays)
         f.write('\n'.join(flatten([dset.opsc_code for dset in datasets_dec])))
+        f.write('\n')
         f.close()
         # Declare stencils
         output += [WriteString("// Define and declare stencils")]
@@ -595,6 +596,7 @@ class OPSC(object):
         for d in store_stencils:
             stencil_declarations += self.ops_stencils_declare(d)
         f.write('\n'.join(flatten([x.opsc_code for x in stencil_declarations])))
+        f.write('\n')
         f.close()
 
         # Define reduction operation handles (global min, max reductions ...)
@@ -612,6 +614,7 @@ class OPSC(object):
                 call, code = self.bc_exchange_call_code(e)
                 exchange_code += [code]
             f.write('\n'.join(flatten(exchange_code)))
+            f.write('\n')
             f.close()
             output += [WriteString("#include \"bc_exchanges.h\"")]  # Include statement in the code
         # Write HDF5 I/O calls to a separate file
@@ -663,7 +666,8 @@ class OPSC(object):
         output += [WriteString('ops_timers(&partition_end0, &elapsed_partition_end0);')]
         output += [WriteString('ops_printf("-----------------------------------------\\n");')]
         output += [WriteString('ops_printf("MPI partition and reading input file time: %lf\\n", elapsed_partition_end0-elapsed_partition_start0);')]
-        output += [WriteString('ops_printf("-----------------------------------------\\n");\n')]
+        output += [WriteString('ops_printf("-----------------------------------------\\n");')]
+        output += [WriteString('fflush(stdout);\n')]
         return output
 
     def restart_notification(self):
