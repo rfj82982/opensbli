@@ -1,10 +1,11 @@
-from sympy import Rational, Min, Abs, sqrt, tanh, pprint, Max
+from sympy import Rational, Min, Abs, sqrt, tanh, pprint, Max, exp
 from opensbli.core.opensblifunctions import CentralDerivative as CD
 from opensbli.core.parsing import EinsteinEquation as EE
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.utilities.helperfunctions import increment_dataset
+from opensbli.core.grid import GridVariable as gv
 
 
 class ShockSensor(object):
@@ -23,8 +24,6 @@ class ShockSensor(object):
         substitutions, constants, output_eqns = [], [], []
         cart = CoordinateObject('x_i')
         cartesian_coordinates = [cart.apply_index(cart.indices[0], dim) for dim in range(ndim)]
-
-        # Minf = ConstantObject('Minf')
         sensor_array = block.location_dataset('%s' % name)
 
         # Calculate vorticity
@@ -52,13 +51,14 @@ class ShockSensor(object):
         c = ConstantObject('Ducros_sensitivity')
         c.value = 0.2
         CTD.add_constant(c)
-        tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + c*divergence.rhs)))
-        # tanh_filter = 1.0
-        # # Add a pressure gradient term
-        # a = ConstantObject('Jameson_sensitivity')
-        # a.value = 1.0
-        # CTD.add_constant(a)
-        # pressure_term = a*self.Jameson_sensor(block)
+        # Tanh function doesn't vectorise, use exponentials instead
+        # output_eqns += [OpenSBLIEq(gv('divV'), divergence.rhs)]
+        # output_eqns += [OpenSBLIEq(gv('vort_sq'), vorticity_sq)]
+
+        # tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + c*gv('divV'))))
+        tanh_inner = 2.5*(1 + c*divergence.rhs)
+        tanh_filter = Rational(1, 2)*(1 - (exp(2*tanh_inner, evaluate=False) - 1) / (exp(2*tanh_inner, evaluate=False) + 1))
+
         output_eqns += [OpenSBLIEq(sensor_array, Min(1, Mach*tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + self.epsilon)))]
         return output_eqns, sensor_array
 
