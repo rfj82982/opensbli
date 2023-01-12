@@ -201,7 +201,8 @@ def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, n
             # Inside the condition
             lines[no+2] += """if(fmod(iter+1, %d) == 0){
         ops_timers(&inner_end, &elapsed_inner_end);
-        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f. Time/iteration: %%lf.\\n", iter+1, dt, simulation_time, (elapsed_inner_end - elapsed_inner_start)/%d); """ % (every, every)
+        ops_printf("Iteration: %%d. Time-step: %%.3e. Simulation time: %%.5f. Time/iteration: %%lf.\\n", iter+1, dt, simulation_time, (elapsed_inner_end - elapsed_inner_start)/%d);
+        fflush(stdout);"""  % (every, every)
             if NaN_check is not None:
                 for i in range(nblocks):
                     if i == 0:
