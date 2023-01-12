@@ -90,11 +90,13 @@ class StoreSome(Central):
         for no, der in enumerate(derivatives):
             der.update_work(block)
             work_arrays[der] = der.work
-            ker = Kernel(block)
+            ker = Kernel(block, kernel_name='FD_%d' % no)
             ker.set_computation_name("Derivative evaluation %s " % (der))
             self.update_range_of_constituent_relations(der, block)
             v = der
             expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
+            if self.merged: # combine the branch conditions
+                expr = self.merge_conditionals([expr])
             ker.add_equation(expr)
             ker.set_grid_range(block)
             self.local_kernels[v] = ker
@@ -106,22 +108,23 @@ class StoreSome(Central):
                 expr, self.local_kernels = self.traverse(d, self.local_kernels, block)
 
         # Combine the kernels per direction?
-        if self.group_stored:
-            store_local = self.local_kernels
-            self.local_kernels = {}
-            for dire in range(block.ndim):
-                # Get the kernels in this direction
-                kernels = [store_local[d] for d in self.derivatives_to_store[dire]]
-                equations = flatten([ker.equations for ker in kernels])
-                # Group conditionals if needed
-                equations = flatten(self.merge_conditionals(equations))
-                # Create new merged kernel
-                ker = Kernel(block)
-                ker.set_computation_name("StoreSome evaluations direction %d" % (dire))
-                ker.add_equation(equations)
-                # self.update_range_of_constituent_relations(der, block)
-                ker.set_grid_range(block)
-                self.local_kernels[dire] = ker       
+        # if self.group_stored:
+        #     store_local = self.local_kernels
+        #     self.local_kernels = {}
+        #     for dire in range(block.ndim):
+        #         # Get the kernels in this direction
+        #         kernels = [store_local[d] for d in self.derivatives_to_store[dire]]
+        #         equations = flatten([ker.equations for ker in kernels])
+        #         # Group conditionals if needed
+        #         equations = flatten(self.merge_conditionals(equations))
+        #         # Create new merged kernel
+        #         ker = Kernel(block)
+        #         ker.set_computation_name("StoreSome evaluations direction %d" % (dire))
+        #         # ker.update_kernel_name('Testing')
+        #         ker.add_equation(equations)
+        #         # self.update_range_of_constituent_relations(der, block)
+        #         ker.set_grid_range(block)
+        #         self.local_kernels[dire] = ker       
 
         return work_arrays
 
