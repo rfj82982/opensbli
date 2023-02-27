@@ -20,6 +20,9 @@ class ShockSensor(object):
         :arg string coordinate_symbol: Coordinate symbol to perform the derivatives with.
         :arg object metrics: OpenSBLI metric class to apply curvilinear coordinates to the sensor if required."""
 
+        if Mach == None:
+            Mach = 1
+
         ndim = block.ndim
         substitutions, constants, output_eqns = [], [], []
         cart = CoordinateObject('x_i')
