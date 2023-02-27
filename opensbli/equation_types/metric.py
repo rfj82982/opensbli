@@ -37,22 +37,12 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         self._mhash = h
         return h
 
-    def __deepcopy__(self, memo):
-        deepcopy_method = self.__deepcopy__
-        self.__deepcopy__ = None
-        cp = deepcopy(self, memo)
-        self.__deepcopy__ = deepcopy_method
-        cp.__deepcopy__ = deepcopy_method
-
-        # custom treatments
-        # for instance: cp.id = None
-
-        return cp
-
     def _hashable_content(self):
         return "MetricsEquation"
 
-    def generate_transformations(cls, ndim, coordinate_symbol, parameters, max_order):
+    def generate_transformations(cls, ndim, coordinate_symbol, parameters, max_order, latex_debug=True):
+        # Optional LaTeX output of the transformed equations
+        cls.latex_debug = latex_debug
         cls.ndim = ndim
         if len(flatten(parameters)) != ndim*2:
             raise ValueError("The parameters for stretching provided should match the number of dimensions")
@@ -65,10 +55,12 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         curvilinear_coordinates = [curv.apply_index(cart.indices[0], dim) for dim in range(ndim)]
         cls.curvilinear_coordinates = curvilinear_coordinates
         cls.cartesian_coordinates = cartesian_coordinates
-        cls.latex_debug_start()
+        if cls.latex_debug:
+            cls.latex_debug_start()
         fd_subs, fd_fns = cls.transform_first_derivative(coordinate_symbol)
         cls.transform_second_derivative(coordinate_symbol, fd_subs, fd_fns)
-        cls.latex_debug_end()
+        if cls.latex_debug:
+            cls.latex_debug_end()
         return
 
     def latex_debug_start(self):
@@ -146,10 +138,11 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         for d in fd_transformed:
             cls.classical_strong_differentiabilty_transformation += [d]
         # Write latex file for easy debugging
-        latex = cls.latex_file
-        for i in range(cls.ndim):
-            cd = CD(cls.general_function, cls.cartesian_coordinates[i])
-            latex.write_expression(OpenSBLIEq(cd, cls.classical_strong_differentiabilty_transformation[i]))
+        if cls.latex_debug:
+            latex = cls.latex_file
+            for i in range(cls.ndim):
+                cd = CD(cls.general_function, cls.cartesian_coordinates[i])
+                latex.write_expression(OpenSBLIEq(cd, cls.classical_strong_differentiabilty_transformation[i]))
         return fd_subs, M2
 
     # def conservative_3D_metrics(cls, Cartesian_curvilinear_derivatives):
@@ -211,7 +204,7 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         SD_evaluations = MutableDenseNDimArray([0 for i in range(cls.ndim) for j in range(cls.ndim) for k in range(cls.ndim)], (cls.ndim, cls.ndim, cls.ndim))
         SD_jacobians = MutableDenseNDimArray([0 for i in range(cls.ndim) for j in range(cls.ndim) for k in range(cls.ndim)],
                                              (cls.ndim, cls.ndim, cls.ndim))
-        latex = cls.latex_file
+        # latex = cls.latex_file
         for i in range(M2.shape[0]):
             for j in range(M2.shape[0]):
                 if M2[i, j] in cls.curvilinear_coordinates:
@@ -255,10 +248,12 @@ class MetricsEquation(NonSimulationEquations, Discretisation, Solution):
         cls.SD_metrics = SD_jacobians
         cls.SD_evaluations = SD_evaluations
         cls.generate_sd_metrics_equations()
-        for i in range(cls.ndim):
-            for j in range(cls.ndim):
-                fn = CD(cls.general_function, cls.cartesian_coordinates[i], cls.cartesian_coordinates[j])
-                latex.write_expression(OpenSBLIEq(fn, cls.classical_strong_differentiabilty_transformation_sd[i, j]))
+        if cls.latex_debug:
+            latex = cls.latex_file
+            for i in range(cls.ndim):
+                for j in range(cls.ndim):
+                    fn = CD(cls.general_function, cls.cartesian_coordinates[i], cls.cartesian_coordinates[j])
+                    latex.write_expression(OpenSBLIEq(fn, cls.classical_strong_differentiabilty_transformation_sd[i, j]))
         return
 
     def generate_sd_metrics_equations(cls):
