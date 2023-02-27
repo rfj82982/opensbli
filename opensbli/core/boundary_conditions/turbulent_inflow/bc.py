@@ -1,15 +1,19 @@
 """ Boundary Condition for turbulent inflow"""
 
-from opensbli import *
 from sympy import symbols, exp
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation as Eq
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.code_generation.algorithm.common import *
+from opensbli.core.boundary_conditions.Carpenter_scheme import Carpenter
 from opensbli.core.io_hdf5 import iohdf5
 from sympy import Function
-import time
+from opensbli.core.grid import GridVariable
+from opensbli.core.opensbliobjects import DataObject, ConstantObject
+from sympy.functions.elementary.piecewise import ExprCondPair, Piecewise
+from opensbli.utilities.helperfunctions import increment_dataset
 from opensbli.core.boundary_conditions.bc_core import BoundaryConditionBase, ModifyCentralDerivative, WallBC
-
+from opensbli.schemes.spatial.shock_capturing import ShockCapturing
+from opensbli.core.boundary_conditions.periodic import PeriodicBC
 
 class UserFunction(Function):
     def __new__(cls, *args):
