@@ -133,7 +133,7 @@ class Condition(object):
     def opsc_condition_end(self):
         """ The loop end for an if condition in OPS C
         """
-        return ['}']
+        return ['}\n']
 
 
 class DoLoop(Loop):

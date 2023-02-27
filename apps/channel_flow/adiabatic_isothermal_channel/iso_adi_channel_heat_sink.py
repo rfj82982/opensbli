@@ -22,7 +22,7 @@ mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Add channel forcing term and heat sink
 for i, eqn in enumerate(momentum):
     momentum[i] = OpenSBLIEq(eqn.lhs, eqn.rhs - ConstantObject("c%d" % i))
-energy = OpenSBLIEq(energy.lhs, energy.rhs - (ConstantObject("c0")*DataObject('u0') + ConstantObject("c1")*DataObject('u1') + ConstantObject("c2")*DataObject('u2')) - ConstantObject('theta'))
+energy = OpenSBLIEq(energy.lhs, energy.rhs - (ConstantObject("c0")*DataObject('u0') + ConstantObject("c1")*DataObject('u1') + ConstantObject("c2")*DataObject('u2')) - GridVariable('theta_0'))
 # Expand the simulation equations, for this create a simulation equations class
 simulation_eq = SimulationEquations()
 simulation_eq.add_equations(mass)
@@ -93,8 +93,8 @@ boundaries = []
 # For laminar channel flow case the boundaries are periodic in x and walls in y
 # Periodic boundaries in x0 direction
 direction = 0
-boundaries += [PeriodicBC(direction, side=0)]
-boundaries += [PeriodicBC(direction, side=1)]
+boundaries += [PeriodicBC(direction, side=0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, side=1, halos=[-2,2])]
 # Isothermal wall in x1 direction
 Twall = ConstantObject("Twall")
 wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
@@ -105,8 +105,8 @@ boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
 boundaries += [AdiabaticWall_CarpenterBC(direction, 1)]
 # Periodic boundaries in x2 direction
 direction = 2 # spanwise
-boundaries += [PeriodicBC(direction, 0)]
-boundaries += [PeriodicBC(direction, 1)]
+boundaries += [PeriodicBC(direction, side=0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, side=1, halos=[-2,2])]
 
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
@@ -175,7 +175,7 @@ simulation_eq.apply_metrics(metriceq)
 block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
 
 # Dispersion relation preserving filters
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.1, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.1, wall_control=True, airfoil=False, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # STEP 3
@@ -214,7 +214,7 @@ if stats:
 # Perform the symbolic discretisation of the equations
 block.discretise()
 
-# Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
+#Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
 def create_exchange_calls_codes(block, dsets):
     kernels = []
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
@@ -257,7 +257,7 @@ OPSC(alg, OPS_V2=True)
 # STEP 10
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1',
     'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', "c0", "c1", "c2", "lx0", "lx2", "stretch", "Twall", "theta"]
-values = ['600.0', '1.4', '0.135', '0.7', '0.0000575', '250000', '128', '129', '128',
+values = ['600.0', '1.4', '0.2', '0.7', '0.00005', '250000', '1021', '475', '575',
     '4.0*M_PI/block0np0', '2.0/(block0np1-1)', '(4.0*M_PI/3.0)/block0np2', '-1', '0', '0', "4.0*M_PI", "(4.0*M_PI/3.0)", "1.7", "1.0", "0.1"]
 substitute_simulation_parameters(constants, values)
 print_iteration_ops()

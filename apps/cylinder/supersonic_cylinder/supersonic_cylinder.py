@@ -132,7 +132,7 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write", "write_constants" : True}
 h5 = iohdf5(save_every=5000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('Mach_sensor'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
+h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
 kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1')])

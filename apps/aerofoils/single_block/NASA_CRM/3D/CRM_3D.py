@@ -198,7 +198,7 @@ else:
 block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
 
 # Set the IO class to write out arrays
-h5 = iohdf5(save_every=2500, **{'iotype': "Write"})
+h5 = iohdf5(save_every=10000, **{'iotype': "Write"})
 h5.add_arrays(q_vector)
 h5.add_arrays([DataObject('kappa')]) # shock sensor array
 # Read grid file
@@ -212,19 +212,19 @@ metrics_hdf5 = iohdf5(arrays=metriceq.grid_der_wks, **{'position': "init", 'ioty
 block.setio([h5, h5_read, stats_hdf5, metrics_hdf5])
 
 
-# Add slice writing capability, data dimension reduction
-# Add grid coordinates to the slices, once at the start of the simulation
-grid_slice_hdf5 = iohdf5_slices(**{'iotype': "Init"})
-coords = [([DataObject('x0'), DataObject('x2')], 1, 1), ([DataObject('x0'), DataObject('x2')], 2, 'block0np2/2')] # q vector, x-z, j=1 plane, # q vector, x-y, z=Lz/2 plane
-grid_slice_hdf5.add_slices(coords)
-# Q vector slices written out in time
-slices_hdf5 = iohdf5_slices(save_every=500, **{'iotype': "Write"})
-# Arrays, direction, index
-slices = [(q_vector, 1, 1)] # q vector, x-z, j=1 plane
-slices += [(q_vector, 2, 'block0np2/2')] # q vector, x-y, z=Lz/2 plane
-slices_hdf5.add_slices(slices)
+# # Add slice writing capability, data dimension reduction
+# # Add grid coordinates to the slices, once at the start of the simulation
+# grid_slice_hdf5 = iohdf5_slices(**{'iotype': "Init"})
+# coords = [([DataObject('x0'), DataObject('x2')], 1, 1), ([DataObject('x0'), DataObject('x2')], 2, 'block0np2/2')] # q vector, x-z, j=1 plane, # q vector, x-y, z=Lz/2 plane
+# grid_slice_hdf5.add_slices(coords)
+# # Q vector slices written out in time
+# slices_hdf5 = iohdf5_slices(save_every=500, **{'iotype': "Write"})
+# # Arrays, direction, index
+# slices = [(q_vector, 1, 1)] # q vector, x-z, j=1 plane
+# slices += [(q_vector, 2, 'block0np2/2')] # q vector, x-y, z=Lz/2 plane
+# slices_hdf5.add_slices(slices)
 
-block.setio([grid_slice_hdf5, slices_hdf5])
+# block.setio([grid_slice_hdf5, slices_hdf5])
 
 # Various filters and shock capturing
 j = block.grid_indexes[1]
@@ -236,7 +236,7 @@ DRP = ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=3, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=True)
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=True)
 block.set_equations(WF.equation_classes)
 
 # Discretise the equations on the block
@@ -268,10 +268,10 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
-OPSC(alg, OPS_diagnostics=1)
+OPSC(alg, OPS_diagnostics=2)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'Twall', 'stat_frequency', 'RefT', 'SuthT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'shock_factor']
-values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '2607', '562', '50', '2.0360657500662898/(block0np0)', '22.5/(block0np1-1)', '0.05/(block0np2)', '1.0', '10', '273.15', '110.4', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1' ]
+values = ['5.0e5', '1.4', '0.70', '0.71', '3.0e-5', '500000000', '3001', '551', '50', '2.0360657500662898/(block0np0)', '22.5/(block0np1-1)', '0.05/(block0np2)', '1.0', '10', '273.15', '110.4', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1' ]
 
 # Add forcing modes
 constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']

@@ -6,8 +6,6 @@ from opensbli.multiblock.algorithm import TraditionalAlgorithmRKMB
 from opensbli.postprocess.airfoil import *
 from sympy.functions.elementary.piecewise import Piecewise, ExprCondPair
 import os
-# Disable the gmpy library for this case to avoid deepcopy issues
-os.environ['MPMATH_NOGMPY'] = '1'
 
 import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
@@ -29,7 +27,7 @@ constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2, latex_debug=False)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 Einstein_expansion = EinsteinEquation()
