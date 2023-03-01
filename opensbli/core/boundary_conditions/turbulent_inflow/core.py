@@ -7,7 +7,8 @@ Generates:
     - RNG seed values
 '''
 
-from math import exp, log, log10, sin, cos, tan, asin, acos, atan, pi, sqrt, sinh, tanh, cosh
+# from math import exp, log, log10, sin, cos, tan, asin, acos, atan, pi, sqrt, sinh, tanh, cosh
+import math # don't overwrite SymPy versions of these math functions
 from scipy import interpolate
 import sympy
 from sympy.parsing.sympy_parser import parse_expr
@@ -150,8 +151,8 @@ def yStretch(j, beta, Sy, Ny):
     else:
         # Implements the hyperbolic sine function used in openSBLI
 
-        return Sy * sinh(beta*j /(Ny - 1))/sinh(beta)
-        # return Sy*0.5*(1 - tanh(beta*(1.0 - 2.0*j/(2*Ny - 1.0)))/tanh(beta)) 
+        return Sy * math.sinh(beta*j /(Ny - 1))/math.sinh(beta)
+        # return Sy*0.5*(1 - math.tanh(beta*(1.0 - 2.0*j/(2*Ny - 1.0)))/math.tanh(beta)) 
 
 def zStretch(k, beta, Sz, Nz):
     '''
@@ -164,7 +165,7 @@ def zStretch(k, beta, Sz, Nz):
     else:
         # Implements the hyperbolic sine function used in openSBLI
 
-        return Sz*0.5*(1 - tanh(beta*(1.0 - 2.0*k/(Nz - 1.0)))/tanh(beta))    
+        return Sz*0.5*(1 - math.tanh(beta*(1.0 - 2.0*k/(Nz - 1.0)))/math.tanh(beta))    
         
 #######################################################################################################################
 #
@@ -267,7 +268,7 @@ def VD_profile(inputs, u_VD_eplus, option=[False]):
         u_VD_plus[i] = u_VD_eplus*i/(NyMean - 1)
         tmp = u_VD_plus[i]
         
-        xi_plus[i] = tmp + exp(-kapa*loglawB)*(exp(kapa*tmp) - 1 - kapa*tmp - 0.5*(kapa*tmp)**2 - ((kapa*tmp)**3)/6)
+        xi_plus[i] = tmp + math.exp(-kapa*loglawB)*(math.exp(kapa*tmp) - 1 - kapa*tmp - 0.5*(kapa*tmp)**2 - ((kapa*tmp)**3)/6)
     
     # Compute the new coordinate system 
     xi_eplus = xi_plus[NyMean - 1]
@@ -284,7 +285,7 @@ def VD_profile(inputs, u_VD_eplus, option=[False]):
         y_VD[i] = y_plus[i]*u_VD_eplus/Re
     
     # Normalised boundary layer thickenss
-    alpha = exp(2*Re/(690 + 1.5*Re)) - 1
+    alpha = math.exp(2*Re/(690 + 1.5*Re)) - 1
     delta0 = u_VD_eplus*xi_eplus/(alpha*Re)
     
     # Velocity profile in VD space (normalised by free stream velocity)
@@ -292,7 +293,7 @@ def VD_profile(inputs, u_VD_eplus, option=[False]):
     for i in range(1, NyMean):
         eta = y_VD[i]/delta0
         try:
-            f = exp(-3*(exp(eta**(1.0/kapa)) - 1 )) 
+            f = math.exp(-3*(math.exp(eta**(1.0/kapa)) - 1 )) 
             u_VD[i] = 1 - f + (u_VD_plus[i]/u_VD_eplus)*f
         except:
             u_VD[i] = 1.0
@@ -325,14 +326,14 @@ def physical_profile(inputs, u_VD_eplus, u_VD, y_VD):
     c1 = -0.5*(gamma - 1)*(M**2) 
     
     # Find the edge velociy in + units
-    K = sqrt(-Tw/c1)*(asin(b1/sqrt(b1**2 - 4*a1*c1)) - asin((2*c1 + b1)/sqrt(b1**2 - 4*a1*c1)))
+    K = math.sqrt(-Tw/c1)*(math.asin(b1/math.sqrt(b1**2 - 4*a1*c1)) - math.asin((2*c1 + b1)/math.sqrt(b1**2 - 4*a1*c1)))
     u_eplus = u_VD_eplus/K 
     
     # Iterate through boundary layer to find velocity, temperature and density
     for i in range(NyMean):
         f = u_VD[i]*u_VD_eplus/u_eplus 
-        K = asin(b1/sqrt(b1**2 - 4*a1*c1)) - f*sqrt(-c1/Tw) 
-        u[i] = (sqrt(b1**2 - 4*a1*c1)*sin(K) - b1)/(2*c1)
+        K = math.asin(b1/math.sqrt(b1**2 - 4*a1*c1)) - f*math.sqrt(-c1/Tw) 
+        u[i] = (math.sqrt(b1**2 - 4*a1*c1)*math.sin(K) - b1)/(2*c1)
         T[i] = a1 + b1*u[i] + c1*(u[i]**2) 
         rho[i] = 1/T[i]
     
@@ -481,7 +482,7 @@ def upstream_profile(inputs, dx, uvdeplus, u, T, y):
     cf2 = 0.02*(Re2**(-1.0/6.0))#*inputs.Re
 
     # Get U_{vd,e}^+ from ratio of skin friction at point (1) and (2)
-    uvdeplus2 = uvdeplus*sqrt(cf1/cf2)
+    uvdeplus2 = uvdeplus*math.sqrt(cf1/cf2)
 
     #print x1
 
@@ -569,7 +570,7 @@ def wall_normal_profile(inputs, y, u, T, u_VD_eplus):
     Re2 = 0.16*(ReX2**(6.0/7.0))
     Cf2 = 0.02*(Re2**(-1.0/6.0))
 
-    u_VD_eplus2 = sqrt(2.0/Cf2)
+    u_VD_eplus2 = math.sqrt(2.0/Cf2)
     Re_VD2 = ReX2/(X1 + del_x)
     
     # From this, the downstream physical profile can be computed
@@ -902,7 +903,7 @@ def blend_amplitudes(inputs):
                     c1 = 1.0
                 else:
                     # within corner region, compute weight parameters
-                    c1 = 0.5 - 0.5*sin(0.5*pi*h/blt)
+                    c1 = 0.5 - 0.5*math.sin(0.5*pi*h/blt)
 
                 c2 = 1.0 - c1
 
