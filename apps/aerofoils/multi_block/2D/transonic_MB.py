@@ -76,7 +76,7 @@ constituent.add_equations(eqns)
 simulation_eq.apply_metrics(metriceq)
 # Specify the numerical schemes
 schemes = {}
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
 cent = StoreSome(4, 'u0 u1 T')
@@ -131,14 +131,54 @@ mb_bcs[0] = block0_bc
 block1_bc = []
 block1_bc.append(InterfaceBC(direction=0, side=0,  halos=[-2,2], name="block1_to_block0", match=(0, 0, 0, True)))
 block1_bc.append(InterfaceBC(direction=0, side=1,  halos=[-2,2], name="block1_to_block2", match=(2, 0, 0, False)))
+
+
 # Wall temperature is required for halo points
-Twall = ConstantObject('Twall')
-Twall.value = 1.0
-if conservative:
-    wall_energy = [Eq(q_vector[-1], Twall*q_vector[0]/((gama-1.0)*gama*Minf*Minf))]
+# Isothermal wall in x1 direction
+gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
+# Boundary-layer tripping
+tripped = True
+direction, side = 1, 0
+if tripped:
+    Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
+    # Time dependence
+    # current_iter = multi_block.get_block(nblocks-1).get_temporal_schemes[0].iteration_number # Current iteration number
+    current_iter = Globalvariable("iter", integer=True)
+    dt, omega0, omega1, omega2 = symbols('dt omega_0 omega_1 omega_2', **{'cls': ConstantObject})
+    t = dt*current_iter 
+    # Spatial Modes
+    phi0, phi1, phi2 = symbols('phi_0 phi_1 phi_2', **{'cls': ConstantObject})
+    # Coordinate arrays
+    x0  = DataObject('x0')
+    conditional_expressions = []
+    # Suction side trip
+    SS_trip = Amp*(exp(-(x0 - xts)**2  / (2*sigma**2))*(sin(omega0*t + phi0) + sin(omega1*t + phi1) + sin(omega2*t + phi2)))
+    # Pressure side trip
+    PS_trip = Amp*(exp(-(x0 - xtp)**2  / (2*sigma**2))*(sin(omega0*t + phi0) + sin(omega1*t + phi1) + sin(omega2*t + phi2)))
+    # Index in x direction, assuming anti-clockwise grid configuration here
+    idx = multi_block.get_block(1).grid_indexes[0] # x index on block 1 (airfoil block)
+    expr_condition_pairs = Piecewise((SS_trip, idx > ConstantObject('block1np0')/2), (PS_trip, idx < ConstantObject('block1np0')/2),  (0, True))
+    v = OpenSBLIEq(GridVariable('v'), expr_condition_pairs)
+    rhov_wall = OpenSBLIEq(DataObject('rhou1'), DataObject('rho')*GridVariable('v'))
+    # Adding the non-zero V component to the calculation of rhoE at the wall
+    rhoE_wall = OpenSBLIEq(DataObject('rhoE'), DataObject('rho')*Twall/(gama*(gama-1.0)*Minf**2.0) + 0.5*DataObject('rho')*GridVariable('v')**2)
+    # Equations to set rhov and rhoE on the wall
+    wall_eqns = [rhov_wall, rhoE_wall]
+    wall_energy = [rhoE_wall]
+    block1_bc.append(ForcingStripBC(direction, 0, v, wall_eqns, corners=False, multi_block=True))
 else:
-    wall_energy = [Eq(DataObject('Et'), Twall/((gama-1.0)*gama*Minf*Minf))]
-block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=wall_energy, multi_block=True))
+    # Energy on the wall is set
+    if conservative:
+        wall_energy = [Eq(q_vector[-1], q_vector[0]*Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    else:
+        wall_energy = [Eq(q_vector[-1], Twall / (gama * Minf**2.0 * (gama - S.One)))]
+    direction = 1
+    lower_wall_eq = wall_energy[:]
+
+    block1_bc.append(IsothermalWallBC(direction=1, side=0, corners=False, equations=lower_wall_eq, multi_block=True))
+
+
+# Farfield boundary
 block1_bc.append(DirichletBC(direction=1, side=1, equations=initial_equations))
 mb_bcs[1] = block1_bc
 
@@ -173,11 +213,11 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 for no, block in enumerate(multi_block.blocks):
     if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        filters[no] += [WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF').equation_classes]
+        filters[no] += [WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF').equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1], width=11, filter_type='Visbal', optimized=False, sigma=0.05, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.33333333, wall_control=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
@@ -201,7 +241,7 @@ multi_block.set_filters(filters)
 kwargs = {'iotype': "Write"}
 q_hdf5 = iohdf5(save_every=1000, **kwargs)
 q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
-q_hdf5.add_arrays([DataObject('kappa'), DataObject('q0')])
+q_hdf5.add_arrays([DataObject('kappa')])
 # Read in the grid file
 kwargs = {'iotype': "Read"}
 x,y = symbols("x0, x1", **{'cls':DataObject})
@@ -222,12 +262,12 @@ multi_block.discretise()
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
 # Sponge zones for outer boundaries
 # Outlet
-outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=62)
-outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=62)
+outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=12)
+outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=12)
 # Farfield
-farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=7.5, npoints=62)
-farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=7.5, npoints=62)
-farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=7.5, npoints=62)
+farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=22.5, npoints=12)
+farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=22.5, npoints=12)
+farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=22.5, npoints=12)
 
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
@@ -251,15 +291,20 @@ OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor']
-values = ['1.4', '0.70', '0.72', '5.0e5', '3.0e-5', '1000000', '0.01', '110.4', '268.67', '10', '50.0']
+constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor', 'Twall']
+values = ['1.4', '0.73', '0.72', '3.0e6', '3.0e-5', '1000000', '0.01', '110.4', '268.67', '10', '1.0', '1.0']
 # Block 0
 constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'inv_rfact0_block0', 'inv_rfact1_block0']
-values += ['1099', '980', '11.5/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '1.0/Delta0block0', '1.0/Delta1block0']
+values += ['1801', '1010', '5.0/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '1.0/Delta0block0', '1.0/Delta1block0']
 # Block 1
 constants += ['block1np0', 'block1np1', 'Delta0block1', 'Delta1block1', 'inv_rfact0_block1', 'inv_rfact1_block1']
-values += ['1495', '980', '22.5/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '1.0/Delta0block1', '1.0/Delta1block1']
+values += ['4999', '1010', '2.0461756979465546/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '1.0/Delta0block1', '1.0/Delta1block1']
 # Block 2
 constants += ['block2np0', 'block2np1', 'Delta0block2', 'Delta1block2', 'inv_rfact0_block2', 'inv_rfact1_block2']
-values += ['1099', '980', '11.5/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '1.0/Delta0block2', '1.0/Delta1block2']
+values += ['1801', '1010', '5.0/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '1.0/Delta0block2', '1.0/Delta1block2']
+
+# Add forcing modes
+constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
+values += ['0.05', '0.00833', '0.07', '0.07', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
+
 substitute_simulation_parameters(constants, values)

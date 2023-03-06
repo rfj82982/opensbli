@@ -10,7 +10,7 @@ stats = True
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2 latex_debug=False)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True)], 2, latex_debug=True)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 

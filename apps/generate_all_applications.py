@@ -12,7 +12,7 @@ directories = [\
 '/viscous_shock_tube/',
 '/kelvin_helmholtz/',
 '/inviscid_shock_reflection/',
-# '/katzer_SBLI/',
+'/katzer_SBLI/',
 '/channel_flow/laminar_2D/',
 '/channel_flow/turbulent_3D/',
 '/channel_flow/compressible_TCF_Central/',
@@ -20,13 +20,14 @@ directories = [\
 '/channel_flow/adiabatic_isothermal_channel',
 #'/Delery_bump/inviscid/',
 #'/Delery_bump/viscous/',
-# '/transitional_SBLI/',
+'/transitional_SBLI/',
 '/cylinder/supersonic_cylinder/',
-'/taylor_green_vortex/TGV_multi_block/',
+#'/taylor_green_vortex/TGV_multi_block/',
 '/compressible_taylor_green_vortex/',
-'/aerofoils/single_block/NASA_CRM/3D_buffet/',
-'/aerofoils/single_block/NASA_CRM/3D',
-'/aerofoils/multi_block/V2C/3D/',
+'/aerofoils/single_block/2D/',
+'/aerofoils/single_block/3D/',
+'/aerofoils/multi_block/2D/',
+'/aerofoils/multi_block/3D/',
 ]
 file_names = [\
 'wave.py',
@@ -39,7 +40,7 @@ file_names = [\
 'viscous_shock_tube.py',
 'kelvin_helmholtz.py',
 'inviscid_shock.py',
-# 'katzer_SBLI.py',
+'katzer_SBLI.py',
 'laminar_channel.py',
 'turbulent_channel.py',
 'turbulent_channel.py',
@@ -47,12 +48,13 @@ file_names = [\
 'iso_adi_channel_heat_sink.py',
 #'inviscid_shock_delery_aerofoil_forced.py',
 #'viscous_shock_delery_aerofoil.py',
-# 'transitional_SBLI.py',
+'transitional_SBLI.py',
 'supersonic_cylinder.py',
-'taylor_green_vortex.py',
+#'taylor_green_vortex.py',
 'compressible_TGV.py',
+'CRM_2D.py',
 'CRM_3D.py',
-'CRM_3D.py',
+'transonic_MB.py',
 'transonic_MB.py',
 ]
 
@@ -72,7 +74,7 @@ with open(os.devnull, 'w') as devnull:
 
     for fname, directory in zip(file_names, directories):
         print("Generating the %s application." % (directory+fname))
-        output_code = subprocess.call(["python %s" % fname], shell=True, cwd=owd+directory, stdout=devnull)
+        output_code = subprocess.call(["python3.8 %s" % fname], shell=True, cwd=owd+directory, stdout=devnull)
         if output_code == 0:
             print('\33[92m' + "%s generated successfully." % fname + '\033[0m')
             # Compare the output code to a previously generated one

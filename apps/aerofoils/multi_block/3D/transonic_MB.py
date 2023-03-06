@@ -29,7 +29,7 @@ constants = ["Re", "Pr", "gama", "Minf", "RefT", "SuthT"]
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 metriceq = MetricsEquation()
-metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2)
+metriceq.generate_transformations(ndim, coordinate_symbol, [(True, True), (True, True), (False, False)], 2, latex_debug=False)
 #Create an optional substitutions dictionary, this will be used to modify the equations when parsed
 optional_subs_dict = metriceq.metric_subs
 Einstein_expansion = EinsteinEquation()
@@ -278,12 +278,12 @@ for i, block in enumerate(multi_block.blocks):
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
 # Sponge zones for outer boundaries
 # Outlet
-outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=62)
-outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=62)
+outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=12)
+outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=12)
 # Farfield
-farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=7.5, npoints=62)
-farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=7.5, npoints=62)
-farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=7.5, npoints=62)
+farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=7.5, npoints=12)
+farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=7.5, npoints=12)
+farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=7.5, npoints=12)
 
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
@@ -344,6 +344,6 @@ values += ['1099', '980', '50', '11.5/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0
 
 # Add forcing modes
 constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
-values += ['0.05', '0.00833', '0.2', '0.5', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
+values += ['0.05', '0.00833', '0.1', '0.1', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
 
 substitute_simulation_parameters(constants, values)
