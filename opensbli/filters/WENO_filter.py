@@ -218,9 +218,6 @@ class WENOFilter(NonSimulationEquations):
         # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(gamma*p*inv_rho))]
 
-        # Turn shock-capturing off in low-Mach regions
-        # CR_eqns += self.evaluate_Yee_Mach_sensor(velocity_components, p, a, block)
-
         CR_halos = []
         for _ in range(self.ndim):
             CR_halos.append([self.halo_type, self.halo_type])
@@ -242,47 +239,32 @@ class WENOFilter(NonSimulationEquations):
     def evaluate_Ducros_sensor(self, block):
         # Add a shock sensor for the WENO filter
         SS = ShockSensor()
-        # Pressure sensor term
+        sensor_evaluations = []
         # Ducros dilatation part
-        output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa', Mach=1.0)
-        # Add Mach correction
-        sensor_evaluation = output_eqns[-1]
-        del output_eqns[-1]
-        output_eqns += [OpenSBLIEq(sensor_evaluation.lhs, sensor_evaluation.rhs)]
-        # # # Make the Ducros sensor a binary array of either 0 or 1s    
+        output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
+        # sensor_pre_evaluations = flatten([output_eqns[0:-1]])
+        # sensor_evaluations += sensor_pre_evaluations
+        # Make the Ducros sensor a binary array of either 0 or 1s    
         kappa_evaluation = output_eqns[-1].rhs
-        del output_eqns[-1]
+        # del output_eqns[-1]
         DT = ConstantObject('Ducros_threshold')
         DT.value = 0.5
         CTD.add_constant(DT)
         Ducros_condition = [ExprCondPair(1, kappa_evaluation > DT)]
         # # No wall or interface, default condition is the sensor is not turned off
         Ducros_condition += [ExprCondPair(0, True)]
-        output_eqns += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        sensor_evaluations += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        for eqn in sensor_evaluations:
+            pprint(eqn)
+        # exit()
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
             sensor_halos.append([self.halo_type, self.halo_type])
-        sensor_kernel = self.create_kernel('Shock sensor', flatten(output_eqns), sensor_halos, block)
+        sensor_kernel = self.create_kernel('Shock sensor', flatten(sensor_evaluations), sensor_halos, block)
         self.add_kernel(sensor_kernel)
         self.component_counter += 1
         return kappa
-
-    def airfoil_modification(self, block):
-        # If airfoil, turn off shock-capturing in front of the leading edge
-        if block.blocknumber == 0 and not block.MB or block.MB and block.blocknumber == 1:
-            temp = gv('temp')
-            airfoil_condition = [ExprCondPair(0, Or(block.location_dataset('x0') <= 0.05, block.location_dataset('x1') >= 1.5))]
-            airfoil_condition += [ExprCondPair(self.kappa, True)]
-            output_eqns = [OpenSBLIEq(temp, Piecewise(*airfoil_condition))]
-            output_eqns += [OpenSBLIEq(self.kappa, temp)]
-            grid_halos = []
-            for _ in range(self.ndim):
-                grid_halos.append([set(), set()])
-            airfoil_kernel = self.create_kernel('Airfoil sensor modification', flatten(output_eqns), grid_halos, block)
-            self.add_kernel(airfoil_kernel)
-            self.component_counter += 1
-        return
 
     def wall_control(self):
         """ Turns off the filter close to any of the walls or block interfaces in the problem."""
@@ -333,24 +315,28 @@ class WENOFilter(NonSimulationEquations):
         # Turn off the sensor at the walls
         wall_detection, wall_equations = self.wall_control()
         modified_equations += wall_equations
-        # check = self.kappa
+
+        kappa_fact = self.kappa
+        check = self.kappa
         # for direction in range(self.ndim):
         #     for loc in [-2, -1, 0, 1, 2]:
         #         check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
-        # kappa_fact = gv('kappa_fact')
+        kappa_fact = gv('kappa_fact')
         # check = check > self.DT
         # cond1 = ExprCondPair(self.kappa, check)
         # cond2 = ExprCondPair(0.0, True)
+        modified_equations += [OpenSBLIEq(kappa_fact, check)]
         # modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
-        kappa_fact = self.kappa
-
         shock_factor = ConstantObject('shock_factor')
         shock_factor.value = 1
         CTD.add_constant(shock_factor)
 
         # detJ if needed
         if self.curvilinear and self.airfoil:
-            modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            if self.ndim == 3:
+                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            else:
+                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))] ## Assumes span-periodic for now, for scaling
             detJ_term = gv('inv_detJ')
         else:
             detJ_term = 1
@@ -358,7 +344,9 @@ class WENOFilter(NonSimulationEquations):
         update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
             q = q_vars[i].lhs
-            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), shock_factor*wall_detection*kappa_fact*ConstantObject('dt')*eqn.rhs * detJ_term))
+            # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
+            weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
+            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term))
             update_equations.append(OpenSBLIEq(q, q + block.location_dataset('q%d' % i)))
 
         # Update the global q arrays
@@ -435,7 +423,7 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations
@@ -452,9 +440,6 @@ class WENOFilter(NonSimulationEquations):
 
         if self.dissipation_sensor == 'Ducros':
             self.kappa = self.evaluate_Ducros_sensor(block)
-            # # Turn off shock-capturing ahead of the leading edge
-            # if self.airfoil:
-            #     self.airfoil_modification(block)
         elif self.dissipation_sensor == 'Constant': # No flow sensor for the dissipation control, only a global parameter
             self.kappa, kappa_evaluation = 1, []
         else:
