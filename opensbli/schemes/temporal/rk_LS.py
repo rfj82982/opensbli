@@ -69,7 +69,7 @@ class RungeKuttaLS(Scheme):
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
         cls.niter_symbol = ConstantObject('niter', integer=True)
         cls.niter_symbol.datatype = Int()
-        cls.iteration_number = Globalvariable("iter", integer=True)
+        cls.iteration_number = Globalvariable("iter", force_int=True, integer=True)
         cls.iteration_number._value = None
         cls.iteration_number.datatype = Int()
         # As iteration number is used in a for loop we dont add them to constants to declare
