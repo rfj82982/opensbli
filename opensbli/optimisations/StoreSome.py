@@ -14,7 +14,7 @@ class StoreSome(Central):
     """ Low-storage algorithms to reduce memory intensity and the number of global storage arrays.
         S.P. Jammy et al. Journal of Computational Science. Vol 36, September 2019 10.015."""
 
-    def __init__(self, order, der_fns_to_store, merged=True, group_stored=False, level=1):
+    def __init__(self, order, der_fns_to_store, merged=False, group_stored=False, level=1):
         """ Set up the scheme.
         :arg int order: The order of accuracy of the scheme."""
         Central.__init__(self, order)
@@ -195,6 +195,11 @@ class StoreSome(Central):
         factor_dict = dict()
         grouped_conditions = set()
         output_equations = []
+        print("before", len(input_equations))
+        for eqn in input_equations:
+            pprint(eqn)
+
+        print("\n\n\n\n")
 
         for order, eqn in enumerate(input_equations):
             # Find conditional expressions and group them together based on their if condition
@@ -239,6 +244,10 @@ class StoreSome(Central):
         # Add the equations which have no branching conditions
         for key, val in no_condition.items():
             output_equations.append(val)
+        print("after", len(output_equations))
+        for eqn in output_equations:
+            pprint(eqn)
+        print("\n\n\n\n")
         return output_equations
 
     def SS(self, type_of_eq, block, equation_type, group=True, level=1):
