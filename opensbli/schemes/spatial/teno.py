@@ -13,6 +13,7 @@ from opensbli.schemes.spatial.weno import LFCharacteristic, ShockCapturing
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations
 from sympy.functions.elementary.piecewise import ExprCondPair
+from opensbli.core.kernel import Kernel
 
 
 class TenoHalos(object):
@@ -502,6 +503,9 @@ class LFTeno(LFCharacteristic, Teno):
         Then TENO derivative class is instantiated with the flux at i+1/2 array --> Function in TENO scheme, called from in here
         Final derivatives are evaluated from Weno derivative class --> Using WD.discretise."""
         if isinstance(type_of_eq, SimulationEquations):
+            if self.flux_type == 'GLF':
+                EV_kernel = Kernel(block, computation_name="Global wave-speed reductions")
+                EV_kernel.set_grid_range(block)
             eqs = flatten(type_of_eq.equations)
             grouped = self.group_by_direction(eqs)
             all_derivatives_evaluated_locally = []
@@ -517,9 +521,12 @@ class LFTeno(LFCharacteristic, Teno):
                     deriv.create_reconstruction_work_array(block)
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
-                # Get the equations for a characteristic reconstruction
-                characteristic_eqns = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
-                pre_process, interpolated, post_process = characteristic_eqns[0], characteristic_eqns[1], characteristic_eqns[2]
+                # Get the pre, interpolations and post equations for characteristic reconstruction
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)                
+                if direction == 0 and len(reductions) > 0:
+                    EV_kernel.add_equation(reductions)
+                # Add the equations to the kernel and add the kernel to SimulationEquations
+                kernel.add_equation(pre_process + interpolated + post_process)
                 if self.formulation == 'adaptive':
                     # Calculate adaptive TENO_CT parameter and add to pre_process equations
                     adaptive_CT = self.create_adaptive_CT(direction, block)
@@ -529,6 +536,9 @@ class LFTeno(LFCharacteristic, Teno):
                 # Add the equations to the kernel and add the kernel to SimulationEquations
                 kernel.add_equation(pre_process + interpolated + post_process)
                 type_of_eq.Kernels += [kernel]
+
+            if self.flux_type == 'GLF':
+                type_of_eq.Kernels = [EV_kernel] + type_of_eq.Kernels
             # Generate kernels for the constituent relations
             if grouped:
                 constituent_relations = self.generate_constituent_relations_kernels(block)
