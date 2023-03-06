@@ -182,10 +182,10 @@ class iohdf5(opensbliIO):
                 name = cls.kwargs["name"]
             elif '.' in cls.kwargs["name"]:
                 raise ValueError("")
+            elif cls.dynamic_fname:
+                name = cls.kwargs["name"]
             else:
                 name = cls.kwargs["name"] + '.h5'
-            if cls.dynamic_fname:
-                raise ValueError("dynamic fname not allowed ")
             filename = "\"%s\"" % name
         else:
             name = "opensbli_output"
