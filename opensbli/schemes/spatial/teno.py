@@ -472,7 +472,7 @@ class LFTeno(LFCharacteristic, Teno):
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
     def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF'):
-        LFCharacteristic.__init__(self, physics, averaging)
+        LFCharacteristic.__init__(self, physics, flux_type, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")

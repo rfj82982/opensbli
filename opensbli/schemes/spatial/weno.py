@@ -486,6 +486,10 @@ class LFWeno(LFCharacteristic, Weno):
             print("Global Lax-Friedrich flux splitting.")
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")
+
+        # Check WENO order
+        if (order % 2 == 0):
+            raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
         self.flux_type = flux_type
         self.temp_wk_arrays = []
         LFCharacteristic.__init__(self, physics, flux_type, averaging)
