@@ -154,23 +154,24 @@ class ExplicitFilter(object):
         cases = []
         # Create conditions for adaptive filtering strength
         # Apply filtering if needed over the entire [-5, 5] range in this direction
-        locations = self.locations
-        fmax = increment_dataset(self.Ren, direction, locations[0])
-        for loc in locations[1:]:
-            fmax = Max(increment_dataset(self.Ren, direction, loc), fmax)
-        # Targeted filter to turn the filter off in the boundary-layer
-        output += [OpenSBLIEq(gv('Ren'), fmax)]
-        inner1 = ExprCondPair(3.0, gv('Ren') >= error_indicator)
-        inner2 = ExprCondPair(0.01, True)
-        inner_pw = OpenSBLIEq(st, Piecewise(*[inner1, inner2]))
-        output += [GroupedPiecewise(ExprCondPair(inner_pw, Equality(self.filter_mask, 0)), ExprCondPair(OpenSBLIEq(st, 1.0), True))]
-        # cases += [ExprCondPair(3, And(Equality(self.filter_mask, 0), gv('Ren') >= error_indicator))]
-        # cases += [ExprCondPair(3, And(Equality(self.filter_mask, 0), gv('Ren') >= error_indicator))]
-        # # Case 2: inside the boundary-layer, very weak filtering
-        # cases += [ExprCondPair(0.01, And(Equality(self.filter_mask, 0), gv('Ren') < error_indicator))]
-        # # Case 3: Outside of the boundary-layer, regular uniform filtering
-        # cases += [ExprCondPair(1, True)]
-        # output += [OpenSBLIEq(st, Piecewise(*cases))]
+        if self.airfoil: # Targeted adaptive filter for airfoil buffet cases
+            locations = self.locations
+            fmax = increment_dataset(self.Ren, direction, locations[0])
+            for loc in locations[1:]:
+                fmax = Max(increment_dataset(self.Ren, direction, loc), fmax)
+            # Targeted filter to turn the filter off in the boundary-layer
+            output += [OpenSBLIEq(gv('Ren'), fmax)]
+            inner1 = ExprCondPair(3.0, gv('Ren') >= error_indicator)
+            inner2 = ExprCondPair(0.01, True)
+            inner_pw = OpenSBLIEq(st, Piecewise(*[inner1, inner2]))
+            output += [GroupedPiecewise(ExprCondPair(inner_pw, Equality(self.filter_mask, 0)), ExprCondPair(OpenSBLIEq(st, 1.0), True))]
+            # cases += [ExprCondPair(3, And(Equality(self.filter_mask, 0), gv('Ren') >= error_indicator))]
+            # cases += [ExprCondPair(3, And(Equality(self.filter_mask, 0), gv('Ren') >= error_indicator))]
+            # # Case 2: inside the boundary-layer, very weak filtering
+            # cases += [ExprCondPair(0.01, And(Equality(self.filter_mask, 0), gv('Ren') < error_indicator))]
+            # # Case 3: Outside of the boundary-layer, regular uniform filtering
+            # cases += [ExprCondPair(1, True)]
+            # output += [OpenSBLIEq(st, Piecewise(*cases))]
 
         if self.filter_type == 'DRP':
             for dset_id, dset in enumerate(self.q_vector):
