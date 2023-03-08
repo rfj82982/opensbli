@@ -1,6 +1,6 @@
 from sympy import flatten, simplify, symbols, factor, count_ops, pprint, Piecewise, Equality
 from sympy.functions.elementary.piecewise import ExprCondPair
-from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet, GroupedPiecewise, ConstantIndexed
+from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet, GroupedPiecewise, ConstantIndexed, Grididx
 from opensbli.core.grid import GridVariable
 from opensbli.core.opensblifunctions import CentralDerivative
 from opensbli.core.kernel import Kernel
@@ -47,7 +47,7 @@ class StoreSome(Central):
         else:
             discretised_eq = self.SS(type_of_eq, block, None, group=False)
             if discretised_eq:
-                # discretised_eq = self.merge_conditionals(discretised_eq)
+                # discretised_eq = self.merge_conditionals(discretised_eq, block)
                 discretisation_kernel = Kernel(block, computation_name="%s evaluation" % type_of_eq.__class__.__name__)
                 discretisation_kernel.set_grid_range(block)
                 for eq in discretised_eq:
@@ -95,8 +95,8 @@ class StoreSome(Central):
             self.update_range_of_constituent_relations(der, block)
             v = der
             expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
-            if self.merged: # combine the branch conditions
-                expr = self.merge_conditionals([expr])
+            # if self.merged: # combine the branch conditions
+            #     expr = self.merge_conditionals([expr], block)
             ker.add_equation(expr)
             ker.set_grid_range(block)
             self.local_kernels[v] = ker
@@ -116,7 +116,7 @@ class StoreSome(Central):
         #         kernels = [store_local[d] for d in self.derivatives_to_store[dire]]
         #         equations = flatten([ker.equations for ker in kernels])
         #         # Group conditionals if needed
-        #         equations = flatten(self.merge_conditionals(equations))
+        #         equations = flatten(self.merge_conditionals(equations, block))
         #         # Create new merged kernel
         #         ker = Kernel(block)
         #         ker.set_computation_name("StoreSome evaluations direction %d" % (dire))
@@ -162,8 +162,10 @@ class StoreSome(Central):
         viscous_equations = [x for x in viscous_equations if isinstance(x, OpenSBLIEq)]
         # Group conditionals for vectorisation into a grouped piecewise object instead
         if self.merged:
-            convective_equations = self.merge_conditionals(convective_equations)
-            viscous_equations = self.merge_conditionals(viscous_equations)
+            if convective_equations is not None:
+                convective_equations = self.merge_conditionals(convective_equations, block)
+            if viscous_equations is not None:
+                viscous_equations = self.merge_conditionals(viscous_equations, block)
 
         if convective_equations or viscous_equations:
             for der, ker in self.local_kernels.items():
@@ -188,71 +190,89 @@ class StoreSome(Central):
         self.check_missing_constituent_relations(block, equations)
         return self.required_constituent_relations
 
-    def merge_conditionals(self, input_equations):
-        """ Optimisation to enable vectorisation by grouping the conditional expressions."""
-        no_condition = dict()
-        conditionals = dict()
-        factor_dict = dict()
-        grouped_conditions = set()
+    def merge_conditionals(self, input_equations, block):
+        """ Optimisation to enable vectorisation by grouping the conditional expressions per direction (x, y, z)."""
         output_equations = []
-        print("before", len(input_equations))
-        for eqn in input_equations:
-            pprint(eqn)
+        # Process the equations per direction
+        # output = []
+        # from opensbli.schemes import Central
+        # from sympy import simplify
+        # c = Central(4)
+        # original = input_equations[0].rhs
+        # grouped = c.group_by_direction([original])
+        # subs_dict = {}
+        # pprint(grouped)
+        # exit()
 
-        print("\n\n\n\n")
+        start_order = 0
+        for direction in range(block.ndim):
+            no_condition = dict()
+            conditionals = dict()
+            factor_dict = dict()
+            grouped_conditions = set()
+            for order, eqn in enumerate(input_equations):
+                # Find conditional expressions and group them together based on their if condition
+                if len(eqn.rhs.atoms(Piecewise)) > 0:
+                    # Find the direction
+                    idx = list(eqn.rhs.atoms(Grididx))
+                    assert len(idx) == 1
+                    pw_dire = idx[0].args[-1]
+                    if pw_dire == direction:
+                        for const in eqn.rhs.atoms(ConstantObject):
+                            if not isinstance(const, ConstantIndexed):
+                                if const.rational:
+                                    factor = const
+                        lhs = eqn.lhs
+                        pw = list(eqn.rhs.atoms(Piecewise))[0]
+                        factor_dict[lhs] = factor
+                        for pair in pw.args:
+                            expr, cond = pair.args[0], pair.args[1]
+                            if cond in conditionals:
+                                conditionals[cond].append((lhs, expr, order+start_order))
+                            else:
+                                conditionals[cond] = [(lhs, expr, order+start_order)]
+                else:
+                    if direction == block.ndim - 1:
+                        no_condition[order+start_order] = eqn
 
-        for order, eqn in enumerate(input_equations):
-            # Find conditional expressions and group them together based on their if condition
-            if len(eqn.rhs.atoms(Piecewise)) > 0:
-                for const in eqn.rhs.atoms(ConstantObject):
-                    if not isinstance(const, ConstantIndexed):
-                        if const.rational:
-                            factor = const
-                lhs = eqn.lhs
-                pw = list(eqn.rhs.atoms(Piecewise))[0]
-                factor_dict[lhs] = factor
-                for pair in pw.args:
-                    expr, cond = pair.args[0], pair.args[1]
-                    if cond in conditionals:
-                        conditionals[cond].append((lhs, expr, order))
-                    else:
-                        conditionals[cond] = [(lhs, expr, order)]
-            else:
-                no_condition[order] = eqn
 
-        if len(conditionals) > 0:
-            # Construct the grouped equations
-            conditions_to_evaluate = []
-            for cond, exprs in conditionals.items():
+            # Processs conditional equations if they exist
+            if len(conditionals) > 0:
+                # Construct the grouped equations
+                conditions_to_evaluate = []
+                for cond, exprs in conditionals.items():
+                    evaluations = []
+                    if str(cond) != 'True': # avoid true condition until the end
+                        for triple_value in exprs:
+                            lhs, rhs, order = triple_value
+                            factor = factor_dict[lhs]
+                            evaluations.append(OpenSBLIEq(lhs, factor*rhs))
+                        conditions_to_evaluate.append(ExprCondPair(evaluations, Equality(cond.lhs, cond.rhs)))
+                # Add the default condition
                 evaluations = []
-                if str(cond) != 'True': # avoid true condition until the end
-                    for triple_value in exprs:
-                        lhs, rhs, order = triple_value
-                        factor = factor_dict[lhs]
-                        evaluations.append(OpenSBLIEq(lhs, factor*rhs))
-                    conditions_to_evaluate.append(ExprCondPair(evaluations, Equality(cond.lhs, cond.rhs)))
-            # Add the default condition
-            evaluations = []
-            for triple_value in conditionals[True]:
-                lhs, rhs, order = triple_value
-                factor = factor_dict[lhs]
-                evaluations.append(OpenSBLIEq(lhs, factor*rhs))
-            conditions_to_evaluate.append(ExprCondPair(evaluations, True))
-            # Create a GroupedPiecewise evalation object
-            grouped = GroupedPiecewise(*conditions_to_evaluate)
-            output_equations += [grouped]
-        # Add the equations which have no branching conditions
-        for key, val in no_condition.items():
-            output_equations.append(val)
-        print("after", len(output_equations))
-        for eqn in output_equations:
-            pprint(eqn)
-        print("\n\n\n\n")
+                for triple_value in conditionals[True]:
+                    lhs, rhs, order = triple_value
+                    factor = factor_dict[lhs]
+                    evaluations.append(OpenSBLIEq(lhs, factor*rhs))
+                conditions_to_evaluate.append(ExprCondPair(evaluations, True))
+                # Create a GroupedPiecewise evalation object
+                grouped = GroupedPiecewise(*conditions_to_evaluate)
+                output_equations += [grouped]
+            # Add the equations which have no branching conditions
+            for key, val in no_condition.items():
+                output_equations.append(val)
+            start_order += order
+        # print("after", len(output_equations))
+        # for eqn in output_equations:
+        #     pprint(eqn)
+        # print("\n\n\n\n")
+        # exit()
         return output_equations
 
     def SS(self, type_of_eq, block, equation_type, group=True, level=1):
         """ Generates the GridVariables to store the local derivatives. Also sorts the
         derivatives to re-access the same arrays consecutively."""
+        directions = ['x', 'y', 'z']
         if not isinstance(type_of_eq, list):
             equations = type_of_eq.equations
         else:
@@ -262,17 +282,23 @@ class StoreSome(Central):
         cds = self.get_local_function(flatten(equations))
         grid_variable_evaluations = []
         if cds:
-            gridvars = [GridVariable('localeval_%d' % i) for i in range(len(cds))]
             # Sort by grouping variables
             if group:
                 if equation_type == 'Convective':
                     cds = sorted(cds, key=lambda x: x.args[1].direction)
                 elif equation_type == 'Viscous':
                     cds = sorted(cds, key=lambda x: str(x.args[0]))
-            for der in cds:
+            for i, der in enumerate(cds):
                 self.update_range_of_constituent_relations(der, block)
                 if level == 1:
-                    gv = gridvars.pop(0)
+                    var_name = str(der.args[0]).split('_B%d' % block.blocknumber)[0]
+                    # gv = gridvars.pop(0)
+                    if len(der.args) == 2:
+                        gv = GridVariable('d_%s_d%s' % (var_name, directions[der.args[1].direction]))
+                    elif len(der.args) == 3:
+                        gv = GridVariable('d2_%s_d%s' % (var_name, directions[der.args[1].direction]))
+                    else:
+                        raise ValueError("Only first and second derivatives are supported in StoreSome.")
                     grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
                     for no, c in enumerate(discrete_equations):
                         discrete_equations[no] = discrete_equations[no].subs(der, gv)
