@@ -4,8 +4,10 @@
    @details Implements the tree-based structure with the attribute (components) controls the
    depth of a node."""
 
-from sympy.core.compatibility import is_sequence
+# from sympy.core.compatibility import is_sequence
+from sympy.utilities.iterables import is_sequence
 from sympy.printing.ccode import C99CodePrinter
+# from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
 from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable
 from sympy import Symbol, flatten
@@ -141,7 +143,12 @@ class OPSCCodePrinter(C99CodePrinter):
         return str(expr)
 
     def _print_Equality(self, expr):
-        return "%s == %s" % (self._print(expr.lhs), self._print(expr.rhs))
+        from opensbli.equation_types.opensbliequations import OpenSBLIEquation
+        if isinstance(expr, OpenSBLIEquation):
+            print("here")
+            return "%s = %s" % (self._print(expr.lhs), self._print(expr.rhs))
+        else:
+            return "%s == %s" % (self._print(expr.lhs), self._print(expr.rhs))
 
     def _print_DataSet(self, expr):
         """ Prints the OpenSBLI dataset in the OPS format with the access numbers provided.
@@ -365,9 +372,9 @@ class OPSC(object):
             elif str(key) == 'iter': # current iteration counter
                 code += ['const int *%s' % key]
             elif isinstance(key, ReductionVariable):
-                if key.intent is 'OPS_INC': # summation reduction variables
+                if key.intent == 'OPS_INC': # summation reduction variables
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
-                elif val is 'input':
+                elif val == 'input':
                     code += ['const %s *%s' % (key.datatype.opsc(), key)]
                 else:
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
