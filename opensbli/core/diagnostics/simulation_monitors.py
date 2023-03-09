@@ -165,9 +165,9 @@ class SimulationMonitor(object):
         variables = ', '.join(iterations + variables)
         # Check if the output should be written directly to a log file
         if self.output_file:
-            output_print = ["ops_fprintf(f, \"%s\\n\", %s);" % (placeholders, variables)]
+            output_print = ["ops_fprintf(f, \"%s\\n\", %s);" % (placeholders, variables)] + ["fflush(f);"]
         else:
-            output_print = ["ops_printf(\"%s\\n\", %s);" % (placeholders, variables)]
+            output_print = ["ops_printf(\"%s\\n\", %s);" % (placeholders, variables)] + ["fflush(stdout);"]
         return ["// Write the output values"] + output_print
 
     @property

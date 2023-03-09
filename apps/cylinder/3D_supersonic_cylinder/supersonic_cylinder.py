@@ -102,7 +102,7 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 u2 T'
-cent = StoreSome(4, fns)
+cent = StoreSome(4, fns, merged=True)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(3, formulation='SSP', stages=3)
@@ -139,9 +139,9 @@ block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write", "write_constants" : True}
-h5 = iohdf5(save_every=1000, **kwargs)
+h5 = iohdf5(save_every=10000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('kappa')])
+h5.add_arrays([DataObject('kappa'), DataObject('q0')])
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([h5, h5_read])
@@ -163,15 +163,15 @@ DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, 
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
 block.set_discretisation_schemes(schemes)
 
 # Monitor residuals within the domain
-RM = ResidualMonitor(block, frequency=100)
-block.set_equations(RM.equation_classes)
+# RM = ResidualMonitor(block, frequency=100)
+# block.set_equations(RM.equation_classes)
 
 # Discretise the equations on the block
 block.discretise()
@@ -202,9 +202,16 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Monitor the residuals
 # Simulation monitor
-arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'L2_R4', 'u1_B0']
-probe_locations = ['residual', 'residual', 'residual', 'residual', 'residual', (0, 100, 50)]
-SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=1000, output_file='residuals.log')
+# arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'L2_R4', 'u1_B0']
+# probe_locations = ['residual', 'residual', 'residual', 'residual', 'residual', (0, 100, 50)]
+# SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=1000, output_file='residuals.log')
+
+arrays = ['u1', 'u1', 'u1', 'u1', 'u1', 'u1', 'u1']
+arrays = [block.location_dataset('%s' % dset) for dset in arrays]
+indices = [(0, 50, 25), (0, 100, 25), (0, 200, 25), (0, 400, 25), (0, 700, 25), (0, 1200, 25), (0, 1500, 25)]
+SM = SimulationMonitor(arrays, indices, block, print_frequency=250, fp_precision=12, output_file='output.log')
+alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
+# Create algorithm
 
 # Create algorithm
 alg = TraditionalAlgorithmRK(block, SM)
@@ -214,6 +221,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Simulation parameters
 constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0',  'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'shock_factor']
-values = ['250.0', '1.4', '1.2', '0.71', '0.00005', '5000000', '598', '782', '100', '242.2/(block0np0-1)', '242.2/(block0np1-1)', '5.0/(block0np2)','1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '500.0']
+values = ['1500.0', '1.4', '1.2', '0.71', '0.0001', '5000000', '1572', '1605', '50', 'M_PI/(block0np0)', '242.2/(block0np1-1)', '10.0/(block0np2)','1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1.0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho', every=100)
