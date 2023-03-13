@@ -1,6 +1,7 @@
 
 from opensbli.core.block import SimulationBlock
 from opensbli.core.boundary_conditions.multi_block import MultiBlockBoundary
+from opensbli.core.io_hdf5 import iohdf5_slices
 import copy
 from sympy import flatten
 
@@ -40,6 +41,7 @@ class MultiBlock():
         self.blocks = [0 for i in range(nblocks)]
         for i in range(nblocks):
             self.blocks[i] = SimulationBlock(ndim, block_number=i, conservative=conservative)
+            self.blocks[i].MB = True
         return
 
     def get_block(self, number):
@@ -91,7 +93,16 @@ class MultiBlock():
             
     def setio(self, list_of_ios):
         for b in self.blocks:
-            copied_io = [copy.deepcopy(io) for io in list_of_ios]
+            # Adding option of different slicing output per block
+            copied_io = [copy.deepcopy(io) for io in list_of_ios if not isinstance(io, iohdf5_slices)]
             b.setio(copied_io)
+        # Add the HDF5 slicing output objects
+        for b in self.blocks:
+            slice_io = []
+            for io in list_of_ios:
+                if isinstance(io, iohdf5_slices):
+                    print(io.blocknumber)
+                    if io.blocknumber == b.blocknumber:
+                        slice_io += [copy.deepcopy(io)]
+            b.setio(slice_io)
         return
-# MBCHANGE

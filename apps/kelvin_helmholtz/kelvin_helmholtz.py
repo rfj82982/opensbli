@@ -84,7 +84,7 @@ h5.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([copy.deepcopy(h5)])
 
 # Random number generation for the initial condition
-add_random = False
+add_random = True
 if add_random:
     # read the random numbers dataset from hdf5
     kwargs = {'iotype': "Read"}

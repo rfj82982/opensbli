@@ -79,7 +79,7 @@ schemes = {}
 rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
-cent = StoreSome(4, 'u0 u1 T')
+cent = StoreSome(4, 'u0 u1 T', merged=True)
 schemes[cent.name] = cent
 multi_block.set_discretisation_schemes(schemes)
 

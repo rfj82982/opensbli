@@ -23,7 +23,7 @@ class iohdf5(opensbliIO):
     def __new__(cls, arrays=None, save_every=None, **kwargs):
         ret = super(iohdf5, cls).__new__(cls)
         ret.order = 0
-        ret.block_number = 0
+        ret.blocknumber = 0
         ret.group_number = cls.group_number
         # Function name to call from the main program file
         ret.func_name = 'HDF5_IO_Write_%d' % ret.group_number
@@ -171,7 +171,7 @@ class iohdf5(opensbliIO):
     def hdf5write_opsc_code(cls):
         """ Generates the OPS C code to write data to disk as HDF5 files."""
         code = []
-        var_name = 'name%s' % cls.block_number
+        var_name = 'name%s' % cls.blocknumber
         # Add HDF5 timers to check I/O cost
         code += ['double cpu_start0, elapsed_start0;']
         code += ['if (HDF5_timing == 1){']
@@ -203,7 +203,7 @@ class iohdf5(opensbliIO):
         # generate the block name
         code += ['ops_fetch_block_hdf5_file(%s, %s);' % (block_name, filename)] + dataset_write
         # Write constants to the HDF5 output file, once per file (not per block)
-        if cls.write_constants and cls.block_number == 0:
+        if cls.write_constants and cls.blocknumber == 0:
             code += ['// Writing simulation constants']
             code += ['write_constants(%s);' % filename]
 
@@ -256,10 +256,13 @@ class HDF5_slice(object):
         return
 
 class iohdf5_slices(opensbliIO):
-    def __new__(cls, slices=None, save_every=None, **kwargs):
+    def __new__(cls, slices=None, save_every=None, blocknumber=None, **kwargs):
         ret = super(iohdf5_slices, cls).__new__(cls)
         ret.order = 0
-        ret.block_number = 0
+        if blocknumber == None:
+            ret.blocknumber = 0
+        else:    
+            ret.blocknumber = blocknumber
         ret.group_number = cls.group_number
         cls.increase_io_group_number()
         if kwargs:
@@ -344,7 +347,7 @@ class iohdf5_slices(opensbliIO):
         return # hdf5 slicing has no read functionality, output option only
 
     def hdf5write_opsc_code(cls, init=False):
-        var_name = 'name%s' % cls.block_number
+        var_name = 'name%s' % cls.blocknumber
         code = []
         if "name" in cls.kwargs:
             if '.h5' in cls.kwargs["name"]:
@@ -367,13 +370,13 @@ class iohdf5_slices(opensbliIO):
         
 
         dataset_write = []
-        # syntax: ops_write_slice_group_hdf5({{2, 50}}, str, {{rho_B0, rhou0_B0, rhou1_B0, rhou2_B0, rhoE_B0}});
+        # syntax: ops_write_plane_group_hdf5({{2, 50}}, str, {{rho_B0, rhou0_B0, rhou1_B0, rhou2_B0, rhoE_B0}});
         for slc in cls.slices:
-            dataset_write += ['ops_write_slice_group_hdf5({{%s, %s}}, %s, {{%s}});' % (str(slc.direction), str(slc.index), var_name, str(', '.join([str(x)+'_B%d' % cls.block_number for x in slc.arrays])))]
+            dataset_write += ['ops_write_plane_group_hdf5({{%s, %s}}, %s, {{%s}});' % (str(slc.direction), str(slc.index), var_name, str(', '.join([str(x)+'_B%d' % cls.blocknumber for x in slc.arrays])))]
         code += dataset_write
         
         # Write constants to the HDF5 output file, once per file (not per block)
-        if cls.write_constants and cls.block_number == 0:
+        if cls.write_constants and cls.blocknumber == 0:
             # Generate the OPS API calls
             user_constants = [x for x in CTD.constants if isinstance(x, ConstantObject)]
             user_constants = [x for x in user_constants if not x.rational]

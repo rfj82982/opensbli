@@ -79,7 +79,7 @@ schemes = {}
 rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 # cent = Central(4)
-cent = StoreSome(4, 'u0 u1 u2 T')
+cent = StoreSome(4, 'u0 u1 u2 T', merged=True)
 schemes[cent.name] = cent
 multi_block.set_discretisation_schemes(schemes)
 
@@ -267,6 +267,57 @@ kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
 stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
 # Set the I/O on the block
 multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5, stats_hdf5])
+
+# Block 0 slicing
+grid_slice_hdf5_0 = iohdf5_slices(blocknumber=0, **{'iotype': "Init"})
+# x-y view
+coords = [([DataObject('x0'), DataObject('x1')], 2, 'block0np2/2')]
+grid_slice_hdf5_0.add_slices(coords)
+# Q vector slices written out in time
+slices_hdf5_0 = iohdf5_slices(save_every=1000, blocknumber=0, **{'iotype': "Write"})
+# x-y view
+slices = [(q_vector, 2, 'block0np2/2')]
+slices_hdf5_0.add_slices(slices)
+# Block 2 slicing
+grid_slice_hdf5_2 = iohdf5_slices(blocknumber=2, **{'iotype': "Init"})
+# x-y view
+coords = [([DataObject('x0'), DataObject('x1')], 2, 'block2np2/2')]
+grid_slice_hdf5_2.add_slices(coords)
+# Q vector slices written out in time
+slices_hdf5_2 = iohdf5_slices(save_every=1000, blocknumber=2, **{'iotype': "Write"})
+# Surface above the cylinder, 5 points off the wall
+slices = [(q_vector, 2, 'block2np2/2')]
+slices_hdf5_2.add_slices(slices)
+
+# Block 1 slicing (airfoil block)
+grid_slice_hdf5_1 = iohdf5_slices(blocknumber=1, **{'iotype': "Init"})
+# x-y view
+coords = [([DataObject('x0'), DataObject('x1')], 2, 'block1np2/2')]
+# Airfoil surface coordinates
+coords += [([DataObject('x0'), DataObject('x2')], 1, 0)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 1)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 2)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 3)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 4)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 5)]
+
+grid_slice_hdf5_1.add_slices(coords)
+# Q vector slices written out in time
+slices_hdf5_1 = iohdf5_slices(save_every=1000, blocknumber=1, **{'iotype': "Write"})
+# x-y view
+slices = [(q_vector, 2, 'block1np2/2')]
+# Airfoil 
+slices += [(q_vector, 1, 0)]
+slices += [(q_vector, 1, 1)]
+slices += [(q_vector, 1, 2)]
+slices += [(q_vector, 1, 3)]
+slices += [(q_vector, 1, 4)]
+slices += [(q_vector, 1, 5)]
+slices_hdf5_1.add_slices(slices)
+
+# Set both HDF5 slicing objects
+multi_block.setio([grid_slice_hdf5_0, slices_hdf5_0, grid_slice_hdf5_1, slices_hdf5_1, grid_slice_hdf5_2, slices_hdf5_2])
+
 # Perform the discretization
 multi_block.discretise()
 
@@ -274,16 +325,16 @@ multi_block.discretise()
 for i, block in enumerate(multi_block.blocks):
     shock_filters[i].update_periodic_boundary(block, halos=[-4,4])
 
-# Add the wake treatment kernels
+# Add the wake treatment kernelss
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])
 # Sponge zones for outer boundaries
 # Outlet
-outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=4.5, npoints=12)
-outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=4.5, npoints=12)
+outlet_sponge_block0 = generate_outlet_sponge(q_vector, multi_block.get_block(0), Lx=5.0, npoints=10)
+outlet_sponge_block2 = generate_outlet_sponge(q_vector, multi_block.get_block(2), Lx=5.0, npoints=10)
 # Farfield
-farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=7.5, npoints=12)
-farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=7.5, npoints=12)
-farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=7.5, npoints=12)
+farfield_sponge_block0 = generate_farfield_sponge(q_vector, multi_block.get_block(0), Ly=22.5, npoints=10)
+farfield_sponge_block1 = generate_farfield_sponge(q_vector, multi_block.get_block(1), Ly=22.5, npoints=10)
+farfield_sponge_block2 = generate_farfield_sponge(q_vector, multi_block.get_block(2), Ly=22.5, npoints=10)
 
 # Add wake exchanges and kernels to block2 boundary conditions
 b = multi_block.get_block(2)
@@ -331,19 +382,18 @@ OPSC(alg, OPS_diagnostics=1)
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
 # Substitute simulation parameter values
 constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor', 'Twall']
-values = ['1.4', '0.70', '0.72', '5.0e5', '4.0e-5', '1000000', '0.01', '110.4', '268.67', '100', '1.0', '1.0']
+values = ['1.4', '0.73', '0.72', '3.0e6', '3.0e-5', '1000000', '0.01', '110.4', '273.15', '100', '1.0', '1.0']
 # Block 0
 constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
-values += ['1099', '980', '50', '11.5/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '0.05/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
+values += ['1099', '980', '50', '5.0/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '0.065/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
 # Block 1
 constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1', 'inv_rfact0_block1', 'inv_rfact1_block1', 'inv_rfact2_block1']
 values += ['1495', '980', '50', '2.0461756979465546/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
 # Block 2
 constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2', 'inv_rfact0_block2', 'inv_rfact1_block2', 'inv_rfact2_block2']
-values += ['1099', '980', '50', '11.5/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '0.05/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
-
+values += ['1099', '980', '50', '5.0/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '0.065/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
 # Add forcing modes
 constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
-values += ['0.05', '0.00833', '0.1', '0.1', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
+values += ['0.05', '0.00833', '0.07', '0.07', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
 
 substitute_simulation_parameters(constants, values)

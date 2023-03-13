@@ -336,8 +336,9 @@ class StoreSome(Central):
             var_name = ''.join([str(x).split('_B%d' % block.blocknumber)[0] for x in dsets])
         if len(input_args.atoms(Pow)) > 0:
             npow = list(input_args.atoms(Pow))[0].args[-1]
-            assert list(input_args.atoms(Pow))[0].args[-1] == 2 # currently only checked for powers of 2
-            repeated = [(npow-1)*str(list(input_args.atoms(Pow))[0]).split('_B%d' % block.blocknumber)[0]]
-            var_name = ''.join([str(x).split('_B%d' % block.blocknumber)[0] for x in dsets] + repeated)
+            if npow > 0:
+                repeated = [(npow-1)*str(list(input_args.atoms(Pow))[0]).split('_B%d' % block.blocknumber)[0]]
+            else:
+                repeated = ['inv_']
+            var_name = ''.join(repeated + [str(x).split('_B%d' % block.blocknumber)[0] for x in dsets])
         return var_name
-

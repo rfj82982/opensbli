@@ -145,7 +145,6 @@ class OPSCCodePrinter(C99CodePrinter):
     def _print_Equality(self, expr):
         from opensbli.equation_types.opensbliequations import OpenSBLIEquation
         if isinstance(expr, OpenSBLIEquation):
-            print("here")
             return "%s = %s" % (self._print(expr.lhs), self._print(expr.rhs))
         else:
             return "%s == %s" % (self._print(expr.lhs), self._print(expr.rhs))
