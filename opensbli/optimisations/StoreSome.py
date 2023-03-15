@@ -124,8 +124,7 @@ class StoreSome(Central):
         #         ker.add_equation(equations)
         #         # self.update_range_of_constituent_relations(der, block)
         #         ker.set_grid_range(block)
-        #         self.local_kernels[dire] = ker       
-
+        #         self.local_kernels[dire] = ker    
         return work_arrays
 
 
@@ -307,8 +306,7 @@ class StoreSome(Central):
             for i, der in enumerate(cds):
                 self.update_range_of_constituent_relations(der, block)
                 if level == 1:
-                    var_name = self.generate_name(der, block)
-                    # pprint(var_name)
+                    var_name = self.generate_name(der, block, i)
                     if len(der.args) == 2:
                         gv = GridVariable('d1_%s_d%s' % (var_name, directions[der.args[1].direction]))
                     elif len(der.args) == 3:
@@ -316,17 +314,19 @@ class StoreSome(Central):
                     else:
                         raise ValueError("Only first and second derivatives are supported in StoreSome.")
                     assert str(gv) not in names # no repeated grid variable names
-                    names.append(gv)
+                    names.append(str(gv))
                     # Evaluate the expression and assign to the local grid variable
                     grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
                     for no, c in enumerate(discrete_equations):
                         discrete_equations[no] = discrete_equations[no].subs(der, gv)
+            # Check the each input derivative received a local grid variable
+            assert len(cds) == len(names)
             return grid_variable_evaluations+discrete_equations
         else:
             return None
 
 
-    def generate_name(self, der, block):
+    def generate_name(self, der, block, identity):
         # Make a name for the local derivative evaluation
         input_vars = []
         input_args = der.args[0]
@@ -341,4 +341,5 @@ class StoreSome(Central):
             else:
                 repeated = ['inv_']
             var_name = ''.join(repeated + [str(x).split('_B%d' % block.blocknumber)[0] for x in dsets])
+        # var_name = str(identity) + '_' + var_name
         return var_name

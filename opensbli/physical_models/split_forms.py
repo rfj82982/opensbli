@@ -77,7 +77,10 @@ class KGP(object):
         # Split on phi = E, with quadratic split applied to pressure-velocity term
         A, B, C, D = self.alpha, self.beta, self.gamma, self.delta
         if self.energy_formulation == 'enthalpy': # The RHS does not have rhoE or E explicitly here. Pressure divergence derivative is included within H definition H = E + p / rho (constituent relations)
-            convective = "(%s*Conservative(rho*H*u_j, x_j) + %s*(H*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(H, x_j)) + %s*(u_j*Conservative(rho*H, x_j) + rho*H*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*H, x_j) + u_j*H*Der(rho, x_j)))" % (A, B, C, D)
+            if self.conservative:
+                convective = "(%s*Conservative(rhou_j*H, x_j) + %s*(H*Conservative(rhou_j, x_j) + rhou_j*Conservative(H, x_j)) + %s*(u_j*Conservative(rho*H, x_j) + rho*H*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*H, x_j) + u_j*H*Der(rho, x_j)))" % (A, B, C, D) 
+            else:
+                convective = "(%s*Conservative(rho*H*u_j, x_j) + %s*(H*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(H, x_j)) + %s*(u_j*Conservative(rho*H, x_j) + rho*H*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*H, x_j) + u_j*H*Der(rho, x_j)))" % (A, B, C, D)
         else:
             if self.conservative:
                 convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
