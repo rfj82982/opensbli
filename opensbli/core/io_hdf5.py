@@ -36,6 +36,7 @@ class iohdf5(opensbliIO):
                         ret.kwargs[key.lower()] = kwargs[key].lower()
         else:
             # Default IO type is write to hdf5
+            print("Warning: IO type has not been specified for this HDF5 object.")
             ret.kwargs = {'iotype': "write"}
             # Default write placement is the end of the simulation
         # Position of write calls in the output
@@ -207,7 +208,6 @@ class iohdf5(opensbliIO):
             code += ['// Writing simulation constants']
             code += ['write_constants(%s);' % filename]
 
-
         code += ['if (HDF5_timing == 1){']
         code += ['double cpu_end0, elapsed_end0;']
         code += ['ops_timers(&cpu_end0, &elapsed_end0);']
@@ -347,7 +347,7 @@ class iohdf5_slices(opensbliIO):
         return # hdf5 slicing has no read functionality, output option only
 
     def hdf5write_opsc_code(cls, init=False):
-        var_name = 'name%s' % cls.blocknumber
+        var_name = 'slice_name%s' % cls.blocknumber
         code = []
         if "name" in cls.kwargs:
             if '.h5' in cls.kwargs["name"]:
