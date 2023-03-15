@@ -388,9 +388,7 @@ class Kernel(object):
             if stencil not in block.block_stencils.keys():
                 # Add more descriptive naming of the stencils
                 name = self.process_stencil_name(stencil, block)
-                print(name)
                 # name = 'stencil_%d_%02d' % (block.blocknumber, len(block.block_stencils.keys()))
-
                 block.block_stencils[stencil] = StencilObject(name, stencil, block.ndim)
             if dset not in self.stencil_names:
                 self.stencil_names[dset] = block.block_stencils[stencil].name

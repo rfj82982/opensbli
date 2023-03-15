@@ -19,7 +19,7 @@ class WENOFilter(NonSimulationEquations):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False):
+    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=False, flux_type='LLF', airfoil=False):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         self.reconstruction_kernels = []
         self.residual_kernels = []
@@ -37,6 +37,7 @@ class WENOFilter(NonSimulationEquations):
         # Choice of how to evaluate the amount of dissipation to be added (varies spatially in the domain)
         self.dissipation_sensor = dissipation_sensor
         self.block = block
+        self.store_filter = store_filter
         self.ndim = block.ndim
         self.equation_classes = []
         # Check if the problem needs a metric transformation of the equations
@@ -158,8 +159,8 @@ class WENOFilter(NonSimulationEquations):
                     energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
                 governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
-        for eqn in output_equations:
-            pprint(eqn)
+        # for eqn in output_equations:
+        #     pprint(eqn)
         # exit()                      
         return output_equations
 
@@ -183,6 +184,7 @@ class WENOFilter(NonSimulationEquations):
         return
 
     def reduction_operations(self, reduction_equations):
+        """ Get reduction kernels for global reductions if needed."""
         reduction_halos = []
         for _ in range(self.ndim):
             reduction_halos.append([self.halo_type, self.halo_type])
@@ -254,9 +256,6 @@ class WENOFilter(NonSimulationEquations):
         # # No wall or interface, default condition is the sensor is not turned off
         Ducros_condition += [ExprCondPair(0, True)]
         sensor_evaluations += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
-        for eqn in sensor_evaluations:
-            pprint(eqn)
-        # exit()
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
@@ -306,12 +305,6 @@ class WENOFilter(NonSimulationEquations):
         q_grid = [gv('q%d' % i) for i in range(nvars)]
         rho = self.solution_vector[0]
         modified_equations = []
-        if not block.conservative:
-            q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
-        else:
-            q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
-        modified_equations += q_vars[:]
-
         # Turn off the sensor at the walls
         wall_detection, wall_equations = self.wall_control()
         modified_equations += wall_equations
@@ -336,31 +329,42 @@ class WENOFilter(NonSimulationEquations):
             if self.ndim == 3:
                 modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
             else:
-                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))] ## Assumes span-periodic for now, for scaling
+                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
             detJ_term = gv('inv_detJ')
         else:
             detJ_term = 1
+
         # Apply the filter
+        if not block.conservative:
+            q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
+        else:
+            q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
+        
+        if self.store_filter:
+            modified_equations += q_vars[:]
+
         update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
-            q = q_vars[i].lhs
             # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
             weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
-            update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term))
-            update_equations.append(OpenSBLIEq(q, q + block.location_dataset('q%d' % i)))
-
+            rhs = shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
+            update_equations.append(OpenSBLIEq(q_vars[i].lhs, rhs))
+            if self.store_filter:
+                update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), q_vars[i].lhs))
+                                
         # Update the global q arrays
-        update_equations.append(OpenSBLIEq(self.solution_vector[0], q_vars[0].lhs))
+        update_equations.append(OpenSBLIEq(self.solution_vector[0], self.solution_vector[0] + q_vars[0].lhs))
         if not block.conservative:
             inv_rho = gv('inv_rho')
             update_equations += [OpenSBLIEq(inv_rho, 1.0/q_vars[0].lhs)]
         for i, var in enumerate(self.solution_vector[1:]):
             if not block.conservative:
-                update_equations.append(OpenSBLIEq(var, inv_rho*q_vars[i+1].lhs))
+                update_equations.append(OpenSBLIEq(var, var + inv_rho*q_vars[i+1].lhs))
             else:
-                update_equations.append(OpenSBLIEq(var, q_vars[i+1].lhs))
-        modified_equations += update_equations
+                update_equations.append(OpenSBLIEq(var, var + q_vars[i+1].lhs))
 
+        modified_equations += update_equations
+        # Finish creating the kernel
         resid_kernel.equations = modified_equations
         residual_kernel = self.create_kernel('Non-linear filter application', resid_kernel.equations, resid_kernel.halo_ranges, block)
         self.component_counter += 1
@@ -368,6 +372,7 @@ class WENOFilter(NonSimulationEquations):
         return
 
     def zero_work_arrays(self, block, dsets):
+        """ Ensure all the temporary arrays are zeroed before calculating the filter."""
         resid_kernel = self.residual_kernels[0]
         zero_halos = []
         for _ in range(self.ndim):
@@ -390,7 +395,7 @@ class WENOFilter(NonSimulationEquations):
         input_equations = flatten(kernel.equations)
         kernel.equations = []
         self.DT = ConstantObject('Ducros_threshold')
-        self.DT.value = 0.65
+        self.DT.value = 0.5
         CTD.add_constant(self.DT)
         locations = [-3, -2, -1, 1, 2]
         term = self.kappa
@@ -405,6 +410,7 @@ class WENOFilter(NonSimulationEquations):
         return kernel
 
     def update_periodic_boundary(self, block, halos):
+        """ Apply periodic boundary conditions again if required before applying the WENO filter."""
         print("Applying periodic boundary for WENO")
         bc_kernels = []
         for direction in range(block.ndim):
@@ -416,6 +422,7 @@ class WENOFilter(NonSimulationEquations):
         return
 
     def main(self, scheme_order, block):
+        """ Main calling function to generate the kernels for the WENO filter."""
         # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
