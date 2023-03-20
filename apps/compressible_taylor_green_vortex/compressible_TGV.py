@@ -11,19 +11,37 @@ constants = ["Re", "Pr", "gama", "Minf"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
+teno = True
+# Central scheme plus WENO filtering, otherwise pure TENO
+if not teno:
+    NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
+    mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+    # Expand the simulation equations, for this create a simulation equations class
+    simulation_eq = SimulationEquations()
+    simulation_eq.add_equations(mass)
+    simulation_eq.add_equations(momentum)
+    simulation_eq.add_equations(energy)
 
-mass, momentum, energy = NS.mass, NS.momentum, NS.energy
-# pprint(-1*debug_equation(ndim, energy, 0))
+else:
+    sc1 = "**{\'scheme\':\'Teno\'}"
+    # Define the compresible Navier-Stokes equations in Einstein notation.
+    mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % sc1
+    momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s) + Der(tau_i_j,x_j) )" % sc1
+    energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s) - Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j) )" % sc1
+    stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i) - (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
+    heat_flux = "Eq(q_j, (-mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
+    # Substitutions
+    substitutions = [stress_tensor, heat_flux]
+    constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
+    einstein_eq = EinsteinEquation()
+    base_eqns = [mass, momentum, energy]
+    # Expand the base equations
+    for i, base in enumerate(base_eqns):
+        base_eqns[i] = einstein_eq.expand(base, ndim, coordinate_symbol, substitutions, constants)
+    simulation_eq = SimulationEquations()
+    for eqn in base_eqns:
+        simulation_eq.add_equations(eqn)
 
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-simulation_eq.add_equations(mass)
-simulation_eq.add_equations(momentum)
-simulation_eq.add_equations(energy)
-
-einstein_eq = EinsteinEquation()
 # Constituent relations
 if conservative:
     pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
@@ -35,6 +53,8 @@ else:
 
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**(1.5)*(1.4042)/(T+0.40417)))" ## Modified sutherland law
+speed_of_sound = "Eq(a, (gama*p/rho)**0.5)"
+
 
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
@@ -55,6 +75,9 @@ eqns = einstein_eq.expand(enthalpy, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # # Expand viscosity and add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
+constituent.add_equations(eqns)
+# # Expand viscosity and add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(speed_of_sound, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Create a simulation block
@@ -103,40 +126,63 @@ initial.add_equations(initial_equations)
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
-fns = 'u0 u1 u2 T'
+fns = 'u0 u1 u2'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3)
+rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
+
+if teno:
+    teno_order = 6
+    Avg = RoeAverage([0, 1])
+    # Adaptive changing of TENO CT coefficients paired with a shock-sensor
+    adaptive = True
+    if adaptive:
+        SS = ShockSensor()
+        shock_sensor, sensor_array = SS.ducros_equations(block, coordinate_symbol)
+        # Add shock Ducros sensor to constituent relations
+        constituent.add_equations(shock_sensor)
+        LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF', formulation='adaptive', sensor=sensor_array, store_sensor=True)
+    else:
+        LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF')
+    schemes[LF.name] = LF
 
 boundaries = []
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
+if not teno:
+    halos = [-2,2]
+else:
+    halos = [-4,4]
+# Set periodic boundary with desired halo depth
 for direction in range(ndim):
-    boundaries += [PeriodicBC(direction, 0, halos=[-2,2])]
-    boundaries += [PeriodicBC(direction, 1, halos=[-2,2])]
+    boundaries += [PeriodicBC(direction, 0, halos=halos)]
+    boundaries += [PeriodicBC(direction, 1, halos=halos)]
 
 q_vector = simulation_eq.time_advance_arrays
 # set the boundaries for the block
 block.set_block_boundaries(boundaries)
 # set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=100, **kwargs)
-h5.add_arrays(q_vector + [DataObject('kappa')] + [DataObject('x0'), DataObject('x1'), DataObject('x2')] + [DataObject('q0')])
+h5 = iohdf5(save_every=10000, **kwargs)
+h5.add_arrays(q_vector + [DataObject('x0'), DataObject('x1'), DataObject('x2')])
+
+if not teno:
+    h5.add_arrays([DataObject('kappa')] + [DataObject('q0')]) 
 # Write out a grid file
 if store_grid:
     h5_grid = iohdf5(**kwargs)
     h5_grid.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 block.setio(copy.deepcopy(h5))
-# set the equations to be solved on the block
 
 # Dispersion relation preserving filters
 # DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
 # block.set_equations(DRP.equation_classes)
 
-# WENO filter for shock-capturing
-WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
-block.set_equations(WF.equation_classes)
+if not teno:
+    # WENO filter for shock-capturing
+    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+    block.set_equations(WF.equation_classes)
 
 ## Post-processing for TGV case, kinetic energy and enstrophy reductions
 # Velocity in 3D
@@ -187,7 +233,8 @@ block.set_discretisation_schemes(schemes)
 # Discretise the equations on the block
 block.discretise()
 # Apply a periodic BC for WENO filter
-WF.update_periodic_boundary(block, halos=[-5,5])
+if not teno:
+    WF.update_periodic_boundary(block, halos=[-5,5])
 
 # Simulation monitor
 arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rho_m']
@@ -203,8 +250,8 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
 
 # NaN check and iteration counter
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'shock_factor', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
-values = ['1600.0', '1.4', '1.25', '0.71', '0.0005', '40000', '128', '128', '128', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2', '1', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
+constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'shock_factor', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'TENO_CT', 'eps', 'teno_a1', 'teno_a2']
+values = ['1600.0', '1.4', '1.25', '0.71', '0.0005', '40000', '256', '256', '256', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2', '1', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1e-6', '1.0e-30', '10.5', '4.5']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
 
