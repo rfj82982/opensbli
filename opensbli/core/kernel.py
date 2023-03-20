@@ -332,20 +332,17 @@ class Kernel(object):
         template = 'ops_arg_dat(%s, %d, %s, \"%s\", %s)'
         return template % (array, 1, stencil, self.dtype, access_type)
 
-    def process_stencil_name(self, stencil, block):
+    def process_stencil_name(self, stencil, block, counter):
         """ Create a stencil name based on the min/max values in each direction"""
         indices_to_process = []
         for indices in stencil:
             indices_to_process.append(list(indices))
         # Create a name based on the min/max stencil values
-        name = 'stencil_%d' % block.blocknumber
+        name = 'stencil_%d_%d' % (block.blocknumber, counter)
         for direction in range(block.ndim):
             indices = [x[direction] for x in indices_to_process]
             xm, xp = abs(min(indices)), max(indices)
             name += '_%d%d' % (xm, xp)
-            # Case where the zero point is included
-            if 0 in indices and xm != 0 and xp !=0 and direction == (block.ndim -1):
-                name += '_z'
         return name
 
     def update_block_datasets(self, block):
@@ -387,7 +384,7 @@ class Kernel(object):
         for dset, stencil in stens.items():
             if stencil not in block.block_stencils.keys():
                 # Add more descriptive naming of the stencils
-                name = self.process_stencil_name(stencil, block)
+                name = self.process_stencil_name(stencil, block, len(block.block_stencils.keys()))
                 # name = 'stencil_%d_%02d' % (block.blocknumber, len(block.block_stencils.keys()))
                 block.block_stencils[stencil] = StencilObject(name, stencil, block.ndim)
             if dset not in self.stencil_names:

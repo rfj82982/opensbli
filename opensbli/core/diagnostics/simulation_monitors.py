@@ -24,7 +24,7 @@ class ScalarMonitor(object):
 
 
 class SimulationMonitor(object):
-    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=15, NaNcheck=True, output_file=None):
+    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=12, NaNcheck=True, output_file=None):
         """ Class to enable access of dataset values during the simulation.
         :arg list arrays: A list of DataSets to monitor during the simulation.
         :arg list probe_locations: A list of tuples giving the (i,j,k) grid index location of the probe.
@@ -153,7 +153,7 @@ class SimulationMonitor(object):
     @property
     def format_output(self):
         """ Controls the printing format for the output."""
-        placeholders = ', '.join(["%d"] + ["%%.%df" % self.fp_precision for _ in range(len(self.array_monitors)+1)] + ["%%.%df" % self.fp_precision for _ in range(len(self.scalar_monitors))])
+        placeholders = ', '.join(["%d"] + ["%%.%de" % self.fp_precision for _ in range(len(self.array_monitors)+1)] + ["%%.%de" % self.fp_precision for _ in range(len(self.scalar_monitors))])
         iterations = ['iter+1', '%s' % 'simulation_time']
         variables = ["%s_%d_output" % (str(M.flow_var), M.probe_no) for M in self.array_monitors]
         # Scalar variables

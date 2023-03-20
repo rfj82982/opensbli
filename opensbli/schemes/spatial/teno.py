@@ -526,7 +526,6 @@ class LFTeno(LFCharacteristic, Teno):
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations
-                kernel.add_equation(pre_process + interpolated + post_process)
                 if self.formulation == 'adaptive':
                     # Calculate adaptive TENO_CT parameter and add to pre_process equations
                     adaptive_CT = self.create_adaptive_CT(direction, block)

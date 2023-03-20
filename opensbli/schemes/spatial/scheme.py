@@ -26,6 +26,7 @@ class Scheme(object):
 
         self.name = name
         self.order = order
+        self.algorithm_order = 0
         return
 
 
@@ -76,6 +77,7 @@ class Central(Scheme):
         self.points = list(i for i in range(int(-order/2), int(order/2+1)))
         self.required_constituent_relations = {}
         self.halotype = CentralHalos(order)
+        self.algorithm_order = 10000 # Place central evaluations last
         return
 
     def _generate_weights(self, direction, order, block):

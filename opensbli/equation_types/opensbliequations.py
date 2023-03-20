@@ -214,6 +214,14 @@ class Solution(object):
         return
 
 
+    def get_spatial_schemes(self, schemes):
+        spatialschemes = []
+        for key, value in sorted(schemes.items(), key=lambda x: x[1].algorithm_order):
+            if value.schemetype == "Spatial":
+                spatialschemes += [key]
+        return spatialschemes
+
+
 class SimulationEquations(Discretisation, Solution):
     """Class for the simulation equations. This performs the discretisation of the equations.
 
@@ -283,12 +291,10 @@ class SimulationEquations(Discretisation, Solution):
         # Kernel to make the residuals zero
         # cls.zero_residuals_kernel(block)
 
-        spatialschemes = []
         # Get the schemes on the block
         schemes = block.discretisation_schemes
-        for sc in schemes:
-            if schemes[sc].schemetype == "Spatial":
-                spatialschemes += [sc]
+        # Force WENO/TENO schemes to be evaluated first
+        spatialschemes = cls.get_spatial_schemes(schemes)
         # Perform spatial Discretisation
         cls.constituent_evaluations = {}
         crs = block.get_constituent_equation_class
@@ -321,7 +327,18 @@ class SimulationEquations(Discretisation, Solution):
             if dset in cr_dictionary.keys():
                 for kernel in cr_dictionary[dset].kernels:
                     cls.constituent_relations_kernels[kernel.equations[-1].lhs] = kernel
+
+        # Merge the CRs into one large kernel?
+        CR_merge = False
+        if CR_merge:
+            cls.merge_CR(block)
         cls.process_kernels(block)
+        return
+
+
+    def merge_CR(cls, block):
+        """ Merges the CRs to evalute in one kernel instead."""
+
         return
 
     def process_kernels(cls, block):
@@ -474,13 +491,9 @@ class ConstituentRelations(Discretisation, Solution):
         (Solution, cls).__init__(cls)
         # Create the residual array for the equations
         cls.create_residual_arrays()
-
-        spatialschemes = []
         # Get the schemes on the block
         schemes = block.discretisation_schemes
-        for sc in schemes:
-            if schemes[sc].schemetype == "Spatial":
-                spatialschemes += [sc]
+        spatialschemes = cls.get_spatial_schemes(schemes)
         # Perform spatial Discretisation if any in constituent relations evaluation
         cls.constituent_evaluations = {}
         equations = cls.equations
