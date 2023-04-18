@@ -645,7 +645,7 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
             total = []
             for r in self.reconstructions:
                 total += [r.reconstructed_symbol]
-            return total
+            return total[::-1]
 
 
 class TenoDerivative(Function, BasicDiscretisation, DerPrint):
@@ -717,7 +717,7 @@ class TenoDerivative(Function, BasicDiscretisation, DerPrint):
             total = []
             for r in self.reconstructions:
                 total += [r.reconstructed_symbol]
-            return total
+            return total[::-1]
 
     def classical_strong_differentiabilty_transformation(cls, metric):
         direction = cls.get_direction

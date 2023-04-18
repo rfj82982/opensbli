@@ -84,7 +84,7 @@ for direction in range(ndim):
 pprint
 schemes = {}
 # Local LaxFredirich scheme for weno
-weno_order = 3
+weno_order = 5
 # Averaging procedure to be used for the eigen system evaluation
 Avg = RoeAverage([0, 1])
 # LF scheme

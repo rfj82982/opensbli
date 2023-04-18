@@ -10,6 +10,7 @@ from opensbli.core.opensbliobjects import ConstantObject, GroupedPiecewise
 from opensbli.core.grid import GridVariable
 from opensbli.schemes.spatial.scheme import Scheme
 from opensbli.schemes.spatial.weno import LFCharacteristic, ShockCapturing
+from opensbli.schemes.spatial.shock_capturing import HLLCCharacteristic
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations
 from sympy.functions.elementary.piecewise import ExprCondPair
@@ -523,6 +524,81 @@ class LFTeno(LFCharacteristic, Teno):
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
                 pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)                
+                if direction == 0 and len(reductions) > 0:
+                    EV_kernel.add_equation(reductions)
+                # Add the equations to the kernel and add the kernel to SimulationEquations
+                if self.formulation == 'adaptive':
+                    # Calculate adaptive TENO_CT parameter and add to pre_process equations
+                    adaptive_CT = self.create_adaptive_CT(direction, block)
+                    pre_process += adaptive_CT
+                    # Add the sensor evaluation to the required constituent relations
+                    self.update_constituent_relation_symbols([self.sensor_array.base], direction)
+                # Add the equations to the kernel and add the kernel to SimulationEquations
+                kernel.add_equation(pre_process + interpolated + post_process)
+                type_of_eq.Kernels += [kernel]
+
+            if self.flux_type == 'GLF':
+                type_of_eq.Kernels = [EV_kernel] + type_of_eq.Kernels
+            # Generate kernels for the constituent relations
+            if grouped:
+                constituent_relations = self.generate_constituent_relations_kernels(block)
+                type_of_eq.Kernels += [self.evaluate_residuals(block, eqs, all_derivatives_evaluated_locally)]
+                constituent_relations = self.check_constituent_relations(block, eqs, constituent_relations)
+            return constituent_relations
+
+
+
+class HLLCTeno(HLLCCharacteristic, Teno):
+    """ Local Lax-Friedrichs flux splitting applied to characteristic variables using a TENO scheme.
+
+    :arg int order: Order of the WENO/TENO scheme.
+    :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
+
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC'):
+        HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
+        print("A TENO scheme of order %s is being used for shock capturing." % str(order))
+        if sensor is None and formulation is not None:
+            raise ValueError("Storage array for the shock sensor is required.")
+        else:
+            self.sensor_array = sensor
+        self.conservative = conservative
+        self.store_sensor = store_sensor
+        Teno.__init__(self, order, formulation)
+        self.formulation = formulation
+        # Variables used for the Nonlinear WENO filter only
+        self.sensor_evaluation = None 
+        self.shock_filter = False
+        return
+
+    def discretise(self, type_of_eq, block):
+        """ This is the place where the logic of vector form of equations are implemented.
+        Find physical fluxes by grouping derivatives by direction --> in central, copy over
+        Then the physical fluxes are transformed to characteristic space ---> a function in Characteristic
+        For each f+ and f-, find f_hat of i+1/2, i-1/2, (L+R) are evaluated  ----> Function in TENO scheme, called from in here
+        flux at i+1/2 evaluated -- > Function in TENO scheme
+        Then TENO derivative class is instantiated with the flux at i+1/2 array --> Function in TENO scheme, called from in here
+        Final derivatives are evaluated from Weno derivative class --> Using WD.discretise."""
+        if isinstance(type_of_eq, SimulationEquations):
+            if self.flux_type == 'GLF':
+                EV_kernel = Kernel(block, computation_name="Global wave-speed reductions")
+                EV_kernel.set_grid_range(block)
+            eqs = flatten(type_of_eq.equations)
+            grouped = self.group_by_direction(eqs)
+            all_derivatives_evaluated_locally = []
+            reconstruction_halos = self.reconstruction_halotype(self.order, reconstruction=True)
+            solution_vector = flatten(type_of_eq.time_advance_arrays)
+
+            # Instantiate eigensystems with block, but don't add metrics yet
+            self.instantiate_eigensystem(block)
+            for direction, derivatives in sorted(grouped.items()):
+                # Create a work array for each component of the system
+                all_derivatives_evaluated_locally += derivatives
+                for no, deriv in enumerate(derivatives):
+                    deriv.create_reconstruction_work_array(block)
+                # Kernel for the reconstruction in this direction
+                kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
+                # Get the pre, interpolations and post equations for characteristic reconstruction
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, combined_reconstruction=False)                
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations

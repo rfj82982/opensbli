@@ -5,7 +5,7 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 ndim = 1
-sc1 = "**{\'scheme\':\'Weno\'}"
+sc1 = "**{\'scheme\':\'Teno\'}"
 # Define the compresible Navier-Stokes equations in Einstein notation.
 a = "Conservative(rhou_j,x_j,%s)" % sc1
 mass = "Eq(Der(rho,t), - %s)" % (a)
@@ -93,9 +93,11 @@ for direction in range(ndim):
 
 schemes = {}
 # Averaging procedure to be used for the eigen system evaluation
-Avg = SimpleAverage([0, 1])
+Avg = RoeAverage([0, 1])
 # LF scheme
-LF = LFWeno(order=7, formulation='Z', averaging=Avg,flux_type='LLF')
+#LF = LFWeno(order=5, formulation='Z', averaging=Avg,flux_type='LLF')
+# LF = LFTeno(order=6, averaging=Avg)
+LF = HLLCTeno(order=6, averaging=Avg)
 # Add to schemes
 schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
@@ -116,7 +118,7 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0']
-values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '320', '10.0/(block0np0-1)']
+constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT']
+values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-6']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

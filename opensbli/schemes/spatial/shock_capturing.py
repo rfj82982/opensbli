@@ -865,7 +865,7 @@ class HLLCCharacteristic(Characteristic):
             post_process_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]/rhoL)]
             post_process_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]/rhoR)]
         # WARNING: ideal gas law assumed
-        gama = ConstantObject('gamma')
+        gama = ConstantObject('gama')
         post_process_equations += [OpenSBLIEq(pL, (gama- 1)*(left_q[-1] - 0.5*rhoL*sum([x**2 for x in vel_L])))]
         post_process_equations += [OpenSBLIEq(pR, (gama- 1)*(right_q[-1] - 0.5*rhoR*sum([x**2 for x in vel_R])))]
         post_process_equations += [OpenSBLIEq(aL, sqrt(gama*pL/rhoL))]
@@ -890,15 +890,13 @@ class HLLCCharacteristic(Characteristic):
         condition1 = (F_L, sL >= 0)
         condition2 = (F_L + sL*(USTAR_L - U_L), And(sL <= 0, 0 <= s_star))
         condition3 = (F_R + sR*(USTAR_R - U_R), And(s_star <= 0, 0 <= sR))
-        # condition4 = (F_R, sR <= 0)
-        condition4 = (F_R, True)
-
-
+        condition4 = (F_R, sR <= 0)
+        condition5 = ([0,0,0], True)
 
         # Create output arrays to store the final flux reconstructions
         reconstructed_work = self.create_output_wk_arrays(direction, derivatives, block)
         for i, component in enumerate(reconstructed_work):
-            post_process_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1])]))]
+            post_process_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
         # print(reconstructed_work)
         # exit()
         # post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
