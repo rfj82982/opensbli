@@ -641,10 +641,10 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
             else:
                 raise ValueError("")
         else:
-            # Sum the reconstruction placeholders
-            total = 0
+            # Return them separately for singular use
+            total = []
             for r in self.reconstructions:
-                total += r.reconstructed_symbol
+                total += [r.reconstructed_symbol]
             return total
 
 
@@ -713,10 +713,10 @@ class TenoDerivative(Function, BasicDiscretisation, DerPrint):
             else:
                 raise ValueError("")
         else:
-            # Sum the reconstruction placeholders
-            total = 0
+            # Return them separately for singular use
+            total = []
             for r in self.reconstructions:
-                total += r.reconstructed_symbol
+                total += [r.reconstructed_symbol]
             return total
 
     def classical_strong_differentiabilty_transformation(cls, metric):
