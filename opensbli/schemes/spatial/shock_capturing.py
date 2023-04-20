@@ -4,7 +4,7 @@
    @details
 """
 
-from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min, symbols, sqrt, And, Piecewise
+from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min, symbols, sqrt, And, Piecewise, pi, sin
 from sympy.core.numbers import Zero
 from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
@@ -704,12 +704,14 @@ class HLLCCharacteristic(Characteristic):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, physics, flux_type='LLF', averaging=None):
+    def __init__(self, physics, flux_type='HLLC-LM', averaging=None):
         Characteristic.__init__(self, physics)
         if averaging is None:
             self.average = RoeAverage([0, 1]).average
         else:
             self.average = averaging.average
+        # if-else version of the HLLC flux construction
+        self.conditional = True
         self.flux_split = True
         self.flux_type = flux_type
         return
@@ -845,21 +847,21 @@ class HLLCCharacteristic(Characteristic):
 
         :arg list derivatives: The derivatives to perform the characteristic decomposition and WENO on.
         :arg object kernel: The current computational kernel."""
-        post_process_equations = []
+        pp_equations = []
         ndim = block.ndim
 
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i, recon in enumerate(reconstructed_characteristics):
-                post_process_equations += flatten([self.central_diff_formula(i, recon)])
+                pp_equations += flatten([self.central_diff_formula(i, recon)])
 
         avg_REV_values = self.create_REV_inverses(dire)
         # HLLC: Reconstruct the left and right states separately and then transform each back to physical space
         left_q, right_q = symbols("qL:%d" % (ndim+2), **{'cls':GridVariable}), symbols("qR:%d" % (ndim+2), **{'cls':GridVariable})
         wL, wR = Matrix(reconstructed_characteristics[:,1]), Matrix(reconstructed_characteristics[:,0])
-        post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(right_q, avg_REV_values*wR)]
-        post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(left_q, avg_REV_values*wL)]
+        pp_equations += [OpenSBLIEq(x, y) for x, y in zip(right_q, avg_REV_values*wR)]
+        pp_equations += [OpenSBLIEq(x, y) for x, y in zip(left_q, avg_REV_values*wL)]
         # HLLC: Calculate the speed of sound and pressure at each interface using the reconstructed values
         aL, aR = symbols("aL", **{'cls':GridVariable}), symbols("aR", **{'cls':GridVariable})
         pL, pR = symbols("pL", **{'cls':GridVariable}), symbols("pR", **{'cls':GridVariable})
@@ -869,25 +871,27 @@ class HLLCCharacteristic(Characteristic):
         # Velocity component in the dire of reconstruction
         uL, uR = vel_L[dire], vel_R[dire]
         for i, u in enumerate(vel_L):
-            post_process_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]/rhoL)]
-            post_process_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]/rhoR)]
+            pp_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]/rhoL)]
+            pp_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]/rhoR)]
         # WARNING: ideal gas law assumed
         gama = ConstantObject('gama')
-        post_process_equations += [OpenSBLIEq(pL, (gama- 1)*(left_q[-1] - 0.5*rhoL*sum([x**2 for x in vel_L])))]
-        post_process_equations += [OpenSBLIEq(pR, (gama- 1)*(right_q[-1] - 0.5*rhoR*sum([x**2 for x in vel_R])))]
-        post_process_equations += [OpenSBLIEq(aL, sqrt(gama*pL/rhoL))]
-        post_process_equations += [OpenSBLIEq(aR, sqrt(gama*pR/rhoR))]
+        pp_equations += [OpenSBLIEq(pL, (gama- 1)*(left_q[-1] - 0.5*rhoL*sum([x**2 for x in vel_L])))]
+        pp_equations += [OpenSBLIEq(pR, (gama- 1)*(right_q[-1] - 0.5*rhoR*sum([x**2 for x in vel_R])))]
+        pp_equations += [OpenSBLIEq(aL, sqrt(gama*pL/rhoL))]
+        pp_equations += [OpenSBLIEq(aR, sqrt(gama*pR/rhoR))]
         # Compute wave speeds
         sL, sR = symbols("sL", **{'cls':GridVariable}), symbols("sR", **{'cls':GridVariable})
         smin, smax = symbols("smin", **{'cls':GridVariable}), symbols("smax", **{'cls':GridVariable})
-        post_process_equations += [OpenSBLIEq(sL, Min(GridVariable('AVG_%d_u%d' % (dire,dire)) -  GridVariable('AVG_%d_a' % (dire)), uL - aL))]
-        post_process_equations += [OpenSBLIEq(sR, Max(GridVariable('AVG_%d_u%d' % (dire,dire)) +  GridVariable('AVG_%d_a' % (dire)), uR + aR))]
+        pp_equations += [OpenSBLIEq(sL, Min(GridVariable('AVG_%d_u%d' % (dire,dire)) -  GridVariable('AVG_%d_a' % (dire)), uL - aL))]
+        pp_equations += [OpenSBLIEq(sR, Max(GridVariable('AVG_%d_u%d' % (dire,dire)) +  GridVariable('AVG_%d_a' % (dire)), uR + aR))]
         # Intermediate star speed, need to modify these for metrics?
         s_star = symbols('s_star', **{'cls':GridVariable})
-        post_process_equations += [OpenSBLIEq(s_star, (pR - pL + rhoL*uL*(sL - uL) - rhoR*uR*(sR - uR)) / (rhoL*(sL - uL) - rhoR*(sR - uR)))]
+        pp_equations += [OpenSBLIEq(s_star, (pR - pL + rhoL*uL*(sL - uL) - rhoR*uR*(sR - uR)) / (rhoL*(sL - uL) - rhoR*(sR - uR)))]
         # Build the system of flux components
         # Create a substitution dictionary from the flux components
         SD_L, SD_R = self.define_substitution_dictionaries(dire, derivatives, block, [left_q, right_q], [vel_L, vel_R], [pL, pR])
+        # Create output arrays to store the final flux reconstructions
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
         # Vectors for the right/left states
         U_L, U_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
         F_L, F_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
@@ -898,6 +902,7 @@ class HLLCCharacteristic(Characteristic):
             U_R[i] = self.input_solution_vector[i].subs(SD_R)
             F_L[i] = input_args.subs(SD_L)
             F_R[i] = input_args.subs(SD_R)
+
 
         # Build the star states, left and right
         if ndim == 1:
@@ -923,20 +928,40 @@ class HLLCCharacteristic(Characteristic):
 
         # Outside density and wave-speed factor
         USTAR_L *= rhoL*((sL - vel_L[dire])/(sL - s_star))
-        USTAR_L *= rhoR*((sR - vel_R[dire])/(sR - s_star))
-        # Build the conditional states
-        condition1 = (F_L, sL >= 0)
-        condition2 = (F_L + sL*(USTAR_L - U_L), And(sL <= 0, 0 <= s_star))
-        condition3 = (F_R + sR*(USTAR_R - U_R), And(s_star <= 0, 0 <= sR))
-        condition4 = (F_R, sR <= 0)
-        condition5 = ([0 for _ in range(block.ndim+2)], True)
+        USTAR_R *= rhoR*((sR - vel_R[dire])/(sR - s_star))
 
-        # Create output arrays to store the final flux reconstructions
-        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
-        for i, component in enumerate(reconstructed_work):
-            post_process_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
-        post_process_equations = self.replace_gamma_factor(post_process_equations)
-        return post_process_equations
+        if self.flux_type == 'HLLC-LM': # low-Mach correction formulation of HLLC solver
+            # Mach number reduction of nonlinear signal speeds (HLLC-LM variant)
+            phi, M_local = GridVariable('phi'), GridVariable('M_local')
+            pp_equations += [OpenSBLIEq(M_local, Max(Abs(uL/aL), Abs(uR/aR)))]
+            Mach_limit = 0.1 # Ensure the correction only applies when uL is less than 10% of the local sound speed
+            pp_equations += [OpenSBLIEq(phi, sin(Min(1, M_local/Mach_limit)*Rational(1,2)*pi))]
+            # Modify the wave-speeds
+            pp_equations += [OpenSBLIEq(sL, sL*phi), OpenSBLIEq(sR, sR*phi)]
+            # Build the conditional states
+            condition1 = (F_L, sL >= 0)
+            condition2 = (F_R, sR <= 0)
+            F_STAR = Rational(1,2)*(F_L + F_R) + Rational(1,2)*(sL*(USTAR_L - U_L) + Abs(s_star)*(USTAR_L - USTAR_R) + sR*(USTAR_R - U_R))
+            condition3 = (F_STAR, True)
+            # Assign the fluxes to the storage arrays
+            for i, component in enumerate(reconstructed_work):
+                pp_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1])]))]
+
+        else: # standard HLLC formulation
+            # Build the conditional states
+            condition1 = (F_L, sL >= 0)
+            condition2 = (F_L + sL*(USTAR_L - U_L), And(sL <= 0, 0 <= s_star))
+            condition3 = (F_R + sR*(USTAR_R - U_R), And(s_star <= 0, 0 <= sR))
+            condition4 = (F_R, sR <= 0)
+            condition5 = ([0 for _ in range(block.ndim+2)], True)
+            # Assign the fluxes to the storage arrays
+            for i, component in enumerate(reconstructed_work):
+                pp_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
+
+
+        # Replace gamma factors if required
+        pp_equations = self.replace_gamma_factor(pp_equations)
+        return pp_equations
 
 
 

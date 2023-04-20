@@ -97,7 +97,7 @@ Avg = RoeAverage([0, 1])
 # LF scheme
 #LF = LFWeno(order=5, formulation='Z', averaging=Avg,flux_type='LLF')
 # LF = LFTeno(order=6, averaging=Avg)
-LF = HLLCTeno(order=6, averaging=Avg)
+LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
 # Add to schemes
 schemes[LF.name] = LF
 rk = RungeKuttaLS(3)
