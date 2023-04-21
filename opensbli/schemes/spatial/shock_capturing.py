@@ -868,17 +868,20 @@ class HLLCCharacteristic(Characteristic):
         rhoL, rhoR = left_q[0], right_q[0]
         rhoEL, rhoER = left_q[-1], right_q[-1]
         vel_L, vel_R = symbols("uL:%d" % (ndim), **{'cls':GridVariable}), symbols("uR:%d" % (ndim), **{'cls':GridVariable})
+        # Density inversion factor
+        inv_rhoL, inv_rhoR = symbols("inv_rhoL", **{'cls':GridVariable}), symbols("inv_rhoR", **{'cls':GridVariable})
+        pp_equations += [OpenSBLIEq(inv_rhoL, 1.0/rhoL), OpenSBLIEq(inv_rhoR, 1.0/rhoR)]
         # Velocity component in the dire of reconstruction
         uL, uR = vel_L[dire], vel_R[dire]
         for i, u in enumerate(vel_L):
-            pp_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]/rhoL)]
-            pp_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]/rhoR)]
+            pp_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]*inv_rhoL)]
+            pp_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]*inv_rhoR)]
         # WARNING: ideal gas law assumed
         gama = ConstantObject('gama')
         pp_equations += [OpenSBLIEq(pL, (gama- 1)*(left_q[-1] - 0.5*rhoL*sum([x**2 for x in vel_L])))]
         pp_equations += [OpenSBLIEq(pR, (gama- 1)*(right_q[-1] - 0.5*rhoR*sum([x**2 for x in vel_R])))]
-        pp_equations += [OpenSBLIEq(aL, sqrt(gama*pL/rhoL))]
-        pp_equations += [OpenSBLIEq(aR, sqrt(gama*pR/rhoR))]
+        pp_equations += [OpenSBLIEq(aL, sqrt(gama*pL*inv_rhoL))]
+        pp_equations += [OpenSBLIEq(aR, sqrt(gama*pR*inv_rhoR))]
         # Compute wave speeds
         sL, sR = symbols("sL", **{'cls':GridVariable}), symbols("sR", **{'cls':GridVariable})
         smin, smax = symbols("smin", **{'cls':GridVariable}), symbols("smax", **{'cls':GridVariable})
@@ -906,25 +909,25 @@ class HLLCCharacteristic(Characteristic):
 
         # Build the star states, left and right
         if ndim == 1:
-            USTAR_L = Matrix([1, s_star, rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-            USTAR_R = Matrix([1, s_star, rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+            USTAR_L = Matrix([1, s_star, rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+            USTAR_R = Matrix([1, s_star, rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
         elif ndim == 2:
             if dire == 0:
-                USTAR_L = Matrix([1, s_star, vel_L[1], rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-                USTAR_R = Matrix([1, s_star, vel_R[1], rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+                USTAR_L = Matrix([1, s_star, vel_L[1], rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+                USTAR_R = Matrix([1, s_star, vel_R[1], rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
             elif dire == 1:
-                USTAR_L = Matrix([1, vel_L[0], s_star, rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-                USTAR_R = Matrix([1, vel_R[0], s_star, rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+                USTAR_L = Matrix([1, vel_L[0], s_star, rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+                USTAR_R = Matrix([1, vel_R[0], s_star, rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
         elif ndim == 3:
             if dire == 0:
-                USTAR_L = Matrix([1, s_star, vel_L[1], vel_L[2], rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-                USTAR_R = Matrix([1, s_star, vel_R[1], vel_R[2], rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+                USTAR_L = Matrix([1, s_star, vel_L[1], vel_L[2], rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+                USTAR_R = Matrix([1, s_star, vel_R[1], vel_R[2], rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
             elif dire == 1:
-                USTAR_L = Matrix([1, vel_L[0], s_star, vel_L[2], rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-                USTAR_R = Matrix([1, vel_R[0], s_star, vel_R[2], rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+                USTAR_L = Matrix([1, vel_L[0], s_star, vel_L[2], rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+                USTAR_R = Matrix([1, vel_R[0], s_star, vel_R[2], rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
             elif dire == 2:
-                USTAR_L = Matrix([1, vel_L[0], vel_L[1], s_star, rhoEL/rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
-                USTAR_R = Matrix([1, vel_R[0], vel_R[1], s_star, rhoER/rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+                USTAR_L = Matrix([1, vel_L[0], vel_L[1], s_star, rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
+                USTAR_R = Matrix([1, vel_R[0], vel_R[1], s_star, rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
 
         # Outside density and wave-speed factor
         USTAR_L *= rhoL*((sL - vel_L[dire])/(sL - s_star))
@@ -942,6 +945,14 @@ class HLLCCharacteristic(Characteristic):
             condition1 = (F_L, sL >= 0)
             condition2 = (F_R, sR <= 0)
             F_STAR = Rational(1,2)*(F_L + F_R) + Rational(1,2)*(sL*(USTAR_L - U_L) + Abs(s_star)*(USTAR_L - USTAR_R) + sR*(USTAR_R - U_R))
+            for comp in F_STAR:
+                print(count_ops(comp))
+            #     pprint(comp)
+            #     # print(simplify(comp))
+            #     print(count_ops(simplify(comp)))
+            #     print("-----")
+            # exit()
+
             condition3 = (F_STAR, True)
             # Assign the fluxes to the storage arrays
             for i, component in enumerate(reconstructed_work):
