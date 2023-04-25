@@ -51,7 +51,7 @@ class OPSCCodePrinter(C99CodePrinter):
 
     """ Prints OPSC code. """
     dataset_accs_dictionary = {}
-    settings_opsc = {'rational': False, 'kernel': False}
+    settings_opsc = {'rational': False, 'kernel': False, 'order': 'none'}
 
     def __init__(self, settings={}):
         """ Initialise the code printer. """
@@ -60,7 +60,7 @@ class OPSCCodePrinter(C99CodePrinter):
             self.settings_opsc = settings
         else:
             self.settings_opsc['rational'] = False
-        C99CodePrinter.__init__(self, settings={})
+        C99CodePrinter.__init__(self, settings={'order':'none'})
 
     def _print_ReductionVariable(self, expr):
         return '*%s' % str(expr)
@@ -363,8 +363,13 @@ class OPSC(object):
 
         return formatted_code
 
-    def kernel_header(self, tuple_list):
+    def kernel_header(self, tuple_list, idx_constants):
         code = []
+        # Fix the ordering
+        ins, outs, inouts = [x for x in tuple_list if x[1] == 'input'], [x for x in tuple_list if x[1] == 'output'], [x for x in tuple_list if x[1] == 'inout']
+        ins, outs, inouts = sorted(ins, key=lambda x: str(x[0])), sorted(outs, key=lambda x: str(x[0])), sorted(inouts, key=lambda x: str(x[0]))
+        tuple_list = ins + outs + inouts + idx_constants
+        print(tuple_list)
         for key, val in (tuple_list):
             if str(key) == 'rkA' or str(key) == 'rkB' or str(key) == 'rkold' or str(key) == 'rknew': # RK coefficients in the kernel header
                 code += ['const double *%s' % key]
@@ -408,9 +413,10 @@ class OPSC(object):
         all_dataset_types += ['input' for i in reduction_ins] + ['output' for o in reduction_outs]
         # Use list of tuples as dictionary messes the order
         header_dictionary = list(zip(all_dataset_inps, all_dataset_types))
+        idx_constants = []
         if kernel.IndexedConstants:
-            for i in kernel.IndexedConstants:
-                header_dictionary += [tuple([(i.base), 'input'])]
+            for i in sorted(kernel.IndexedConstants, key=lambda x: str(x)):
+                idx_constants += [tuple([(i.base), 'input'])]
         other_inputs = ""
         # Local i, j, k index object (ignores MPI)
         if kernel.grid_indices_used:
@@ -418,7 +424,7 @@ class OPSC(object):
         else:
             other_inputs = ''
         # print header_dictionary
-        code = ["void %s(" % kernel.kernelname + self.kernel_header(header_dictionary) + other_inputs + ')' + '\n{']
+        code = ["void %s(" % kernel.kernelname + self.kernel_header(header_dictionary, idx_constants) + other_inputs + ')' + '\n{']
         ops_accs = [OPSAccess(no) for no in range(len(all_dataset_inps))]
         OPSCCodePrinter.dataset_accs_dictionary = dict(zip(all_dataset_inps, ops_accs))
         # Find all the grid variables and declare them at the top
@@ -465,6 +471,8 @@ class OPSC(object):
             else:
                 pprint(eq)
                 raise TypeError("Unclassified type of equation.")
+        # Sort the gridvariables to fix the order
+        gridvariables = sorted(list(gridvariables), key=lambda x: str(x))
         for gv in gridvariables:
             code += ["%s %s = 0.0;" % (SimulationDataType.opsc(), str(gv))]
         # if '\n' in out[-1]:
@@ -521,7 +529,7 @@ class OPSC(object):
         out += ["%s %s;" % ('int', 'stage')]
         out += ["%s %s;" % ('double', 'tstart')]
 
-        for d in ConstantsToDeclare.constants:
+        for d in sorted(ConstantsToDeclare.constants, key=lambda x: str(x)):
             if isinstance(d, ConstantObject):
                 out += ["%s %s;" % (d.datatype.opsc(), d)]
             elif isinstance(d, ConstantIndexed):
@@ -554,10 +562,12 @@ class OPSC(object):
         decls = []
         # Add OPS_init to the declarations as it should be called before all ops
         decls += self.ops_init()
+        # Sort the constants to a consistent ordering
+        ConstantsToDeclare.sort_constants()
         # First process all the constants in the definitions
         defs += self.set_constant_values(ConstantsToDeclare.constants)
         # OPS declaration of the constants
-        for d in ConstantsToDeclare.constants:
+        for d in sorted(ConstantsToDeclare.constants, key=lambda x: str(x)):
             if isinstance(d, Constant):
                 decls += self.declare_ops_constants(d)
         # Once the constants are done define and declare OPS dats
@@ -779,7 +789,7 @@ class OPSC(object):
         constants.remove(restart)
         # Find which constants to restart
         self.restarted_constants = [x for x in constants if x.restart]
-        init_constants = [x for x in constants if not x.restart]
+        init_constants = [c for c in constants if not c.restart]
         out += [WriteString('// User defined constant values')]
         # Write the rest of the constants
         for c in init_constants:
