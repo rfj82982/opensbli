@@ -364,7 +364,7 @@ class Algorithm(object):
         if self.MultiBlock:
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
-                defdecs.add_components(b.constants.values())
+                # defdecs.add_components(b.constants.values())
                 defdecs.add_components(b.Rational_constants.values())
                 defdecs.add_components(b.block_datasets.values())
                 defdecs.add_components(b.block_stencils.values())
@@ -438,7 +438,7 @@ class TraditionalAlgorithmRKMB(object):
         if self.MultiBlock:
             for block_number in range(blocks.nblocks):
                 b = blocks.get_block(block_number)
-                defdecs.add_components(list(b.constants.values()))
+                # defdecs.add_components(list(b.constants.values()))
                 defdecs.add_components(list(b.Rational_constants.values()))
                 defdecs.add_components(list(b.block_datasets.values()))
                 defdecs.add_components(list(b.block_stencils.values()))

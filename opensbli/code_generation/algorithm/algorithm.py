@@ -356,6 +356,10 @@ class TraditionalAlgorithmRK(object):
         else:
             # TODO V2 import Double datatype
             self.dtype = "double"
+
+        for name in blocks[0].block_kernel_names:
+            print(name)
+        # exit()
         self.check_temporal_scheme(blocks)
         self.prg = MainPrg()
         self.add_block_names(blocks)
@@ -377,7 +381,7 @@ class TraditionalAlgorithmRK(object):
     def get_definitions_declarations(self, blocks):
         defdecs = DefDecs()
         for b in blocks:
-            defdecs.add_components(list(b.constants.values()))
+            # defdecs.add_components(list(b.constants.values()))
             defdecs.add_components(list(b.Rational_constants.values()))
             defdecs.add_components(list(b.block_datasets.values()))
             defdecs.add_components(list(b.block_stencils.values()))
