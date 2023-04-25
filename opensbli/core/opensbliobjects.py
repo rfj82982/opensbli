@@ -1,11 +1,13 @@
 from sympy import Symbol, flatten
-from sympy.core.compatibility import is_sequence
+# from sympy.core.compatibility import 
+from sympy.utilities.iterables import is_sequence
 from sympy.tensor import Idx, IndexedBase, Indexed
 from sympy import pprint
 from sympy.tensor.indexed import IndexException
 from sympy.core.cache import cacheit
 from opensbli.core.datatypes import SimulationDataType
 from sympy.core import Tuple
+from opensbli.core.datatypes import Int
 
 
 _projectname = "opensbli"
@@ -260,6 +262,7 @@ class ConstantIndexed(Indexed, Constant):
         ret.is_constant = True
         ret.inline_array = True
         ret.is_input = True
+        ret.rational = False # not converted to 1/rc notation
         ret._datatype = SimulationDataType()
         ret._value = ["Input" for i in range(ret.shape[0])]
         ret.restart = restart # Restart the constant from HDF5?
@@ -576,9 +579,12 @@ class Globalvariable(EinsteinTerm, GlobalValue):
 
     is_commutative = True
 
-    def __new__(cls, label, restart=False, **kwargs):
+    def __new__(cls, label, force_int=False, restart=False, **kwargs):
         ret = super(Globalvariable, cls).__new__(cls, label, **kwargs)
-        ret._datatype = SimulationDataType()
+        if force_int:
+            ret._datatype = Int()
+        else:
+            ret._datatype = SimulationDataType()
         ret.is_input = True
         ret._value = "Input"
         ret.restart = restart
