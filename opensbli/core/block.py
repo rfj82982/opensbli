@@ -100,7 +100,8 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
         # Place holders to store various block parameters
         self.MB = False
         self.block_datasets = {}
-        self.constants = {}
+        self.block_kernel_names = []
+        # self.constants = {}
         self.Rational_constants = {}
         self.block_stencils = {}
         self.block_reductions = {}
