@@ -238,24 +238,27 @@ class WENOFilter(NonSimulationEquations):
         Mach_equations += [OpenSBLIEq(block.location_dataset('Mach_sensor'), Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
         return Mach_equations
 
-    def evaluate_Ducros_sensor(self, block):
+    def evaluate_shock_sensor(self, block):
         # Add a shock sensor for the WENO filter
         SS = ShockSensor()
         sensor_evaluations = []
+        if block.ndim > 1:
         # Ducros dilatation part
-        output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
-        # sensor_pre_evaluations = flatten([output_eqns[0:-1]])
-        # sensor_evaluations += sensor_pre_evaluations
-        # Make the Ducros sensor a binary array of either 0 or 1s    
+            output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
+            # sensor_pre_evaluations = flatten([output_eqns[0:-1]])
+            # sensor_evaluations += sensor_pre_evaluations
+            # Make the Ducros sensor a binary array of either 0 or 1s
+        else:
+            output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
         kappa_evaluation = output_eqns[-1].rhs
         # del output_eqns[-1]
-        DT = ConstantObject('Ducros_threshold')
+        DT = ConstantObject('Shock_sensor_threshold')
         DT.value = 0.5
         CTD.add_constant(DT)
-        Ducros_condition = [ExprCondPair(1, kappa_evaluation > DT)]
+        evaluation_condition = [ExprCondPair(1, kappa_evaluation > DT)]
         # # No wall or interface, default condition is the sensor is not turned off
-        Ducros_condition += [ExprCondPair(0, True)]
-        sensor_evaluations += [OpenSBLIEq(kappa, Piecewise(*Ducros_condition))]
+        evaluation_condition += [ExprCondPair(0, True)]
+        sensor_evaluations += [OpenSBLIEq(kappa, Piecewise(*evaluation_condition))]
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
@@ -448,14 +451,8 @@ class WENOFilter(NonSimulationEquations):
         # bc_kernels = self.update_periodic_boundary(block, WS.halotype)
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
-        # Compute initial Ducros sensor
-
-        if self.dissipation_sensor == 'Ducros':
-            self.kappa = self.evaluate_Ducros_sensor(block)
-        elif self.dissipation_sensor == 'Constant': # No flow sensor for the dissipation control, only a global parameter
-            self.kappa, kappa_evaluation = 1, []
-        else:
-            raise NotImplementedError("Please enter a valid dissipation sensor option: 'Ducros', or 'Constant'.")
+        # Shock sensor evaluation to find which points to evaluate the WENO scheme on
+        self.kappa = self.evaluate_shock_sensor(block)
         # Reductions if needed
         if len(reductions) > 0:
             self.reduction_operations(reductions)

@@ -122,7 +122,7 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0')])
+h5.add_arrays([DataObject('x0'), DataObject('kappa'), DataObject('q0')])
 block.setio(copy.deepcopy(h5))
 
 if not teno:
@@ -139,7 +139,7 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT']
-values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-6']
+constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
+values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-6', '1.0/Delta0block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

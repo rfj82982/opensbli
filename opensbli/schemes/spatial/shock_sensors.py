@@ -14,7 +14,7 @@ class ShockSensor(object):
         self.epsilon.value = 1.0e-12
         return
 
-    def ducros_equations(self, block, coordinate_symbol, metrics=None, name='theta', Mach=None):
+    def ducros_equations(self, block, coordinate_symbol, metrics=None, name='kappa', Mach=None):
         """ Create the non-discretized equations for the modified Ducros shock sensor and applies a metric transformation if required.
         :arg object block: OpenSBLI simulation block.
         :arg string coordinate_symbol: Coordinate symbol to perform the derivatives with.
@@ -65,7 +65,7 @@ class ShockSensor(object):
         output_eqns += [OpenSBLIEq(sensor_array, Min(1, Mach*tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + self.epsilon)))]
         return output_eqns, sensor_array
 
-    def Ren_sensor(self, block):
+    def Ren_sensor(self, block, name='kappa'):
         eps = 0.001
         # r_j
         base_loc = 0
@@ -89,15 +89,19 @@ class ShockSensor(object):
             ph, mh = pp - p, p - pm
             rj2 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
             output = Max(output, 1 - Min(rj1, rj2))
-        return output
+
+        sensor_array = block.location_dataset('%s' % name)
+        output = [OpenSBLIEq(sensor_array, output)]
+        return output, sensor_array
 
 
-    def Jameson_sensor(self, block):
+    def Jameson_sensor(self, block, name='kappa'):
         pm, p, pp = increment_dataset(block.location_dataset('p'), 0, -1), block.location_dataset('p'), increment_dataset(block.location_dataset('p'), 0, 1)
         output = Abs((pp - 2*p + pm) / (pp + 2*p + pm))
         for dire in range(1, block.ndim):
             pm, p, pp = increment_dataset(block.location_dataset('p'), dire, -1), block.location_dataset('p'), increment_dataset(block.location_dataset('p'), dire, 1)
             output = Max(output, Abs((pp - 2*p + pm) / (pp + 2*p + pm)))
-        return output
+        output = [OpenSBLIEq(sensor_array, output)]
+        return output, sensor_array
 
 
