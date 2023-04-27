@@ -469,6 +469,35 @@ class Characteristic(EigenSystem):
             reconstructed_work = [d.reconstruction_work for d in derivatives]
         return reconstructed_work
 
+    def central_diff_formula(self, component, reconstruction_variable, flux_type, derivative=None):
+        """ Central difference formula based on the f_i = 0.5*(f_(i+1/2) - f_(i-1/2)) half-node locations. Applied in characteristic space
+        using the CF local variables."""
+        if (self.order+1) == 4:
+            weights = [Rational(-1,12), Rational(7,12), Rational(7,12), Rational(-1,12)]
+            locations = [-1, 0, 1, 2]
+        elif (self.order+1) == 6:
+            weights = [Rational(1,60), Rational(-8,60), Rational(37,60), Rational(37,60), Rational(-8,60), Rational(1,60)]
+            locations = [-2, -1, 0, 1, 2, 3]
+        elif (self.order+1) == 8:
+            weights = [Rational(-1,280), Rational(29, 840), Rational(-139,840), Rational(533, 840), Rational(533,840), Rational(-139,840), Rational(29,840), Rational(-1, 280)]
+            locations = [-3, -2, -1, 0, 1, 2, 3, 4]
+        else:
+            raise NotImplementedError("Only 4th, 6th, and 8th order Central are implemented for the WENO-Filter.")
+        # Take a central difference of the characteristic fluxes
+        terms = []
+        if flux_type == 'LLF' or flux_type == 'GLF':
+            # Derivatives of the transformed fluxes
+            terms += [gv('CF_%d%d' % (component, j)) for j in range(len(weights))]
+        else:
+            # HLLC solver, build from the flux vector directly
+            for location in locations:
+                dsets = [x for x in [derivative.args[0]]]
+                combined = sum([increment_dataset(dsets[i], derivative.args[1].direction, location) for i in range(len(dsets))])
+                terms.append(combined)
+        formula = factor(sum([x*y for (x,y) in zip(weights, terms)]))
+        output_equation = [OpenSBLIEq(reconstruction_variable, gv('rj%d' % component)*(reconstruction_variable - formula))]
+        return output_equation
+
 class LFCharacteristic(Characteristic):
     """ This class contains the base Local Lax-Fedrich scheme performed in characteristic space.
 
@@ -559,23 +588,6 @@ class LFCharacteristic(Characteristic):
         pre_process_equations += [x for x in self.generate_equations_from_matrices(grid_vars, reduction_vars) if x != 0]
         return grid_vars, reductions, pre_process_equations
 
-    def central_diff_formula(self, component, reconstruction_variable):
-        """ Central difference formula based on the f_i = 0.5*(f_(i+1/2) - f_(i-1/2)) half-node locations. Applied in characteristic space
-        using the CF local variables."""
-        if (self.order+1) == 4:
-            weights = [Rational(-1,12), Rational(7,12), Rational(7,12), Rational(-1,12)]
-        elif (self.order+1) == 6:
-            weights = [Rational(1,60), Rational(-8,60), Rational(37,60), Rational(37,60), Rational(-8,60), Rational(1,60)]
-        elif (self.order+1) == 8:
-            weights = [Rational(-1,280), Rational(29, 840), Rational(-139,840), Rational(533, 840), Rational(533,840), Rational(-139,840), Rational(29,840), Rational(-1, 280)]
-        else:
-            raise NotImplementedError("Only 4th, 6th, and 8th order Central are implemented for the WENO-Filter.")
-        # Take a central difference of the characteristic fluxes
-        terms = [gv('CF_%d%d' % (component, j)) for j in range(len(weights))]
-        formula = factor(sum([x*y for (x,y) in zip(weights, terms)]))
-        output_equation = [OpenSBLIEq(reconstruction_variable, gv('rj%d' % component)*(reconstruction_variable - formula))]
-        return output_equation
-
     def post_process(self, direction, derivatives, block):
         """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
         eigenvector matrix.
@@ -588,7 +600,7 @@ class LFCharacteristic(Characteristic):
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i, recon in enumerate(reconstructed_characteristics):
-                post_process_equations += flatten([self.central_diff_formula(i, recon)])
+                post_process_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
 
         avg_REV_values = self.create_REV_inverses(direction)
         reconstructed_flux = avg_REV_values*reconstructed_characteristics
@@ -851,11 +863,7 @@ class HLLCCharacteristic(Characteristic):
         ndim = block.ndim
 
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
-        # Apply a shock sensor if the WENO is being applied as a filter step
-        if block.shock_filter:
-            for i, recon in enumerate(reconstructed_characteristics):
-                pp_equations += flatten([self.central_diff_formula(i, recon)])
-
+        # Transformation matrix back to physical (non-characteristic) space
         avg_REV_values = self.create_REV_inverses(dire)
         # HLLC: Reconstruct the left and right states separately and then transform each back to physical space
         left_q, right_q = symbols("qL:%d" % (ndim+2), **{'cls':GridVariable}), symbols("qR:%d" % (ndim+2), **{'cls':GridVariable})
@@ -945,14 +953,6 @@ class HLLCCharacteristic(Characteristic):
             condition1 = (F_L, sL >= 0)
             condition2 = (F_R, sR <= 0)
             F_STAR = Rational(1,2)*(F_L + F_R) + Rational(1,2)*(sL*(USTAR_L - U_L) + Abs(s_star)*(USTAR_L - USTAR_R) + sR*(USTAR_R - U_R))
-            for comp in F_STAR:
-                print(count_ops(comp))
-            #     pprint(comp)
-            #     # print(simplify(comp))
-            #     print(count_ops(simplify(comp)))
-            #     print("-----")
-            # exit()
-
             condition3 = (F_STAR, True)
             # Assign the fluxes to the storage arrays
             for i, component in enumerate(reconstructed_work):
@@ -969,7 +969,10 @@ class HLLCCharacteristic(Characteristic):
             for i, component in enumerate(reconstructed_work):
                 pp_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
 
-
+        # Apply a shock sensor if the WENO is being applied as a filter step
+        if block.shock_filter:
+            for i in range(len(reconstructed_work)):
+                pp_equations += flatten([self.central_diff_formula(i, reconstructed_work[i], self.flux_type, derivatives[i])])
         # Replace gamma factors if required
         pp_equations = self.replace_gamma_factor(pp_equations)
         return pp_equations

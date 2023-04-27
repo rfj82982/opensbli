@@ -369,7 +369,6 @@ class OPSC(object):
         ins, outs, inouts = [x for x in tuple_list if x[1] == 'input'], [x for x in tuple_list if x[1] == 'output'], [x for x in tuple_list if x[1] == 'inout']
         ins, outs, inouts = sorted(ins, key=lambda x: str(x[0])), sorted(outs, key=lambda x: str(x[0])), sorted(inouts, key=lambda x: str(x[0]))
         tuple_list = ins + outs + inouts + idx_constants
-        print(tuple_list)
         for key, val in (tuple_list):
             if str(key) == 'rkA' or str(key) == 'rkB' or str(key) == 'rkold' or str(key) == 'rknew': # RK coefficients in the kernel header
                 code += ['const double *%s' % key]

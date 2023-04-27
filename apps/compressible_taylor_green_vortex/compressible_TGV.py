@@ -11,7 +11,8 @@ constants = ["Re", "Pr", "gama", "Minf"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-teno = True
+teno = False
+einstein_eq = EinsteinEquation()
 # Central scheme plus WENO filtering, otherwise pure TENO
 if not teno:
     NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
@@ -33,7 +34,6 @@ else:
     # Substitutions
     substitutions = [stress_tensor, heat_flux]
     constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
-    einstein_eq = EinsteinEquation()
     base_eqns = [mass, momentum, energy]
     # Expand the base equations
     for i, base in enumerate(base_eqns):
@@ -137,7 +137,7 @@ if teno:
     teno_order = 6
     Avg = RoeAverage([0, 1])
     # Adaptive changing of TENO CT coefficients paired with a shock-sensor
-    adaptive = True
+    adaptive = False    
     if adaptive:
         SS = ShockSensor()
         shock_sensor, sensor_array = SS.ducros_equations(block, coordinate_symbol)
@@ -145,7 +145,8 @@ if teno:
         constituent.add_equations(shock_sensor)
         LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF', formulation='adaptive', sensor=sensor_array, store_sensor=True)
     else:
-        LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF')
+        # LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF')
+        LF = HLLCTeno(teno_order, averaging=Avg, flux_type='HLLC-LM')
     schemes[LF.name] = LF
 
 boundaries = []
@@ -181,7 +182,7 @@ block.setio(copy.deepcopy(h5))
 
 if not teno:
     # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='HLLC', airfoil=False, store_filter=True)
     block.set_equations(WF.equation_classes)
 
 ## Post-processing for TGV case, kinetic energy and enstrophy reductions

@@ -430,7 +430,12 @@ class WENOFilter(NonSimulationEquations):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
-        WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        if self.flux_type == 'LLF' or self.flux_type == 'GLF':
+            WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        elif self.flux_type == 'HLLC' or self.flux_type == 'HLLC-LM':
+            WS = HLLCWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        else:
+            raise ValueError("Please input a valid flux splitting type: LLF, GLF, HLLC, HLLC-LM.")
         self.halo_type = set()
         self.halo_type.add(WS.halotype)
         # Start the discretisation and create residual arrays for the equations

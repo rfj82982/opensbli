@@ -561,6 +561,13 @@ class HLLCTeno(HLLCCharacteristic, Teno):
             raise ValueError("Storage array for the shock sensor is required.")
         else:
             self.sensor_array = sensor
+        if flux_type == 'HLLC':
+            print("HLLC flux splitting.")
+        elif flux_type == 'HLLC-LM':
+            print("HLLC-LM flux splitting.")
+        else:
+            raise ValueError("Please select either HLLC or HLLC-LM for the flux-splitting.")
+        self.flux_type = flux_type
         self.conservative = conservative
         self.store_sensor = store_sensor
         Teno.__init__(self, order, formulation)
