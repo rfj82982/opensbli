@@ -8,8 +8,9 @@ from opensbli.core.datatypes import Int
 from opensbli.core.parsing import EinsteinEquation
 
 class Feiereisen(object):
-    def __init__(self, conservative):
+    def __init__(self, conservative, inviscid):
         self.conservative = conservative
+        self.inviscid = inviscid
         if self.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -33,13 +34,17 @@ class Feiereisen(object):
             convective = "(1/2) * (Conservative(%s*u_j, x_j) + %s_j*Conservative(%s / rho, x_j) + (%s / rho) * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
         else:
             convective = "(1/2) * (Conservative(rho*%s*u_j, x_j) + %s_j*Conservative(%s, x_j) + %s * Conservative(%s_j, x_j))" % (self.energy_lhs, self.rhou, self.energy_lhs, self.energy_lhs, self.rhou)
-        energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        if self.inviscid:
+            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j))" % (self.energy_lhs, convective)
+        else:
+            energy = "Eq(Der(%s, t), - %s - Conservative(p*u_j, x_j) + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         return energy
 
 
 class KGP(object):
-    def __init__(self, conservative, energy_formulation):
+    def __init__(self, conservative, energy_formulation, inviscid):
         self.conservative = conservative
+        self.inviscid = inviscid
         self.energy_formulation = energy_formulation
         if self.conservative:
             self.rhou = 'rhou'
@@ -86,19 +91,29 @@ class KGP(object):
                 convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rhoE*u_j, x_j) + %s*((rhoE/rho)*Conservative(rhou_j, x_j) + rhou_j*Conservative((rhoE/rho), x_j)) + %s*(u_j*Conservative(rhoE, x_j) + rhoE*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*(rhoE/rho), x_j) + u_j*(rhoE/rho)*Der(rho, x_j)))" % (A, B, C, D)
             else:
                 convective = "((1/2)*(Conservative(p*u_j, x_j) + p*Der(u_j, x_j) + u_j*Der(p, x_j)) + %s*Conservative(rho*Et*u_j, x_j) + %s*(Et*Conservative(rho*u_j, x_j) + rho*u_j*Conservative(Et, x_j)) + %s*(u_j*Conservative(rho*Et, x_j) + rho*Et*Der(u_j, x_j)) + %s*(rho*Conservative(u_j*Et, x_j) + u_j*Et*Der(rho, x_j)))" % (A, B, C, D)
-        energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
+        if self.inviscid:
+            energy = "Eq(Der(%s, t), - %s)" % (self.energy_lhs, convective)
+        else:
+            energy = "Eq(Der(%s, t), - %s + Der(q_j, x_j) + Der(u_i*tau_i_j, x_j))" % (self.energy_lhs, convective)
         return energy
 
 
 class NS_Split(object):
     """ Split forms for the convective parts of the Navier-Stokes equations with central/DRP schemes."""
     def __init__(self, split_type, ndim, constants, coordinate_symbol="x", conservative=True, viscosity=None, energy_formulation='none', debug=False):
+        self.viscosity = viscosity
+        # Add diffusive terms?
+        if self.viscosity == 'inviscid':
+            self.inviscid = True
+        else:
+            self.inviscid = False
+        # Which splitting method to use
         if split_type == 'Feiereisen':
             print("Convective terms are using the Feiereisen split form.")
-            self.split = Feiereisen(conservative)
+            self.split = Feiereisen(conservative, self.inviscid)
         elif split_type == 'KGP':
             print("Convective terms are using the Kennedy-Gruber-Pirozzoli split form.")
-            self.split = KGP(conservative, energy_formulation)
+            self.split = KGP(conservative, energy_formulation, self.inviscid)
         else:
             raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
 
@@ -106,7 +121,7 @@ class NS_Split(object):
         self.coordinate_symbol = coordinate_symbol
         self.constants = constants
         self.ndim = ndim
-        self.viscosity = viscosity
+
         self.EE = EinsteinEquation()
         self.replace_factors = False
         # Storing either the conservative or primitive variables as the q vector to advance in time.
@@ -122,7 +137,10 @@ class NS_Split(object):
         if debug: # Don't expand the diffusive terms
             self.substitutions = []
         else:
-            self.substitutions = self.diffusive_terms()
+            if self.inviscid:
+                self.substitutions = []
+            else:
+                self.substitutions = self.diffusive_terms()
         self.mass = self.continuity_eq()
         self.momentum = self.momentum_eq()
         self.energy = self.energy_eq()
@@ -166,7 +184,10 @@ class NS_Split(object):
         return out
 
     def momentum_eq(self):
-        base_momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
+        if self.inviscid:
+            base_momentum = "Eq(Der(%s_i, t), - Der(p, x_i))" % self.mom_lhs
+        else:
+            base_momentum = "Eq(Der(%s_i, t), - Der(p, x_i) + Der(tau_i_j, x_j))" % self.mom_lhs
         out = self.EE.expand(base_momentum, self.ndim, self.coordinate_symbol, self.substitutions, self.constants)
         # Add convective parts
         convective = self.split.momentum()
