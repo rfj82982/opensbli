@@ -1,4 +1,4 @@
-from sympy import Rational, Min, Abs, sqrt, tanh, pprint, Max, exp
+from sympy import Rational, Min, Abs, sqrt, tanh, pprint, Max, exp, Rational
 from opensbli.core.opensblifunctions import CentralDerivative as CD
 from opensbli.core.parsing import EinsteinEquation as EE
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject
@@ -90,6 +90,16 @@ class ShockSensor(object):
             rj2 = (Abs(2*ph*mh) + eps) / (ph**2 + mh**2 + eps)
             output = Max(output, 1 - Min(rj1, rj2))
 
+        sensor_array = block.location_dataset('%s' % name)
+        output = [OpenSBLIEq(sensor_array, output)]
+        return output, sensor_array
+
+    def WENO_1D_sensor(self, block, name='kappa'):
+        # Evaluate based on pressure
+        pm, p, pp = increment_dataset(block.location_dataset('p'), 0, -1), block.location_dataset('p'), increment_dataset(block.location_dataset('p'), 0, 1)
+        # Weighting coefficients
+        a, b = Rational(1,4), Rational(13,12)
+        output = (a*(pp - pm)**2 + b*(pp - 2*p + pm)**2)**2
         sensor_array = block.location_dataset('%s' % name)
         output = [OpenSBLIEq(sensor_array, output)]
         return output, sensor_array

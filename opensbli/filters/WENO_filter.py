@@ -249,7 +249,8 @@ class WENOFilter(NonSimulationEquations):
             # sensor_evaluations += sensor_pre_evaluations
             # Make the Ducros sensor a binary array of either 0 or 1s
         else:
-            output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
+            # output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
+            output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
         kappa_evaluation = output_eqns[-1].rhs
         # del output_eqns[-1]
         DT = ConstantObject('Shock_sensor_threshold')
@@ -350,7 +351,7 @@ class WENOFilter(NonSimulationEquations):
         for i, eqn in enumerate(resid_kernel.equations):
             # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
             weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
-            rhs = shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
+            rhs = 0.5*shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
             update_equations.append(OpenSBLIEq(q_vars[i].lhs, rhs))
             if self.store_filter:
                 update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), q_vars[i].lhs))
