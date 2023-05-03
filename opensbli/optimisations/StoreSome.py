@@ -158,7 +158,8 @@ class StoreSome(Central):
         viscous = [OpenSBLIEq(x, x+y) for x, y in zip(residual_arrays, viscous)]
         viscous_equations = self.SS(viscous, block, 'Viscous')
         # Remove any non equations
-        viscous_equations = [x for x in viscous_equations if isinstance(x, OpenSBLIEq)]
+        if viscous_equations is not None:
+            viscous_equations = [x for x in viscous_equations if isinstance(x, OpenSBLIEq)]
         # Group conditionals for vectorisation into a grouped piecewise object instead
         if self.merged:
             if convective_equations is not None:
@@ -330,7 +331,8 @@ class StoreSome(Central):
         # Make a name for the local derivative evaluation
         input_vars = []
         input_args = der.args[0]
-        dsets = list(input_args.atoms(DataSet))
+        dsets = sorted(list(input_args.atoms(DataSet)), key=lambda x: str(x))
+
         # Check for repeated variables as power
         if len(input_args.atoms(Pow)) == 0:
             var_name = ''.join([str(x).split('_B%d' % block.blocknumber)[0] for x in dsets])
