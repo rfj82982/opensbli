@@ -36,10 +36,13 @@ class Plot(plotFunctions):
     def __init__(self):
         return
 
-    def line_graphs(self, x, variable, name):
-        plt.plot(x, variable)
+    def line_graphs(self, x, variable, name, xref, ref):
+        if ref is not 0:
+            plt.plot(xref, ref, color='k', label='Reference')
+        plt.plot(x, variable, color='r', label='Result')
         plt.xlabel(r'$x_0$', fontsize=20)
         plt.ylabel(r'$%s$' % name, fontsize=20)
+        plt.legend(loc="best")
         plt.savefig(directory + "output_%s.pdf" % name, bbox_inches='tight')
         plt.clf()
         return
@@ -50,17 +53,26 @@ class Plot(plotFunctions):
         rhoE = self.read_dataset(group, "rhoE_B0")
         u = rhou/rho
         p = (0.4)*(rhoE - 0.5*(u**2)*rho)
-        return rho, u, rhoE, p
+        kappa = self.read_dataset(group, "kappa_B0")
+        q0 = self.read_dataset(group, "q0_B0")
+        q1 = self.read_dataset(group, "q1_B0")
+        q2 = self.read_dataset(group, "q2_B0")
+        return rho, u, rhoE, p, kappa, q0, q1, q2
 
     def main_plot(self, fname, n_levels):
         f, group1 = self.read_file(fname)
-        rho, u, rhoE, p = self.extract_flow_variables(group1)
-        variables = [rho, u, p]
-        names = ["rho", "u", "P"]
+        rho, u, rhoE, p, kappa, q0, q1, q2 = self.extract_flow_variables(group1)
+        variables = [rho, u, p, kappa, q0, q1, q2]
+        names = ["rho", "u", "P", "kappa", "q0", "q1", "q2"]
         x = numpy.linspace(0, 10, rho.size)
 
-        for var, name in zip(variables, names):
-            self.line_graphs(x, var, name)
+        # Load reference data
+        data = numpy.loadtxt('TENO6_reference.txt')
+        xref, rhoref, uref, Pref = data[:,0], data[:,1], data[:,2], data[:,3]
+        ref = [rhoref, uref, Pref, 0, 0, 0, 0]
+
+        for i, (var, name) in enumerate(zip(variables, names)):
+            self.line_graphs(x, var, name, xref, ref[i])
             f.close()
 
 

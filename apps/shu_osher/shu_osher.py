@@ -5,18 +5,23 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = False
+teno = True
+weno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama", "Minf"]
+conservative = True
 # Define coordinate direction symbol (x) this will be x_i, x_j, x_k
 coordinate_symbol = "x"
 # Substitutions
 substitutions = []
 eq = EinsteinEquation()
 
-if teno:
-    sc1 = "**{\'scheme\':\'Teno\'}"
+if teno or weno:
+    if teno:
+        sc1 = "**{\'scheme\':\'Teno\'}"
+    else:
+        sc1 = "**{\'scheme\':\'Weno\'}"
     # Define the compresible Navier-Stokes equations in Einstein notation.
     a = "Conservative(rhou_j,x_j,%s)" % sc1
     mass = "Eq(Der(rho,t), - %s)" % (a)
@@ -29,7 +34,6 @@ if teno:
     momentum = eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
     energy = eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
 else:
-    conservative = True
     NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='inviscid', energy_formulation='enthalpy', debug=False)
     mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 
@@ -77,7 +81,12 @@ rho = "Eq(DataObject(rho), d)"
 rhou0 = "Eq(DataObject(rhou0), d*u0)"
 rhoE = "Eq(DataObject(rhoE), p/(gama-1.0) + 0.5* d *(u0**2.0))"
 
-eqns = [x0, x0_dset, u0, p, d, rho, rhou0, rhoE]
+# Temp arrays for testing
+kappa = "Eq(DataObject(kappa), 0)"
+q0 = "Eq(DataObject(q0), 0)"
+q1 = "Eq(DataObject(q1), 0)"
+q2 = "Eq(DataObject(q2), 0)"
+eqns = [x0, x0_dset, u0, p, d, rho, rhou0, rhoE, kappa, q0, q1, q2]
 
 local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
 initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
@@ -104,9 +113,12 @@ for direction in range(ndim):
 
 schemes = {}
 # Spatial scheme
-if teno:
+if teno or weno:
     Avg = RoeAverage([0, 1])
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    if teno:
+        LF = HLLCTeno(order=5, averaging=Avg, flux_type='HLLC')
+    else:
+        LF = HLLCWeno(order=3, formulation='Z', averaging=Avg, flux_type='HLLC')
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -115,19 +127,21 @@ else:
     cent = Central(4)
     schemes[cent.name] = cent
 # Time-stepping
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(4)
 schemes[rk.name] = rk
 
 block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('kappa'), DataObject('q0')])
+h5.add_arrays([DataObject('x0')])
+
+h5.add_arrays([ DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2')])
 block.setio(copy.deepcopy(h5))
 
-if not teno:
+if not teno and not weno:
     # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=3, dissipation_sensor='Ducros', flux_type='HLLC', airfoil=False, store_filter=True)
+    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
     block.set_equations(WF.equation_classes)
 
 
