@@ -25,6 +25,7 @@ class WENOFilter(NonSimulationEquations):
         self.residual_kernels = []
         self.flux_type = flux_type
         self.airfoil = airfoil
+        self.hybrid = False
         if block.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -249,8 +250,8 @@ class WENOFilter(NonSimulationEquations):
             # sensor_evaluations += sensor_pre_evaluations
             # Make the Ducros sensor a binary array of either 0 or 1s
         else:
-            # output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
-            output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
+            output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
+            # output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
         kappa_evaluation = output_eqns[-1].rhs
         # del output_eqns[-1]
         DT = ConstantObject('Shock_sensor_threshold')
@@ -315,6 +316,7 @@ class WENOFilter(NonSimulationEquations):
 
         kappa_fact = self.kappa
         check = self.kappa
+        check = 1
         # for direction in range(self.ndim):
         #     for loc in [-2, -1, 0, 1, 2]:
         #         check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
@@ -324,9 +326,6 @@ class WENOFilter(NonSimulationEquations):
         # cond2 = ExprCondPair(0.0, True)
         modified_equations += [OpenSBLIEq(kappa_fact, check)]
         # modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
-        shock_factor = ConstantObject('shock_factor')
-        shock_factor.value = 1
-        CTD.add_constant(shock_factor)
 
         # detJ if needed
         if self.curvilinear and self.airfoil:
@@ -351,7 +350,7 @@ class WENOFilter(NonSimulationEquations):
         for i, eqn in enumerate(resid_kernel.equations):
             # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
             weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
-            rhs = 0.5*shock_factor*kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
+            rhs = kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
             update_equations.append(OpenSBLIEq(q_vars[i].lhs, rhs))
             if self.store_filter:
                 update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), q_vars[i].lhs))
@@ -398,19 +397,22 @@ class WENOFilter(NonSimulationEquations):
         from sympy import And, Or
         input_equations = flatten(kernel.equations)
         kernel.equations = []
-        self.DT = ConstantObject('Ducros_threshold')
-        self.DT.value = 0.5
-        CTD.add_constant(self.DT)
-        locations = [-3, -2, -1, 1, 2]
-        term = self.kappa
-        # for dire in range(block.ndim):
-        dire = direction # Only check 1D kappa
-        for loc in locations:
-            term = Max(term, increment_dataset(self.kappa, dire, loc))
-        check = term > self.DT
-        cond1 = ExprCondPair(input_equations, check)
-        cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
-        kernel.add_equation([GroupedPiecewise(cond1, cond2)])
+        if self.hybrid:
+            self.DT = ConstantObject('Ducros_threshold')
+            self.DT.value = 0.5
+            CTD.add_constant(self.DT)
+            locations = [-3, -2, -1, 1, 2]
+            term = self.kappa
+            # for dire in range(block.ndim):
+            dire = direction # Only check 1D kappa
+            for loc in locations:
+                term = Max(term, increment_dataset(self.kappa, dire, loc))
+            check = term > self.DT
+            cond1 = ExprCondPair(input_equations, check)
+            cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
+            kernel.add_equation([GroupedPiecewise(cond1, cond2)])
+        else:
+            kernel.add_equation(input_equations)
         return kernel
 
     def update_periodic_boundary(self, block, halos):
@@ -435,9 +437,9 @@ class WENOFilter(NonSimulationEquations):
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
         if self.flux_type == 'LLF' or self.flux_type == 'GLF':
-            WS = LFWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            WS = LFWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         elif self.flux_type == 'HLLC' or self.flux_type == 'HLLC-LM':
-            WS = HLLCWeno(scheme_order, formulation='JS', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            WS = HLLCWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         else:
             raise ValueError("Please input a valid flux splitting type: LLF, GLF, HLLC, HLLC-LM.")
         self.halo_type = set()

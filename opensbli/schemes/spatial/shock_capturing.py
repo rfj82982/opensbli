@@ -428,6 +428,7 @@ class Characteristic(EigenSystem):
         return inverse_evals, avg_LEV_values
 
     def replace_gamma_factor(self, eqns):
+        ConstantsToDeclare.add_constant(ConstantObject('gama'))
         gamma_minus_one = ConstantObject('gamma_m1')
         gamma_minus_one.value = (ConstantObject('gama') - 1)
         ConstantsToDeclare.add_constant(gamma_minus_one)
@@ -685,7 +686,7 @@ class LFCharacteristic(Characteristic):
         stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
         ev = self.eigen_value[direction]
         out = zeros(*ev.shape)
-        # stencil_points = [0,1]
+        stencil_points = [0,1]
         for p in stencil_points:
             location_ev = self.convert_symbolic_to_dataset(ev, p, direction, block)
             for no, val in enumerate(location_ev):
@@ -936,6 +937,11 @@ class HLLCCharacteristic(Characteristic):
             elif dire == 2:
                 USTAR_L = Matrix([1, vel_L[0], vel_L[1], s_star, rhoEL*inv_rhoL + (s_star - vel_L[dire])*(s_star + pL/(rhoL*(sL-vel_L[dire])))])
                 USTAR_R = Matrix([1, vel_R[0], vel_R[1], s_star, rhoER*inv_rhoR + (s_star - vel_R[dire])*(s_star + pR/(rhoR*(sL-vel_R[dire])))])
+
+        # Add extra dissipation via scaling term if required on the signal speeds
+        FC = ConstantObject('shock_filter_control')
+        FC.value = 1.0 # Default condition has no scaling
+        ConstantsToDeclare.add_constant(FC)
 
         # Outside density and wave-speed factor
         USTAR_L *= rhoL*((sL - vel_L[dire])/(sL - s_star))
