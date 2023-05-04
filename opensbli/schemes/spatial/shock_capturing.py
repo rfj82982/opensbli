@@ -332,7 +332,10 @@ class Characteristic(EigenSystem):
             derivatives[i].update_settings(**settings)
         pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
         interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, single_wave)
-        post_process_eqns = self.post_process(direction, derivatives, block)
+        if combined_reconstruction:
+            post_process_eqns = self.post_process(direction, derivatives, block)
+        else:
+            post_process_eqns = self.post_process_Q(direction, derivatives, block)
         return [pre_process_eqns, reduction_eqns, interpolated_eqns, post_process_eqns]
 
     def remove_zero_equations(self, equations):
@@ -499,6 +502,28 @@ class Characteristic(EigenSystem):
         output_equation = [OpenSBLIEq(reconstruction_variable, gv('rj%d' % component)*(reconstruction_variable - formula))]
         return output_equation
 
+    def define_substitution_dictionaries(self, direction, derivatives, block, CS, velocities, pressure):
+        """ Dictionaries to link the datasets present in the flux vector and the left/right evaluated states after the WENO reconstruction."""
+        # Conservative variables
+        q_dsets = self.input_solution_vector
+        left, right = [], []
+        left += [(q_dsets[0], CS[0][0])]
+        left += [(q_dsets[i+1], CS[0][i+1]) for i in range(block.ndim)]
+        left += [(q_dsets[-1], CS[0][-1])]
+        right += [(q_dsets[0], CS[1][0])]
+        right += [(q_dsets[i+1], CS[1][i+1]) for i in range(block.ndim)]
+        right += [(q_dsets[-1], CS[1][-1])]
+        # Pressure
+        left += [(block.location_dataset('p'), pressure[0])]
+        right += [(block.location_dataset('p'), pressure[1])]
+        # Velocities
+        left += [(block.location_dataset('u%d' % i), velocities[0][i]) for i in range(block.ndim)]
+        right += [(block.location_dataset('u%d' % i), velocities[1][i]) for i in range(block.ndim)]
+        SD_L = dict(left)
+        SD_R = dict(right)
+        return SD_L, SD_R
+
+
 class LFCharacteristic(Characteristic):
     """ This class contains the base Local Lax-Fedrich scheme performed in characteristic space.
 
@@ -524,6 +549,9 @@ class LFCharacteristic(Characteristic):
         :arg list solution_vector: Solution vector from the Euler equations (rho, rhou0, rhou1, rhou2, rhoE) in vector form."""
         self.direction = direction
         self.input_solution_vector = solution_vector
+        # Combined reconstruction, or reconstruct WENO/TENO on only on Q vector?
+        self.combined = derivatives[0].settings["combine_reconstructions"]
+        # Output equations
         pre_process_equations = []
         # Update the ev, LEV and REV dicts and perform averaging
         avg_name = 'AVG_%d' % direction
@@ -554,13 +582,13 @@ class LFCharacteristic(Characteristic):
         pre_process_equations += evaluations
         # Get max wavespeeds and their evaluations, eigenvalues evaluated either local or globally
         if self.flux_type == 'LLF':
-            grid_EV, pre_process_equations = self.create_max_characteristic_wave_speed(pre_process_equations, direction, block)
+            self.grid_EV, pre_process_equations = self.create_max_characteristic_wave_speed(pre_process_equations, direction, block)
             reduction_equations = []
         else:
-            grid_EV, reduction_equations, pre_process_equations = self.calculate_eigenvalue_reductions(pre_process_equations, direction, block)
+            self.grid_EV, reduction_equations, pre_process_equations = self.calculate_eigenvalue_reductions(pre_process_equations, direction, block)
         # Transform the flux vector and the solution vector to characteristic space
         if hasattr(self, 'flux_split') and self.flux_split:
-            self.characteristic_flux_splitting(grid_EV, CS_matrix, CF_matrix, derivatives)
+            self.characteristic_flux_splitting(self.grid_EV, CS_matrix, CF_matrix, derivatives)
         else:
             raise NotImplementedError("Only flux splitting is implemented in characteristic.")
         # Remove '0' entries and gamma - 1 factors from pre_process_equations
@@ -589,7 +617,7 @@ class LFCharacteristic(Characteristic):
         pre_process_equations += [x for x in self.generate_equations_from_matrices(grid_vars, reduction_vars) if x != 0]
         return grid_vars, reductions, pre_process_equations
 
-    def post_process(self, direction, derivatives, block):
+    def post_process(self, dire, derivatives, block):
         """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
         eigenvector matrix.
 
@@ -603,13 +631,81 @@ class LFCharacteristic(Characteristic):
             for i, recon in enumerate(reconstructed_characteristics):
                 post_process_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
 
-        avg_REV_values = self.create_REV_inverses(direction)
+        avg_REV_values = self.create_REV_inverses(dire)
         reconstructed_flux = avg_REV_values*reconstructed_characteristics
 
-        reconstructed_work = self.create_output_wk_arrays(direction, derivatives, block)
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
         post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
         post_process_equations = self.replace_gamma_factor(post_process_equations)
         return post_process_equations
+
+    def post_process_Q(self, dire, derivatives, block):
+        """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
+        eigenvector matrix.
+
+        :arg list derivatives: The derivatives to perform the characteristic decomposition and WENO on.
+        :arg object kernel: The current computational kernel."""
+        pp_equations = []
+        ndim = block.ndim
+
+        reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
+        # Transformation matrix back to physical (non-characteristic) space
+        avg_REV_values = self.create_REV_inverses(dire)
+        # LLF: Reconstruct the left and right states separately and then transform each back to physical space
+        left_q, right_q = symbols("qL:%d" % (ndim+2), **{'cls':GridVariable}), symbols("qR:%d" % (ndim+2), **{'cls':GridVariable})
+        wL, wR = Matrix(reconstructed_characteristics[:,1]), Matrix(reconstructed_characteristics[:,0])
+        pp_equations += [OpenSBLIEq(x, y) for x, y in zip(right_q, avg_REV_values*wR)]
+        pp_equations += [OpenSBLIEq(x, y) for x, y in zip(left_q, avg_REV_values*wL)]
+        # LLF: Calculate the speed of sound and pressure at each interface using the reconstructed values
+        pL, pR = symbols("pL", **{'cls':GridVariable}), symbols("pR", **{'cls':GridVariable})
+        rhoL, rhoR = left_q[0], right_q[0]
+        rhoEL, rhoER = left_q[-1], right_q[-1]
+        vel_L, vel_R = symbols("uL:%d" % (ndim), **{'cls':GridVariable}), symbols("uR:%d" % (ndim), **{'cls':GridVariable})
+        # Density inversion factor
+        inv_rhoL, inv_rhoR = symbols("inv_rhoL", **{'cls':GridVariable}), symbols("inv_rhoR", **{'cls':GridVariable})
+        pp_equations += [OpenSBLIEq(inv_rhoL, 1.0/rhoL), OpenSBLIEq(inv_rhoR, 1.0/rhoR)]
+        # Velocity component in the dire of reconstruction
+        uL, uR = vel_L[dire], vel_R[dire]
+        for i, u in enumerate(vel_L):
+            pp_equations += [OpenSBLIEq(vel_L[i], left_q[i+1]*inv_rhoL)]
+            pp_equations += [OpenSBLIEq(vel_R[i], right_q[i+1]*inv_rhoR)]
+        # WARNING: ideal gas law assumed
+        gama = ConstantObject('gama')
+        pp_equations += [OpenSBLIEq(pL, (gama- 1)*(left_q[-1] - 0.5*rhoL*sum([x**2 for x in vel_L])))]
+        pp_equations += [OpenSBLIEq(pR, (gama- 1)*(right_q[-1] - 0.5*rhoR*sum([x**2 for x in vel_R])))]
+
+        # Build the system of flux components
+        # Create a substitution dictionary from the flux components
+        SD_L, SD_R = self.define_substitution_dictionaries(dire, derivatives, block, [left_q, right_q], [vel_L, vel_R], [pL, pR])
+        # Create output arrays to store the final flux reconstructions
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
+        # Vectors for the right/left states
+        U_L, U_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
+        F_L, F_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
+        # Substitute left/right states into the input Q and flux vector
+        for i, d in enumerate(derivatives):
+            input_args = d.args[0]
+            U_L[i] = self.input_solution_vector[i].subs(SD_L)
+            U_R[i] = self.input_solution_vector[i].subs(SD_R)
+            F_L[i] = input_args.subs(SD_L)
+            F_R[i] = input_args.subs(SD_R)
+        # Flux split with wave-speed selection
+        # evs = Matrix([self.grid_EV[i,i] for i in range(ndim+2)]).reshape(1,ndim+2)
+        # print(evs)
+        positive = factor(Rational(1,2)*(F_R + self.grid_EV*U_R))
+        negative = factor(Rational(1,2)*(F_L - self.grid_EV*U_L))
+
+        # Assign the fluxes to the storage arrays
+        for i, component in enumerate(reconstructed_work):
+            pp_equations += [OpenSBLIEq(component, factor(positive[i]+negative[i]))]
+        # Apply a shock sensor if the WENO is being applied as a filter step
+        if block.shock_filter:
+            for i in range(len(reconstructed_work)):
+                pp_equations += flatten([self.central_diff_formula(i, reconstructed_work[i], self.flux_type, derivatives[i])])
+        # Replace gamma factors if required
+        pp_equations = self.replace_gamma_factor(pp_equations)
+        return pp_equations
+
 
     def solution_vector_to_characteristic(self, solution_vector, direction, name):
         stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
@@ -626,41 +722,44 @@ class LFCharacteristic(Characteristic):
         return characteristic_solution_stencil, CS_matrix
 
     def create_characteristic_matrices(self, direction, derivatives, solution_vector, name):
-        characteristic_flux_vector, CF_matrix = self.flux_vector_to_characteristic(derivatives, direction, name)
+        # Reconstruct the combined flux or only the Q vector
+        if self.combined:
+            characteristic_flux_vector, CF_matrix = self.flux_vector_to_characteristic(derivatives, direction, name)
+            CF_evaluations = flatten(self.generate_equations_from_matrices(CF_matrix, characteristic_flux_vector))
+        else:
+            CF_matrix = None
+
         characteristic_solution_vector, CS_matrix = self.solution_vector_to_characteristic(solution_vector, direction, name)
-        CF_evaluations = flatten(self.generate_equations_from_matrices(CF_matrix, characteristic_flux_vector))
         CS_evaluations = flatten(self.generate_equations_from_matrices(CS_matrix, characteristic_solution_vector))
         # Optimise by grouping evaluations by stencil location
         n_rows, n_cols = CS_matrix.shape[0], CS_matrix.shape[1]
         reordered = []
         for j in range(n_cols):
             reordered_CS, reordered_CF = [], []
-            for i in range(n_rows):
-                reordered.append(CF_evaluations[j+i*n_cols])
+            if self.combined:
+                for i in range(n_rows):
+                    reordered.append(CF_evaluations[j+i*n_cols])
             for i in range(n_rows):
                 reordered.append(CS_evaluations[j+i*n_cols])
-
-        # for eqn in reordered:
-        #     pprint(eqn.rhs)
-        #     print(count_ops(eqn.rhs))
-        #     new = factor(eqn.rhs)
-        #     pprint(new)
-        #     print(count_ops(new))
-        # exit()
-
         return reordered, CS_matrix, CF_matrix
 
     def characteristic_flux_splitting(self, ev_matrix, CS_matrix, CF_matrix, derivatives):
-        positive = Rational(1, 2)*(CF_matrix + ev_matrix*CS_matrix)
+        if self.combined:
+            positive = factor(Rational(1, 2)*(CF_matrix + ev_matrix*CS_matrix))
+            negative = factor(Rational(1, 2)*(CF_matrix - ev_matrix*CS_matrix))
+        else:
+            positive = CS_matrix
+            negative = CS_matrix
+
         positive_flux = zeros(*positive.shape)
-        negative = factor(Rational(1, 2)*(CF_matrix - ev_matrix*CS_matrix))
         negative_flux = zeros(*negative.shape)
+        # Assign the values
         for i in range(positive_flux.shape[0]):
             for j in range(positive_flux.shape[1]):
                 positive_flux[i, j] = factor(positive[i, j])
                 negative_flux[i, j] = factor(negative[i, j])
-        positive_flux.stencil_points = CF_matrix.stencil_points
-        negative_flux.stencil_points = CF_matrix.stencil_points
+        positive_flux.stencil_points = CS_matrix.stencil_points
+        negative_flux.stencil_points = CS_matrix.stencil_points
         self.generate_right_reconstruction_variables(positive_flux, derivatives)
         self.generate_left_reconstruction_variables(negative_flux, derivatives)
         return
@@ -832,27 +931,6 @@ class HLLCCharacteristic(Characteristic):
         self.generate_right_reconstruction_variables(positive_flux, derivatives)
         self.generate_left_reconstruction_variables(negative_flux, derivatives)
         return
-
-    def define_substitution_dictionaries(self, direction, derivatives, block, CS, velocities, pressure):
-        """ Dictionaries to link the datasets present in the flux vector and the left/right evaluated states after the WENO reconstruction."""
-        # Conservative variables
-        q_dsets = self.input_solution_vector
-        left, right = [], []
-        left += [(q_dsets[0], CS[0][0])]
-        left += [(q_dsets[i+1], CS[0][i+1]) for i in range(block.ndim)]
-        left += [(q_dsets[-1], CS[0][-1])]
-        right += [(q_dsets[0], CS[1][0])]
-        right += [(q_dsets[i+1], CS[1][i+1]) for i in range(block.ndim)]
-        right += [(q_dsets[-1], CS[1][-1])]
-        # Pressure
-        left += [(block.location_dataset('p'), pressure[0])]
-        right += [(block.location_dataset('p'), pressure[1])]
-        # Velocities
-        left += [(block.location_dataset('u%d' % i), velocities[0][i]) for i in range(block.ndim)]
-        right += [(block.location_dataset('u%d' % i), velocities[1][i]) for i in range(block.ndim)]
-        SD_L = dict(left)
-        SD_R = dict(right)
-        return SD_L, SD_R
 
     def post_process(self, dire, derivatives, block):
         """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
