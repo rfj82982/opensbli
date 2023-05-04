@@ -692,8 +692,8 @@ class LFCharacteristic(Characteristic):
         # Flux split with wave-speed selection
         # evs = Matrix([self.grid_EV[i,i] for i in range(ndim+2)]).reshape(1,ndim+2)
         # print(evs)
-        positive = factor(Rational(1,2)*(F_R + self.grid_EV*U_R))
-        negative = factor(Rational(1,2)*(F_L - self.grid_EV*U_L))
+        positive = factor(Rational(1,2)*(F_L + self.grid_EV*U_L))
+        negative = factor(Rational(1,2)*(F_R - self.grid_EV*U_R))
 
         # Assign the fluxes to the storage arrays
         for i, component in enumerate(reconstructed_work):

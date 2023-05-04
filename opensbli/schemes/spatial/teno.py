@@ -473,7 +473,7 @@ class LFTeno(LFCharacteristic, Teno):
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF'):
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF', combined=False):
         LFCharacteristic.__init__(self, physics, flux_type, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
@@ -486,6 +486,7 @@ class LFTeno(LFCharacteristic, Teno):
             print("Global Lax-Friedrich flux splitting.")
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")
+        self.combined = combined
         self.conservative = conservative
         self.store_sensor = store_sensor
         Teno.__init__(self, order, formulation)
@@ -523,7 +524,7 @@ class LFTeno(LFCharacteristic, Teno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, combined_reconstruction=self.combined)                
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations

@@ -36,10 +36,11 @@ class Plot(plotFunctions):
     def __init__(self):
         return
 
-    def line_graphs(self, x, variable, name, xref, ref):
+    def line_graphs(self, x, variable, name, xref, ref, xref2, ref2):
         if ref is not 0:
-            plt.plot(xref, ref, color='k', label='Reference')
-        plt.plot(x, variable, color='r', label='Result')
+            plt.plot(xref, ref, color='b', label='OldLLF')
+            plt.plot(xref2, ref2, color='k', label='Fine_Mesh')
+        plt.plot(x, variable, color='r', label='NewLLF')
         plt.xlabel(r'$x_0$', fontsize=20)
         plt.ylabel(r'$%s$' % name, fontsize=20)
         plt.legend(loc="best")
@@ -59,20 +60,33 @@ class Plot(plotFunctions):
         q2 = self.read_dataset(group, "q2_B0")
         return rho, u, rhoE, p, kappa, q0, q1, q2
 
+    def save_data(self, fname, x, rho, u, P):
+        numpy.savetxt(fname, numpy.c_[x, rho, u, P])
+        return
+
     def main_plot(self, fname, n_levels):
         f, group1 = self.read_file(fname)
         rho, u, rhoE, p, kappa, q0, q1, q2 = self.extract_flow_variables(group1)
         variables = [rho, u, p, kappa, q0, q1, q2]
         names = ["rho", "u", "P", "kappa", "q0", "q1", "q2"]
         x = numpy.linspace(0, 10, rho.size)
+        save = True
+
+        if save:
+                self.save_data('NewLF_WENO7Z.txt', x, rho, u, p)
 
         # Load reference data
-        data = numpy.loadtxt('TENO6_reference.txt')
+        data = numpy.loadtxt('OldLF_WENO7Z.txt')
         xref, rhoref, uref, Pref = data[:,0], data[:,1], data[:,2], data[:,3]
         ref = [rhoref, uref, Pref, 0, 0, 0, 0]
 
+        # Load reference data
+        data = numpy.loadtxt('TENO6_reference.txt')
+        xref2, rhoref2, uref2, Pref2 = data[:,0], data[:,1], data[:,2], data[:,3]
+        ref2 = [rhoref2, uref2, Pref2, 0, 0, 0, 0]
+
         for i, (var, name) in enumerate(zip(variables, names)):
-            self.line_graphs(x, var, name, xref, ref[i])
+            self.line_graphs(x, var, name, xref, ref[i], xref2, ref2[i])
             f.close()
 
 

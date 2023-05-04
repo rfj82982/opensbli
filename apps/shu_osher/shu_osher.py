@@ -5,8 +5,8 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = False
-weno = True
+teno = True
+weno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama", "Minf"]
@@ -116,9 +116,9 @@ schemes = {}
 if teno or weno:
     Avg = RoeAverage([0, 1])
     if teno:
-        LF = HLLCTeno(order=5, averaging=Avg, flux_type='HLLC')
+        LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', combined=False)
     else:
-        LF = LFWeno(order=3, formulation='Z', averaging=Avg, flux_type='LLF')
+        LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF', combined=False)
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -154,6 +154,6 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
 constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-6', '1.0/Delta0block0']
+values = ['1.4', '0.1', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-5', '1.0/Delta0block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
