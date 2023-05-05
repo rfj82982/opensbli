@@ -5,7 +5,7 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = False
+teno = True
 weno = False
 ndim = 1
 # Define all the constants in the equations
@@ -70,12 +70,12 @@ block = SimulationBlock(ndim, block_number=0)
 # Initial conditions
 initial = GridBasedInitialisation()
 # x = "GridVariable(x0)"
-x0 = "Eq(GridVariable(x0), -5.0 + block.deltas[0]*block.grid_indexes[0])"
+x0 = "Eq(GridVariable(x0), block.deltas[0]*block.grid_indexes[0])"
 x0_dset = "Eq(DataObject(x0), GridVariable(x0))"
 
-p = "Eq(GridVariable(p), Piecewise((10.33333, x0<-4.0),(1.0, x0>=-4.0),(0.0,True)))"
-u0 = "Eq(GridVariable(u0), Piecewise((2.629369, x0<-4.0),(0.0, x0>=-4.0),(0.0,True)))"
-d = "Eq(GridVariable(d), Piecewise((3.857143, x0<-4.0),(1.0+0.2*sin(5*x0), x0>=-4.0),(0,True)))"
+d = "Eq(GridVariable(d), Piecewise((1, x0 < 3),(1e-3, True)))"
+u0 = "Eq(GridVariable(u0), Piecewise((0, x0 < 3),(0, True)))"
+p = "Eq(GridVariable(p), Piecewise(((2/3)*1e-1, x0 < 3), ((2/3)*1e-10, True)))"
 
 rho = "Eq(DataObject(rho), d)"
 rhou0 = "Eq(DataObject(rhou0), d*u0)"
@@ -94,14 +94,14 @@ initial = GridBasedInitialisation()
 initial.add_equations(initial_equations)
 
 
-# Shu Osher boundary condition values left side
+# LeBlanc boundary condition values left side
 arrays = flatten(simulation_eq.time_advance_arrays)
-subs_dict = {Symbol('x0'): -5.0}
+subs_dict = {Symbol('x0'): 0}
 boundary_eqns = [x0, u0, p, d, rho, rhou0, rhoE]
 boundary_eqns = [parse_expr(eq, local_dict=local_dict) for eq in boundary_eqns]
 left_eqns = [eq.subs(subs_dict) for eq in boundary_eqns]
 
-subs_dict = {Symbol('x0'): 5.0}
+subs_dict = {Symbol('x0'): 9.0}
 
 right_eqns = [eq.subs(subs_dict) for eq in boundary_eqns]
 
@@ -114,12 +114,14 @@ for direction in range(ndim):
 schemes = {}
 # Spatial scheme
 if teno or weno:
-    # Avg = RoeAverage([0, 1])
-    Avg = SimpleAverage([0, 1])
+    Avg = RoeAverage([0, 1])
+    # Avg = SimpleAverage([0, 1])
     if teno:
-        LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', combined=True)
+        # LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', flux_split=False)
+        LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     else:
-        LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF', combined=True)
+        LF = LFWeno(order=3, formulation='JS', averaging=Avg, flux_type='LLF', flux_split=True)
+        # LF = HLLCWeno(order=5, formulation='JS', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -142,7 +144,7 @@ block.setio(copy.deepcopy(h5))
 
 if not teno and not weno:
     # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+    WF = WENOFilter(block, order=3, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
     block.set_equations(WF.equation_classes)
 
 
@@ -154,7 +156,7 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-5', '1.0/Delta0block0']
+constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'TENO_CT', 'inv_rfact0_block0']
+values = ['5.0/3.0', '0.0001', 'ceil(6/0.0001)', '900', '9.0/(block0np0-1)', '1.0e-5', '1.0/Delta0block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

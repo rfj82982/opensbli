@@ -5,8 +5,8 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = True
-weno = False
+teno = False
+weno = True
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]
@@ -121,7 +121,7 @@ if teno or weno:
         LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     else:
         # LF = LFWeno(order=7, formulation='JS', averaging=Avg, flux_type='LLF', flux_split=False)
-        LF = HLLCWeno(order=7, formulation='JS', averaging=Avg, flux_type='HLLC-LM')
+        LF = HLLCWeno(order=3, formulation='JS', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -130,7 +130,7 @@ else:
     # cent = Central(4)
     schemes[cent.name] = cent
 # Time-stepping
-rk = RungeKuttaLS(3)
+rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
 
 block.set_block_boundaries(boundaries)
@@ -144,7 +144,7 @@ block.setio(copy.deepcopy(h5))
 
 if not teno and not weno:
     # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+    WF = WENOFilter(block, order=3, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
     block.set_equations(WF.equation_classes)
 
 
