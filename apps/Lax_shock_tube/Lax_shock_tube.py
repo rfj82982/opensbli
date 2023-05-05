@@ -70,12 +70,12 @@ block = SimulationBlock(ndim, block_number=0)
 # Initial conditions
 initial = GridBasedInitialisation()
 # x = "GridVariable(x0)"
-x0 = "Eq(GridVariable(x0), -5.0 + block.deltas[0]*block.grid_indexes[0])"
+x0 = "Eq(GridVariable(x0), block.deltas[0]*block.grid_indexes[0])"
 x0_dset = "Eq(DataObject(x0), GridVariable(x0))"
 
-p = "Eq(GridVariable(p), Piecewise((10.33333, x0<-4.0),(1.0, x0>=-4.0),(0.0,True)))"
-u0 = "Eq(GridVariable(u0), Piecewise((2.629369, x0<-4.0),(0.0, x0>=-4.0),(0.0,True)))"
-d = "Eq(GridVariable(d), Piecewise((3.857143, x0<-4.0),(1.0+0.2*sin(5*x0), x0>=-4.0),(0,True)))"
+d = "Eq(GridVariable(d), Piecewise((0.445, x0<0.5),(0.5,True)))"
+u0 = "Eq(GridVariable(u0), Piecewise((0.698, x0<0.5),(0.0,True)))"
+p = "Eq(GridVariable(p), Piecewise((3.528, x0<0.5), (0.5710,True)))"
 
 rho = "Eq(DataObject(rho), d)"
 rhou0 = "Eq(DataObject(rhou0), d*u0)"
@@ -94,14 +94,14 @@ initial = GridBasedInitialisation()
 initial.add_equations(initial_equations)
 
 
-# Shu Osher boundary condition values left side
+# Lax boundary condition values left side
 arrays = flatten(simulation_eq.time_advance_arrays)
-subs_dict = {Symbol('x0'): -5.0}
+subs_dict = {Symbol('x0'): 0}
 boundary_eqns = [x0, u0, p, d, rho, rhou0, rhoE]
 boundary_eqns = [parse_expr(eq, local_dict=local_dict) for eq in boundary_eqns]
 left_eqns = [eq.subs(subs_dict) for eq in boundary_eqns]
 
-subs_dict = {Symbol('x0'): 5.0}
+subs_dict = {Symbol('x0'): 1.0}
 
 right_eqns = [eq.subs(subs_dict) for eq in boundary_eqns]
 
@@ -119,7 +119,7 @@ if teno or weno:
     if teno:
         LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', combined=True)
     else:
-        LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF', combined=True)
+        LF = LFWeno(order=7, formulation='JS', averaging=Avg, flux_type='LLF', combined=True)
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -154,7 +154,7 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-5', '1.0/Delta0block0']
+constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'TENO_CT', 'inv_rfact0_block0']
+values = ['1.4', '0.0001', 'ceil(0.14/0.0001)', '240', '1.0/(block0np0-1)', '1.0e-6', '1.0/Delta0block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
