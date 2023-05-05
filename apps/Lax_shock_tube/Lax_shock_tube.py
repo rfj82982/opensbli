@@ -5,8 +5,8 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = False
-weno = True
+teno = True
+weno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]
@@ -114,12 +114,14 @@ for direction in range(ndim):
 schemes = {}
 # Spatial scheme
 if teno or weno:
-    # Avg = RoeAverage([0, 1])
-    Avg = SimpleAverage([0, 1])
+    Avg = RoeAverage([0, 1])
+    # Avg = SimpleAverage([0, 1])
     if teno:
-        LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', combined=True)
+        # LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', flux_split=False)
+        LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     else:
-        LF = LFWeno(order=7, formulation='JS', averaging=Avg, flux_type='LLF', combined=True)
+        # LF = LFWeno(order=7, formulation='JS', averaging=Avg, flux_type='LLF', flux_split=False)
+        LF = HLLCWeno(order=7, formulation='JS', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 else:
@@ -155,6 +157,6 @@ alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
 constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.0001', 'ceil(0.14/0.0001)', '240', '1.0/(block0np0-1)', '1.0e-6', '1.0/Delta0block0']
+values = ['1.4', '0.0001', 'ceil(0.14/0.0001)', '240', '1.0/(block0np0-1)', '1.0e-5', '1.0/Delta0block0']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')

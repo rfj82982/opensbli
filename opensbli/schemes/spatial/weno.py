@@ -479,7 +479,7 @@ class LFWeno(LFCharacteristic, Weno):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging. """
 
-    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='LLF', combined=False):
+    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='LLF', flux_split=True):
         if flux_type == 'LLF':
             print("Local Lax-Friedrich flux splitting.")
         elif flux_type == 'GLF':
@@ -490,9 +490,9 @@ class LFWeno(LFCharacteristic, Weno):
         if (order % 2 == 0):
             raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
         self.flux_type = flux_type
+        self.flux_split = flux_split
         self.temp_wk_arrays = []
-        self.combined = combined
-        LFCharacteristic.__init__(self, physics, flux_type, averaging)
+        LFCharacteristic.__init__(self, physics, flux_type, averaging, flux_split)
         self.conservative = conservative
         if shock_filter is not None:
             self.shock_filter = shock_filter
@@ -534,7 +534,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, combined_reconstruction=self.combined)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, flux_split=self.flux_split)                
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -555,7 +555,7 @@ class LFWeno(LFCharacteristic, Weno):
             eqs = flatten(type_of_eq.equations)
             grouped = self.group_by_direction(eqs)
             all_derivatives_evaluated_locally = []
-            reconstruction_halos = self.reconstruction_halotype(self.order, reconstruction=self.combined)
+            reconstruction_halos = self.reconstruction_halotype(self.order, reconstruction=True)
             solution_vector = flatten(type_of_eq.time_advance_arrays)
             # Instantiate eigensystems with block, but don't add metrics yet
             self.instantiate_eigensystem(block)
@@ -566,7 +566,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, single_wave=False, combined_reconstruction=False)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, single_wave=False, flux_split=self.flux_split)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -590,7 +590,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging. """
 
-    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='HLLC'):
+    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='HLLC', flux_split=False):
         # Check WENO order
         if (order % 2 == 0):
             raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
@@ -601,6 +601,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
         else:
             raise ValueError("Please select either HLLC or HLLC-LM for the flux-splitting.")
         self.flux_type = flux_type
+        self.flux_split = False # No flux split into WENO for HLLC solver
         self.temp_wk_arrays = []
         HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
         self.conservative = conservative

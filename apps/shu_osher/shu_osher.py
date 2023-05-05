@@ -6,7 +6,7 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 teno = False
-weno = True
+weno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]

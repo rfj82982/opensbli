@@ -71,7 +71,7 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives, single_wave=False, MP_limiter=False):
+    def interpolate_reconstruction_variables(self, derivatives, block, single_wave=False, MP_limiter=False, positivity_preservation=False):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
@@ -113,7 +113,33 @@ class ShockCapturing(object):
                     output_eqns += [rv.final_equations]
                 if MP_limiter:
                     output_eqns += self.monotonicity_limiter(rv)
+                if positivity_preservation:
+                    output_eqns += self.positivity_limiter(rv, block, derivatives)
         return output_eqns
+
+    # def positivity_limiter(self, rv, block, derivatives):
+    #     from opensbli.schemes.spatial.weno import RightWenoReconstructionVariable, LeftWenoReconstructionVariable
+    #     from opensbli.schemes.spatial.teno import RightTenoReconstructionVariable, LeftTenoReconstructionVariable
+    #     # Initialise variables
+    #     thm, thp = gv('theta_m'), gv('theta_p')
+    #     output_eqns = [OpenSBLIEq(thm, 1), OpenSBLIEq(thp, 1)]
+    #     # Minimum density and pressure
+    #     # Variable to control CFL number that can be used, default alpha=2
+    #     eps_rho, eps_P = ConstantObject('eps_rho'), ConstantObject('eps_P')
+    #     eps_rho.value, eps_P.value = 1.0e-13, 1.0e-13
+    #     ConstantsToDeclare.add_constant(eps_rho)
+    #     ConstantsToDeclare.add_constant(eps_P)
+
+    #     original = rv.reconstructed_symbol
+    #     if isinstance(rv, LeftWenoReconstructionVariable) or isinstance(rv, LeftTenoReconstructionVariable):
+    #     pprint(rv.__dict__)
+    #     pprint(original)
+    #     pprint(output_eqns)
+    #     exit()
+
+
+    #     return
+
 
     def minmod(self, x, y):
         return 0.5*(sign(x, evaluate=False) + sign(y, evaluate=False))*Min(Abs(x), Abs(y))
@@ -138,6 +164,7 @@ class ShockCapturing(object):
 
     def monotonicity_limiter(self, rv):
         from opensbli.schemes.spatial.weno import RightWenoReconstructionVariable, LeftWenoReconstructionVariable
+        from opensbli.schemes.spatial.teno import RightTenoReconstructionVariable, LeftTenoReconstructionVariable
         output_eqns = []
         # Original reconstructed value
         original = rv.reconstructed_symbol
@@ -147,23 +174,26 @@ class ShockCapturing(object):
         ConstantsToDeclare.add_constant(alpha)
         # Function values required to take the limits
         fn = rv.fluxes
+        print(fn)
         # dj = u_(j+1) - 2*u_(j) + u_(j-1) curvature measure
-        if isinstance(rv, RightWenoReconstructionVariable): # upwind
+        if isinstance(rv, LeftWenoReconstructionVariable) or isinstance(rv, LeftTenoReconstructionVariable): # e.g. [-2,2] stencil, 5th order WENO
+            base = 0
             # f(i), f(i+1), f(i+1/2)^MD
-            dj = fn[1]-2*fn[0]+fn[-1]
-            djp1 = fn[2]-2*fn[1]+fn[0]
+            dj = fn[base+1]-2*fn[base+0]+fn[base-1]
+            djp1 = fn[base+2]-2*fn[base+1]+fn[base+0]
             MM1, MM2 = gv('MM1'), gv('MM2')
             output_eqns += [OpenSBLIEq(MM1, self.minmod(dj, djp1))]
-            c_1 = [fn[0], fn[1], 0.5*(fn[0] + fn[1]) - 0.5*MM1]
+            c_1 = [fn[base+0], fn[base+1], 0.5*(fn[base+0] + fn[base+1]) - 0.5*MM1]
             # f(i), f(i+1/2)^UL, f(i+1/2)^LC
-            djm1 = fn[0]-2*fn[-1]+fn[-2]
+            djm1 = fn[base+0]-2*fn[base-1]+fn[base-2]
             output_eqns += [OpenSBLIEq(MM2, self.minmod(djm1, dj))]
-            c_2 = [fn[0], fn[0] + alpha*(fn[0] - fn[-1]), fn[0] + 0.5*(fn[0] - fn[-1]) + Rational(4,3)*MM2]
+            c_2 = [fn[base+0], fn[base+0] + alpha*(fn[base+0] - fn[base-1]), fn[base+0] + 0.5*(fn[base+0] - fn[base-1]) + Rational(4,3)*MM2]
             u_min = Max(Min(c_1[0], Min(c_1[1], c_1[2])), Min(c_2[0], Min(c_2[1], c_2[2])))
             u_max = Min(Max(c_1[0], Max(c_1[1], c_1[2])), Max(c_2[0], Max(c_2[1], c_2[2])))
             # rv.limiter = gv('limiter')
             output_eqns += [OpenSBLIEq(original, self.median(original, u_min, u_max))]
-
+        else:
+            base = -1
         return output_eqns
 
     def update_constituent_relation_symbols(self, sym, direction):
@@ -325,14 +355,19 @@ class Characteristic(EigenSystem):
         EigenSystem.__init__(self, physics)
         return
 
-    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, single_wave=False, combined_reconstruction=True):
+    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, single_wave=False, flux_split=False):
         """ Performs the three stages required for a characteristic based reconstruction."""
+        if not flux_split:
+            combined_reconstruction = False # Use separate variables to reconstruct left and right states
+        else:
+            temp = True
+            combined_reconstruction = temp
         settings = {"combine_reconstructions": combined_reconstruction, "shock_filter": shock_filter, "single_wave": single_wave}
         for i in range(len(derivatives)):
             derivatives[i].update_settings(**settings)
         pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
-        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, single_wave)
-        if combined_reconstruction:
+        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, single_wave, block)
+        if flux_split:
             post_process_eqns = self.post_process(direction, derivatives, block)
         else:
             post_process_eqns = self.post_process_Q(direction, derivatives, block)
@@ -530,14 +565,14 @@ class LFCharacteristic(Characteristic):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, physics, flux_type='LLF', averaging=None):
+    def __init__(self, physics, flux_type='LLF', averaging=None, flux_split=True):
         Characteristic.__init__(self, physics)
         if averaging is None:
             self.average = SimpleAverage([0, 1]).average
         else:
             self.average = averaging.average
-        self.flux_split = True
         self.flux_type = flux_type
+        self.flux_split = flux_split
         return
 
     def pre_process(self, direction, derivatives, solution_vector, block):
@@ -549,8 +584,6 @@ class LFCharacteristic(Characteristic):
         :arg list solution_vector: Solution vector from the Euler equations (rho, rhou0, rhou1, rhou2, rhoE) in vector form."""
         self.direction = direction
         self.input_solution_vector = solution_vector
-        # Combined reconstruction, or reconstruct WENO/TENO on only on Q vector?
-        self.combined = derivatives[0].settings["combine_reconstructions"]
         # Output equations
         pre_process_equations = []
         # Update the ev, LEV and REV dicts and perform averaging
@@ -586,11 +619,9 @@ class LFCharacteristic(Characteristic):
             reduction_equations = []
         else:
             self.grid_EV, reduction_equations, pre_process_equations = self.calculate_eigenvalue_reductions(pre_process_equations, direction, block)
-        # Transform the flux vector and the solution vector to characteristic space
-        if hasattr(self, 'flux_split') and self.flux_split:
-            self.characteristic_flux_splitting(self.grid_EV, CS_matrix, CF_matrix, derivatives)
-        else:
-            raise NotImplementedError("Only flux splitting is implemented in characteristic.")
+        # Transform both the flux vector and the solution vector to characteristic space, flux splitting directly into the WENO/TENO procedure
+        self.characteristic_flux_splitting(self.grid_EV, CS_matrix, CF_matrix, derivatives)
+
         # Remove '0' entries and gamma - 1 factors from pre_process_equations
         pre_process_equations = self.remove_zero_equations(pre_process_equations)
         pre_process_equations = self.replace_gamma_factor(pre_process_equations)
@@ -623,21 +654,33 @@ class LFCharacteristic(Characteristic):
 
         :arg list derivatives: The derivatives to perform the characteristic decomposition and WENO on.
         :arg object kernel: The current computational kernel."""
-        post_process_equations = []
+        pp_equations = []
+        ndim = block.ndim
+        # Create output arrays to store the final flux reconstructions
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
 
+        # Transformation matrix back to physical (non-characteristic) space
+        avg_REV_values = self.create_REV_inverses(dire)
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
+        # Single reconstruction variable?
+        if derivatives[0].settings["combine_reconstructions"]:
+            reconstructed_flux = avg_REV_values*reconstructed_characteristics
+            pp_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
+        else:
+            left_F, right_F = symbols("fL:%d" % (ndim+2), **{'cls':GridVariable}), symbols("fR:%d" % (ndim+2), **{'cls':GridVariable})
+            wL, wR = Matrix(reconstructed_characteristics[:,1]), Matrix(reconstructed_characteristics[:,0])
+            pp_equations += [OpenSBLIEq(x, y) for x, y in zip(right_F, avg_REV_values*wR)]
+            pp_equations += [OpenSBLIEq(x, y) for x, y in zip(left_F, avg_REV_values*wL)]
+
+            for i, component in enumerate(reconstructed_work):
+                pp_equations += [OpenSBLIEq(component, left_F[i] + right_F[i])]
+
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i, recon in enumerate(reconstructed_characteristics):
-                post_process_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
-
-        avg_REV_values = self.create_REV_inverses(dire)
-        reconstructed_flux = avg_REV_values*reconstructed_characteristics
-
-        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
-        post_process_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
-        post_process_equations = self.replace_gamma_factor(post_process_equations)
-        return post_process_equations
+                pp_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
+        pp_equations = self.replace_gamma_factor(pp_equations)
+        return pp_equations
 
     def post_process_Q(self, dire, derivatives, block):
         """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
@@ -647,6 +690,8 @@ class LFCharacteristic(Characteristic):
         :arg object kernel: The current computational kernel."""
         pp_equations = []
         ndim = block.ndim
+        # Create output arrays to store the final flux reconstructions
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
 
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
         # Transformation matrix back to physical (non-characteristic) space
@@ -677,8 +722,6 @@ class LFCharacteristic(Characteristic):
         # Build the system of flux components
         # Create a substitution dictionary from the flux components
         SD_L, SD_R = self.define_substitution_dictionaries(dire, derivatives, block, [left_q, right_q], [vel_L, vel_R], [pL, pR])
-        # Create output arrays to store the final flux reconstructions
-        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
         # Vectors for the right/left states
         U_L, U_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
         F_L, F_R = Matrix([0 for _ in range(ndim+2)]), Matrix([0 for _ in range(ndim+2)])
@@ -690,14 +733,11 @@ class LFCharacteristic(Characteristic):
             F_L[i] = input_args.subs(SD_L)
             F_R[i] = input_args.subs(SD_R)
         # Flux split with wave-speed selection
-        # evs = Matrix([self.grid_EV[i,i] for i in range(ndim+2)]).reshape(1,ndim+2)
-        # print(evs)
-        positive = factor(Rational(1,2)*(F_L + self.grid_EV*U_L))
-        negative = factor(Rational(1,2)*(F_R - self.grid_EV*U_R))
+        flux_split = factor(Rational(1,2)*(F_L+F_R - self.grid_EV*(U_R - U_L)))
 
         # Assign the fluxes to the storage arrays
         for i, component in enumerate(reconstructed_work):
-            pp_equations += [OpenSBLIEq(component, factor(positive[i]+negative[i]))]
+            pp_equations += [OpenSBLIEq(component, flux_split[i])]
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i in range(len(reconstructed_work)):
@@ -723,7 +763,7 @@ class LFCharacteristic(Characteristic):
 
     def create_characteristic_matrices(self, direction, derivatives, solution_vector, name):
         # Reconstruct the combined flux or only the Q vector
-        if self.combined:
+        if self.flux_split:
             characteristic_flux_vector, CF_matrix = self.flux_vector_to_characteristic(derivatives, direction, name)
             CF_evaluations = flatten(self.generate_equations_from_matrices(CF_matrix, characteristic_flux_vector))
         else:
@@ -736,7 +776,7 @@ class LFCharacteristic(Characteristic):
         reordered = []
         for j in range(n_cols):
             reordered_CS, reordered_CF = [], []
-            if self.combined:
+            if self.flux_split:
                 for i in range(n_rows):
                     reordered.append(CF_evaluations[j+i*n_cols])
             for i in range(n_rows):
@@ -744,7 +784,7 @@ class LFCharacteristic(Characteristic):
         return reordered, CS_matrix, CF_matrix
 
     def characteristic_flux_splitting(self, ev_matrix, CS_matrix, CF_matrix, derivatives):
-        if self.combined:
+        if self.flux_split:
             positive = factor(Rational(1, 2)*(CF_matrix + ev_matrix*CS_matrix))
             negative = factor(Rational(1, 2)*(CF_matrix - ev_matrix*CS_matrix))
         else:
@@ -916,7 +956,6 @@ class HLLCCharacteristic(Characteristic):
         CS_matrix.stencil_points = stencil_points
         return characteristic_solution_stencil, CS_matrix
 
-
     def generate_reconstruction_variables(self, CS_matrix, derivatives):
         positive = CS_matrix
         positive_flux = zeros(*positive.shape)
@@ -932,7 +971,7 @@ class HLLCCharacteristic(Characteristic):
         self.generate_left_reconstruction_variables(negative_flux, derivatives)
         return
 
-    def post_process(self, dire, derivatives, block):
+    def post_process_Q(self, dire, derivatives, block):
         """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
         eigenvector matrix.
 
@@ -1060,9 +1099,3 @@ class HLLCCharacteristic(Characteristic):
         # Replace gamma factors if required
         pp_equations = self.replace_gamma_factor(pp_equations)
         return pp_equations
-
-
-
-
-
-
