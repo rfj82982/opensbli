@@ -71,7 +71,7 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives, block, single_wave=False, MP_limiter=False, positivity_preservation=False):
+    def interpolate_reconstruction_variables(self, derivatives, block, MP_limiter=False, positivity_preservation=True):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
@@ -91,54 +91,18 @@ class ShockCapturing(object):
                 rv.evaluate_quantities()
                 # Apply a sensor to each characteristic wave if using filtering methods
                 if self.sensor_evaluation is not None:
-                    if single_wave:
-                        output_eqns += [rv.final_equations[0:-1]]
-                        if no == 0:
-                            if isinstance(rv, type(self.reconstruction_classes[0])):
-                                output_eqns += [OpenSBLIEq(gv('rj_right'), self.sensor_evaluation[0].rhs)]
-                            elif isinstance(rv, type(self.reconstruction_classes[1])):
-                                output_eqns += [OpenSBLIEq(gv('rj_left'), self.sensor_evaluation[0].rhs)]
-                        else:
-                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), gv('rj0'))]
-                        output_eqns += [rv.final_equations[-1]]
-                    else:
-                        output_eqns += [rv.final_equations[0:-1]]
-                        if isinstance(rv, type(self.reconstruction_classes[0])):
-                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[0].rhs)]
-                        elif isinstance(rv, type(self.reconstruction_classes[1])):
-                            output_eqns += [OpenSBLIEq(gv('rj%d' % no), Max(gv('rj%d' % no),self.sensor_evaluation[1].rhs))]
-                            # output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[1].rhs)]
-                        output_eqns += [rv.final_equations[-1]]
+                    output_eqns += [rv.final_equations[0:-1]]
+                    if isinstance(rv, type(self.reconstruction_classes[0])):
+                        output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[0].rhs)]
+                    elif isinstance(rv, type(self.reconstruction_classes[1])):
+                        output_eqns += [OpenSBLIEq(gv('rj%d' % no), Max(gv('rj%d' % no),self.sensor_evaluation[1].rhs))]
+                        # output_eqns += [OpenSBLIEq(gv('rj%d' % no), self.sensor_evaluation[1].rhs)]
+                    output_eqns += [rv.final_equations[-1]]
                 else:
                     output_eqns += [rv.final_equations]
                 if MP_limiter:
                     output_eqns += self.monotonicity_limiter(rv)
-                if positivity_preservation:
-                    output_eqns += self.positivity_limiter(rv, block, derivatives)
         return output_eqns
-
-    # def positivity_limiter(self, rv, block, derivatives):
-    #     from opensbli.schemes.spatial.weno import RightWenoReconstructionVariable, LeftWenoReconstructionVariable
-    #     from opensbli.schemes.spatial.teno import RightTenoReconstructionVariable, LeftTenoReconstructionVariable
-    #     # Initialise variables
-    #     thm, thp = gv('theta_m'), gv('theta_p')
-    #     output_eqns = [OpenSBLIEq(thm, 1), OpenSBLIEq(thp, 1)]
-    #     # Minimum density and pressure
-    #     # Variable to control CFL number that can be used, default alpha=2
-    #     eps_rho, eps_P = ConstantObject('eps_rho'), ConstantObject('eps_P')
-    #     eps_rho.value, eps_P.value = 1.0e-13, 1.0e-13
-    #     ConstantsToDeclare.add_constant(eps_rho)
-    #     ConstantsToDeclare.add_constant(eps_P)
-
-    #     original = rv.reconstructed_symbol
-    #     if isinstance(rv, LeftWenoReconstructionVariable) or isinstance(rv, LeftTenoReconstructionVariable):
-    #     pprint(rv.__dict__)
-    #     pprint(original)
-    #     pprint(output_eqns)
-    #     exit()
-
-
-    #     return
 
 
     def minmod(self, x, y):
@@ -355,18 +319,18 @@ class Characteristic(EigenSystem):
         EigenSystem.__init__(self, physics)
         return
 
-    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, single_wave=False, flux_split=False):
+    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, flux_split=False):
         """ Performs the three stages required for a characteristic based reconstruction."""
         if not flux_split:
             combined_reconstruction = False # Use separate variables to reconstruct left and right states
         else:
             temp = True
             combined_reconstruction = temp
-        settings = {"combine_reconstructions": combined_reconstruction, "shock_filter": shock_filter, "single_wave": single_wave}
+        settings = {"combine_reconstructions": combined_reconstruction, "shock_filter": shock_filter}
         for i in range(len(derivatives)):
             derivatives[i].update_settings(**settings)
         pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
-        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, single_wave, block)
+        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, block)
         if flux_split:
             post_process_eqns = self.post_process(direction, derivatives, block)
         else:
@@ -659,11 +623,18 @@ class LFCharacteristic(Characteristic):
         # Create output arrays to store the final flux reconstructions
         reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
 
+
+
         # Transformation matrix back to physical (non-characteristic) space
         avg_REV_values = self.create_REV_inverses(dire)
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
+
         # Single reconstruction variable?
         if derivatives[0].settings["combine_reconstructions"]:
+            # Apply a shock sensor if the WENO is being applied as a filter step
+            if block.shock_filter:
+                for i, recon in enumerate(reconstructed_characteristics):
+                    pp_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
             reconstructed_flux = avg_REV_values*reconstructed_characteristics
             pp_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
         else:
@@ -675,10 +646,6 @@ class LFCharacteristic(Characteristic):
             for i, component in enumerate(reconstructed_work):
                 pp_equations += [OpenSBLIEq(component, left_F[i] + right_F[i])]
 
-        # Apply a shock sensor if the WENO is being applied as a filter step
-        if block.shock_filter:
-            for i, recon in enumerate(reconstructed_characteristics):
-                pp_equations += flatten([self.central_diff_formula(i, recon, self.flux_type)])
         pp_equations = self.replace_gamma_factor(pp_equations)
         return pp_equations
 
@@ -1064,6 +1031,8 @@ class HLLCCharacteristic(Characteristic):
         USTAR_L *= rhoL*((sL - vel_L[dire])/(sL - s_star))
         USTAR_R *= rhoR*((sR - vel_R[dire])/(sR - s_star))
 
+        # Flux variables
+        flux_vars = [gv('F%d' % i) for i in range(ndim+2)]
         if self.flux_type == 'HLLC-LM': # low-Mach correction formulation of HLLC solver
             # Mach number reduction of nonlinear signal speeds (HLLC-LM variant)
             phi, M_local = GridVariable('phi'), GridVariable('M_local')
@@ -1078,8 +1047,8 @@ class HLLCCharacteristic(Characteristic):
             F_STAR = Rational(1,2)*(F_L + F_R) + Rational(1,2)*(sL*(USTAR_L - U_L) + Abs(s_star)*(USTAR_L - USTAR_R) + sR*(USTAR_R - U_R))
             condition3 = (F_STAR, True)
             # Assign the fluxes to the storage arrays
-            for i, component in enumerate(reconstructed_work):
-                pp_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1])]))]
+            for i, component in enumerate(flux_vars):
+                pp_equations += [OpenSBLIEq(flux_vars[i], Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1])]))]
 
         else: # standard HLLC formulation
             # Build the conditional states
@@ -1089,9 +1058,14 @@ class HLLCCharacteristic(Characteristic):
             condition4 = (F_R, sR <= 0)
             condition5 = ([0 for _ in range(block.ndim+2)], True)
             # Assign the fluxes to the storage arrays
-            for i, component in enumerate(reconstructed_work):
-                pp_equations += [OpenSBLIEq(component, Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
+            for i, component in enumerate(flux_vars):
+                pp_equations += [OpenSBLIEq(flux_vars[i], Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
 
+        
+        # Check for positive density/pressures
+        pp_equations += self.positivity_limiter(dire, block, derivatives, pL, pR, rhoL, rhoR, flux_vars)
+        # Assign to global storage work arrays
+        pp_equations += [OpenSBLIEq(reconstructed_work[i], flux_vars[i]) for i in range(ndim+2)]
         # Apply a shock sensor if the WENO is being applied as a filter step
         if block.shock_filter:
             for i in range(len(reconstructed_work)):
@@ -1099,3 +1073,72 @@ class HLLCCharacteristic(Characteristic):
         # Replace gamma factors if required
         pp_equations = self.replace_gamma_factor(pp_equations)
         return pp_equations
+
+
+    def positivity_limiter(self, dire, block, derivatives, pL, pR, rhoL, rhoR, flux_vars):
+        from sympy.functions.elementary.piecewise import ExprCondPair
+        from opensbli.core.opensbliobjects import GroupedPiecewise
+        from opensbli.schemes.spatial.weno import RightWenoReconstructionVariable, LeftWenoReconstructionVariable
+        from opensbli.schemes.spatial.teno import RightTenoReconstructionVariable, LeftTenoReconstructionVariable
+        ndim = block.ndim
+        # Initialise variables
+        thm, thp, theta_rho, theta_pressure = gv('theta_m'), gv('theta_p'), gv('theta_rho'), gv('theta_pressure')
+        output_eqns = []
+        # Minimum density and pressure
+        # Variable to control CFL number that can be used, default alpha=2
+        eps_rho, eps_p = ConstantObject('eps_rho'), ConstantObject('eps_p')
+        eps_rho.value, eps_p.value = 1.0e-13, 1.0e-13
+        ConstantsToDeclare.add_constant(eps_rho)
+        ConstantsToDeclare.add_constant(eps_p)
+
+        # Check for low density and pressures
+        rho_i, rho_i1 = increment_dataset(block.location_dataset('rho'), dire, 0), increment_dataset(block.location_dataset('rho'), dire, 1)
+        # Right (positive) state
+        check = rhoR < eps_rho
+        solve_theta = OpenSBLIEq(thp, (eps_rho - rho_i)/(rhoR - rho_i))
+        cond1 = ExprCondPair(solve_theta, check)
+        cond2 = ExprCondPair(OpenSBLIEq(thp,1), True)
+        output_eqns += [GroupedPiecewise(cond1, cond2)]
+        # Left (negative) state
+        check = rhoL < eps_rho
+        solve_theta = OpenSBLIEq(thm, (eps_rho - rho_i1)/(rhoL - rho_i1))
+        cond1 = ExprCondPair(solve_theta, check)
+        cond2 = ExprCondPair(OpenSBLIEq(thm,1), True)
+        output_eqns += [GroupedPiecewise(cond1, cond2)]
+        # Find minimum
+        output_eqns += [OpenSBLIEq(theta_rho, Min(thm, thp))]
+        # Check for pressures
+        p_i, p_i1 = increment_dataset(block.location_dataset('p'), dire, 0), increment_dataset(block.location_dataset('p'), dire, 1)
+        # Right (positive) state
+        check = pR < eps_p
+        solve_theta = OpenSBLIEq(thp, (eps_p - p_i)/(pR - p_i))
+        cond1 = ExprCondPair(solve_theta, check)
+        cond2 = ExprCondPair(OpenSBLIEq(thp,1), True)
+        output_eqns += [GroupedPiecewise(cond1, cond2)]
+        # Left (negative) state
+        check = pR < eps_p
+        solve_theta = OpenSBLIEq(thm, (eps_p - p_i1)/(pL - p_i1))
+        cond1 = ExprCondPair(solve_theta, check)
+        cond2 = ExprCondPair(OpenSBLIEq(thm,1), True)
+        output_eqns += [GroupedPiecewise(cond1, cond2)]
+        # Find minimum
+        output_eqns += [OpenSBLIEq(theta_pressure, Min(thm, thp))]
+        # Correct the fluxes as a convex combination of the first order LF flux
+        # F_(i+1/2) = 0.5*(F_i + F_(i+1) - (u+a)*(U_i - U_(i+1))
+        F_fixed = Matrix([0 for _ in range(ndim+2)])
+        # if ndim == 1:
+        #     alpha = self.grid_EV[-1,-1]
+        # else:
+        #     alpha = self.grid_EV[-2,-2]
+        # Max wave-speed
+        alpha = Abs(block.location_dataset('u%d' % dire)) + block.location_dataset('a')
+        for i in range(ndim+2):
+            q, q1 = self.input_solution_vector[i], increment_dataset(self.input_solution_vector[i], dire, 1)
+            F, F1 = derivatives[i].args[0], increment_dataset(derivatives[i].args[0], dire, 1)
+            LF = Rational(1,2)*(F+F1 + alpha*(q - q1))
+            F_fixed[i] = (1 - theta_rho*theta_pressure)*LF + theta_rho*theta_pressure*flux_vars[i]
+            pprint(F_fixed)
+
+        # Set the corrected flux
+        output_eqns += [OpenSBLIEq(flux_vars[i], F_fixed[i]) for i in range(ndim+2)]
+        return output_eqns
