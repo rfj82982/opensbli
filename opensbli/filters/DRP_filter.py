@@ -239,7 +239,9 @@ class ExplicitFilter(object):
     def pressure_correction(self, block, order):
         # Pressure gradient sensor for targeted filtering
         SS = ShockSensor()
-        Ren_output = SS.Ren_sensor(block)
+        output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
+        # output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
+        Ren_output = output_eqns[-1].rhs
         self.Ren = block.location_dataset('Ren_sensor')
         output_eqns = [OpenSBLIEq(self.Ren, Ren_output)]
         UDF = UserDefinedEquations()
