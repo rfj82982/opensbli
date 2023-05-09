@@ -71,7 +71,7 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives, block, MP_limiter=False, positivity_preservation=True):
+    def interpolate_reconstruction_variables(self, derivatives, block, MP_limiter=True, positivity_preservation=False):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
@@ -105,11 +105,16 @@ class ShockCapturing(object):
         return output_eqns
 
 
-    def minmod(self, x, y):
+    def DMM(self, x, y):
+        """ MinMod limiter function for 2 arguments."""
         return 0.5*(sign(x, evaluate=False) + sign(y, evaluate=False))*Min(Abs(x), Abs(y))
 
+    def DM4(self, w, x, y, z):
+        """ MinMod limiter function for 4 arguments."""
+        return 0.125*(sgn(w, evaluate=False) + sgn(x, evaluate=False))*Abs((sgn(w, evaluate=False) + sgn(y, evaluate=False))*(sgn(w, evaluate=False) + sgn(z, evaluate=False)))*Min(Abs(w), Min(Abs(x), Min(Abs(y),Abs(z))))
+
     def median(self, x, y, z):
-        return x + self.minmod(y-x, z-x)
+        return x + self.DMM(y-x, z-x)
 
     def process_rv(self, derivatives):
         # Collects the flux terms used for the reconstructions, per derivative
@@ -140,24 +145,47 @@ class ShockCapturing(object):
         fn = rv.fluxes
         print(fn)
         # dj = u_(j+1) - 2*u_(j) + u_(j-1) curvature measure
-        if isinstance(rv, LeftWenoReconstructionVariable) or isinstance(rv, LeftTenoReconstructionVariable): # e.g. [-2,2] stencil, 5th order WENO
-            base = 0
+        if isinstance(rv, RightWenoReconstructionVariable) or isinstance(rv, RightTenoReconstructionVariable): # e.g. [-2,2] stencil, 5th order WENO
+            # # f(i), f(i+1), f(i+1/2)^MD
+            # djm1 = fn[0] - 2*fn[-1] + fn[-2]
+            # dj = fn[1]-2*fn[0]+fn[-1]
+            # djp1 = fn[2]-2*fn[1]+fn[0]
+            # MM1, MM2 = gv('MM1'), gv('MM2')
+            # output_eqns += [OpenSBLIEq(MM1, self.DMM(dj, djp1))]
+            # output_eqns += [OpenSBLIEq(MM2, self.DMM(djm1, dj))]
+            # # f_j, f_(j+1), 0.5*(u_j + u_(j+1)) - 0.5*MM(d_j, d_(j+1))
+            # c_1 = [fn[0], fn[1], 0.5*(fn[0] + fn[1]) - 0.5*MM1]
+            # # f_j, f_j + alpha*(f_j - f_(j+1)), f_j + 0.5*(f_j - f_(j+1)) + 4/3 * MM(dj, d_(j-1))
+            # c_2 = [fn[0], fn[0] + alpha*(fn[0] - fn[1]), fn[0] + 0.5*(fn[0] - fn[-1]) + Rational(4,3)*MM2]
+            # # The two lists of arguments
+            # u_min = Max(Min(c_1[0], Min(c_1[1], c_1[2])), Min(c_2[0], Min(c_2[1], c_2[2])))
+            # u_max = Min(Max(c_1[0], Max(c_1[1], c_1[2])), Max(c_2[0], Max(c_2[1], c_2[2])))
+            # # rv.limiter = gv('limiter')
+            # output_eqns += [OpenSBLIEq(original, self.median(original, u_min, u_max))]
+            pass
+        elif isinstance(rv, LeftWenoReconstructionVariable) or isinstance(rv, LeftTenoReconstructionVariable):
             # f(i), f(i+1), f(i+1/2)^MD
-            dj = fn[base+1]-2*fn[base+0]+fn[base-1]
-            djp1 = fn[base+2]-2*fn[base+1]+fn[base+0]
+            djm1 = fn[1] - 2*fn[2] + fn[3]
+            dj = fn[0]-2*fn[1]+fn[2]
+            djp1 = fn[-1]-2*fn[0]+fn[1]
             MM1, MM2 = gv('MM1'), gv('MM2')
-            output_eqns += [OpenSBLIEq(MM1, self.minmod(dj, djp1))]
-            c_1 = [fn[base+0], fn[base+1], 0.5*(fn[base+0] + fn[base+1]) - 0.5*MM1]
-            # f(i), f(i+1/2)^UL, f(i+1/2)^LC
-            djm1 = fn[base+0]-2*fn[base-1]+fn[base-2]
-            output_eqns += [OpenSBLIEq(MM2, self.minmod(djm1, dj))]
-            c_2 = [fn[base+0], fn[base+0] + alpha*(fn[base+0] - fn[base-1]), fn[base+0] + 0.5*(fn[base+0] - fn[base-1]) + Rational(4,3)*MM2]
+            output_eqns += [OpenSBLIEq(MM1, self.DMM(dj, djp1))]
+            output_eqns += [OpenSBLIEq(MM2, self.DMM(djm1, dj))]
+            # f_j, f_(j+1), 0.5*(u_j + u_(j+1)) - 0.5*MM(d_j, d_(j+1))
+            c_1 = [fn[1], fn[0], 0.5*(fn[1] + fn[0]) - 0.5*MM1]
+            # f_j, f_j + alpha*(f_j - f_(j+1)), f_j + 0.5*(f_j - f_(j+1)) + 4/3 * MM(dj, d_(j-1))
+            c_2 = [fn[1], fn[1] + alpha*(fn[1] - fn[0]), fn[1] + 0.5*(fn[1] - fn[2]) + Rational(4,3)*MM2]
+            # The two lists of arguments
             u_min = Max(Min(c_1[0], Min(c_1[1], c_1[2])), Min(c_2[0], Min(c_2[1], c_2[2])))
             u_max = Min(Max(c_1[0], Max(c_1[1], c_1[2])), Max(c_2[0], Max(c_2[1], c_2[2])))
             # rv.limiter = gv('limiter')
             output_eqns += [OpenSBLIEq(original, self.median(original, u_min, u_max))]
+            pass
         else:
-            base = -1
+            raise ValueError("Input to MP should be left or right biased reconstruction variable.")
+        # Final corrected flux
+        for eqn in output_eqns:
+            pprint(eqn)
         return output_eqns
 
     def update_constituent_relation_symbols(self, sym, direction):
@@ -324,7 +352,7 @@ class Characteristic(EigenSystem):
         if not flux_split:
             combined_reconstruction = False # Use separate variables to reconstruct left and right states
         else:
-            temp = True
+            temp = False
             combined_reconstruction = temp
         settings = {"combine_reconstructions": combined_reconstruction, "shock_filter": shock_filter}
         for i in range(len(derivatives)):
