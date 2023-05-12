@@ -5,6 +5,7 @@
    depth of a node."""
 
 # from sympy.core.compatibility import is_sequence
+from sympy.printing.precedence import precedence
 from sympy.utilities.iterables import is_sequence
 from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
@@ -51,7 +52,7 @@ class OPSCCodePrinter(C99CodePrinter):
 
     """ Prints OPSC code. """
     dataset_accs_dictionary = {}
-    settings_opsc = {'rational': False, 'kernel': False, 'order': 'none'}
+    settings_opsc = {'rational': True, 'kernel': False, 'order': 'none'}
 
     def __init__(self, settings={}):
         """ Initialise the code printer. """
@@ -59,7 +60,7 @@ class OPSCCodePrinter(C99CodePrinter):
         if 'rational' in settings.keys():
             self.settings_opsc = settings
         else:
-            self.settings_opsc['rational'] = False
+            self.settings_opsc['rational'] = True
         C99CodePrinter.__init__(self, settings={'order':'none'})
 
     def _print_ReductionVariable(self, expr):
@@ -141,6 +142,16 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def _print_DataSetBase(self, expr):
         return str(expr)
+
+    def _print_Pow(self, expr):
+        """ Replace pow function calls with direct multiplication. Modified from stackexchange: 65534432."""
+        PREC = precedence(expr)
+        if expr.exp in range(2, 7):
+            return '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp))
+        elif expr.exp in range(-6, 0):
+            return '1.0/(' + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
+        else:
+            return super()._print_Pow(expr)
 
     def _print_Equality(self, expr):
         from opensbli.equation_types.opensbliequations import OpenSBLIEquation
