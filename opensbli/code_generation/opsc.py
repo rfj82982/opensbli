@@ -11,7 +11,7 @@ from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
 from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable
-from sympy import Symbol, flatten
+from sympy import Symbol, flatten, Rational
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
 from sympy import Pow, Idx, pprint, count_ops
@@ -150,6 +150,8 @@ class OPSCCodePrinter(C99CodePrinter):
             return '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp))
         elif expr.exp in range(-6, 0):
             return '1.0/(' + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
+        elif expr.exp == Rational(3,2):
+            return '*'.join([self.parenthesize(expr.base, PREC)] + ['sqrt(' + self.parenthesize(expr.base, PREC) + ')'])
         else:
             return super()._print_Pow(expr)
 
