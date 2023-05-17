@@ -211,7 +211,9 @@ class Teno5(object):
         tau_5 = Abs(RV.smoothness_symbols[0] - RV.smoothness_symbols[-1])
         for r in range(TC.n_stencils):
             RV.alpha_symbols += [Symbol('alpha_%d' % r)]
-            RV.alpha_evaluated.append((C + (tau_5/(self.eps + RV.smoothness_symbols[r])))**q)
+            RV.inv_beta_symbols += [Symbol('inv_beta_%d' % r)]
+            RV.inv_beta_evaluated += [1.0/(self.eps + RV.smoothness_symbols[r])]
+            RV.alpha_evaluated.append((C + (tau_5*RV.inv_beta_symbols[r]))**q)
         return
 
 
@@ -232,7 +234,9 @@ class Teno6(object):
         tau_6 = Abs(RV.smoothness_symbols[3] - Rational(1, 6)*(RV.smoothness_symbols[0] + RV.smoothness_symbols[2] - 4*RV.smoothness_symbols[1]))
         for r in range(TC.n_stencils):
             RV.alpha_symbols += [Symbol('alpha_%d' % r)]
-            RV.alpha_evaluated.append((C + (tau_6/(self.eps + RV.smoothness_symbols[r])))**q)
+            RV.inv_beta_symbols += [Symbol('inv_beta_%d' % r)]
+            RV.inv_beta_evaluated += [1.0/(self.eps + RV.smoothness_symbols[r])]
+            RV.alpha_evaluated.append((C + (tau_6*RV.inv_beta_symbols[r]))**q)
         return
 
 
@@ -245,6 +249,8 @@ class TenoReconstructionVariable(object):
         self.name = name
         self.smoothness_indicators = []
         self.smoothness_symbols = []
+        self.inv_beta_symbols = []
+        self.inv_beta_evaluated = []
         self.alpha_evaluated = []
         self.alpha_symbols = []
         self.inv_alpha_sum_symbols = []
@@ -267,6 +273,7 @@ class TenoReconstructionVariable(object):
 
         :arg object original: Reconstruction object variable, either left or right reconstruction."""
         self.smoothness_symbols += [GridVariable('%s' % (s)) for s in original.smoothness_symbols]
+        self.inv_beta_symbols += [GridVariable('%s' % (s)) for s in original.inv_beta_symbols]
         self.alpha_symbols += [GridVariable('%s' % (s)) for s in original.alpha_symbols]
         self.inv_alpha_sum_symbols += [GridVariable('%s' % (s)) for s in original.inv_alpha_sum_symbols]
         self.inv_omega_sum_symbols += [GridVariable('%s' % (s)) for s in original.inv_omega_sum_symbols]
@@ -280,14 +287,15 @@ class TenoReconstructionVariable(object):
             originals = []
             new = []
 
-        originals += original.smoothness_symbols + original.alpha_symbols + original.inv_alpha_sum_symbols + original.kronecker_symbols + original.inv_omega_sum_symbols
-        new += self.smoothness_symbols + self.alpha_symbols + self.inv_alpha_sum_symbols + self.kronecker_symbols + self.inv_omega_sum_symbols
+        originals += original.smoothness_symbols + original.inv_beta_symbols + original.alpha_symbols + original.inv_alpha_sum_symbols + original.kronecker_symbols + original.inv_omega_sum_symbols
+        new += self.smoothness_symbols + self.inv_beta_symbols + self.alpha_symbols + self.inv_alpha_sum_symbols + self.kronecker_symbols + self.inv_omega_sum_symbols
         subs_dict = dict(zip(originals, new))
 
         for key, value in original.function_stencil_dictionary.items():
             subs_dict[value] = self.function_stencil_dictionary[key]
 
         self.smoothness_indicators = [s.subs(subs_dict) for s in original.smoothness_indicators]
+        self.inv_beta_symbols = [s.subs(subs_dict) for s in original.inv_beta_symbols]
         # Only update tau_8 for right reconstructions
         if original.order == 8:
             if isinstance(self, LeftTenoReconstructionVariable):
@@ -296,6 +304,7 @@ class TenoReconstructionVariable(object):
                 self.tau_8_evaluated = [s.subs(subs_dict) for s in original.tau_8_evaluated]
 
         self.alpha_evaluated = [s.subs(subs_dict) for s in original.alpha_evaluated]
+        self.inv_beta_evaluated = [s.subs(subs_dict) for s in original.inv_beta_evaluated]
         self.inv_alpha_sum_evaluated = [s.subs(subs_dict) for s in original.inv_alpha_sum_evaluated]
         self.inv_omega_sum_evaluated = [s.subs(subs_dict) for s in original.inv_omega_sum_evaluated]
         self.kronecker_evaluated = [s.subs(subs_dict) for s in original.kronecker_evaluated]
@@ -306,8 +315,8 @@ class TenoReconstructionVariable(object):
         """ Adds the evaluations of the TENO quantities to the computational kernel.
 
         :arg object kernel: OpenSBLI Kernel for the TENO computation."""
-        all_symbols = self.smoothness_symbols + self.tau_8_symbol + self.alpha_symbols + self.inv_alpha_sum_symbols + self.kronecker_symbols + self.inv_omega_sum_symbols
-        all_evaluations = self.smoothness_indicators + self.tau_8_evaluated + self.alpha_evaluated + self.inv_alpha_sum_evaluated + self.kronecker_evaluated + self.inv_omega_sum_evaluated
+        all_symbols = self.smoothness_symbols + self.inv_beta_symbols + self.tau_8_symbol + self.alpha_symbols + self.inv_alpha_sum_symbols + self.kronecker_symbols + self.inv_omega_sum_symbols
+        all_evaluations = self.smoothness_indicators + self.inv_beta_evaluated + self.tau_8_evaluated + self.alpha_evaluated + self.inv_alpha_sum_evaluated + self.kronecker_evaluated + self.inv_omega_sum_evaluated
 
         final_equations = []
         for no, value in enumerate(all_symbols):
@@ -556,8 +565,8 @@ class HLLCTeno(HLLCCharacteristic, Teno):
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC'):
-        HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC', positivity_preservation=False):
+        HLLCCharacteristic.__init__(self, physics, flux_type, averaging, positivity_preservation=positivity_preservation)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")
