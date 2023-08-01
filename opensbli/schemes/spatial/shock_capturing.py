@@ -71,7 +71,7 @@ class ShockCapturing(object):
             raise TypeError("Input should be a matrix.")
         return
 
-    def interpolate_reconstruction_variables(self, derivatives, block, MP_limiter=True, positivity_preservation=False):
+    def interpolate_reconstruction_variables(self, derivatives, block, MP_limiter=False, positivity_preservation=False):
         """ Perform the WENO/TENO interpolation on the reconstruction variables.
 
         :arg list derivatives: A list of the TENO derivatives to be computed.
