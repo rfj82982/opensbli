@@ -184,4 +184,4 @@ OPSC(alg)
 constants = ['Re', 'gama', 'Minf', 'Pr', 'Sc', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Ly', 'stretch']
 values = ['200.0', '1.4', '0.4', '0.72', '1.0', '0.02', '1000', '81', '121', '10.0/(block0np0-1)', '1.0/(block0np1-1)', '20.0', '2.0']
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho')

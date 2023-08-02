@@ -15,7 +15,7 @@ def read_dataset(file, dataset):
     size = group["%s" % (dataset)].shape
     start=[abs(d+2) for d in d_m]
     end=[s-abs(d+2) for d, s in zip(d_m, size)]
-    read_data=group["%s" % (dataset)].value[start[0]:end[0],start[1]:end[1]]
+    read_data=group["%s" % (dataset)][start[0]:end[0],start[1]:end[1]]
     return read_data
 
 print('Reading data')
