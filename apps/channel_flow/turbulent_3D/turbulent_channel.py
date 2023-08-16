@@ -5,6 +5,27 @@ from sympy import sin, log, cos, pi
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # STEP 0 Create the equations required for the numerical solution
+simulation_parameters = {
+'Re'        :   '180.0',
+'gama'      :   '1.4',
+'Minf'      :   '0.01',
+'Pr'        :   '0.72',
+'dt'        :   '0.00001',
+'niter'     :   '100000',
+'block0np0'     :   '256',
+'block0np1'     :   '256',
+'block0np2'     :   '256',
+'Delta0block0'      :   '11.0/block0np0',
+'Delta1block0'      :   '2.0/(block0np1-1)',
+'Delta2block0'      :   '4.0/block0np2',
+"c0"        :   '-1',
+"c1"        :   '0',
+"c2"        :   '0',
+"lx0"       :   "11.0",
+"lx2"       :   "4.0",
+"Twall"     :   "1.0",
+}
+
 # Problem dimension
 ndim = 3
 stats = True
@@ -240,10 +261,7 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 
 # STEP 10
-# Populate the values of the constants like Re, Pr etc and the number of points for the
-# simulation etc. In the future reading thes from HDF5 would be provided
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1',
-    'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', "c0", "c1", "c2", "lx0", "lx2", "Twall"]
-values = ['180.0', '1.4', '0.01', '0.72', '0.00001', '100000', '256', '256', '256',
-    '11.0/block0np0', '2.0/(block0np1-1)', '4.0/block0np2', '-1', '0', '0', "11.0", "4.0", "1.0"]
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')
+

@@ -5,6 +5,29 @@ from sympy import sin, log, cos, pi, tanh
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters, print_iteration_ops
 
 # STEP 0 Create the equations required for the numerical solution
+simulation_parameters = {
+'Re'    :   '600.0',
+'gama'  :   '1.4',
+'Minf'  :   '0.2',
+'Pr'    :   '0.7',
+'dt'    :   '0.00005',
+'niter' :   '250000',
+'block0np0' :   '1021',
+'block0np1' :   '475',
+'block0np2' :   '575',
+'Delta0block0'  :   '4.0*M_PI/block0np0',
+'Delta1block0'  :   '2.0/(block0np1-1)',
+'Delta2block0'  :   '(4.0*M_PI/3.0)/block0np2',
+"c0"    :   '-1',
+"c1"    :   '0',
+"c2"    :   '0',
+"lx0"   :   "4.0*M_PI",
+"lx2"   :   "(4.0*M_PI/3.0)",
+"stretch"   :   "1.7",
+"Twall" :   "1.0",
+"theta" :   "0.1",
+}
+
 # Problem dimension
 ndim = 3
 stats = False
@@ -255,9 +278,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg, OPS_V2=True)
 
 # STEP 10
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1',
-    'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', "c0", "c1", "c2", "lx0", "lx2", "stretch", "Twall", "theta"]
-values = ['600.0', '1.4', '0.2', '0.7', '0.00005', '250000', '1021', '475', '575',
-    '4.0*M_PI/block0np0', '2.0/(block0np1-1)', '(4.0*M_PI/3.0)/block0np2', '-1', '0', '0', "4.0*M_PI", "(4.0*M_PI/3.0)", "1.7", "1.0", "0.1"]
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops()

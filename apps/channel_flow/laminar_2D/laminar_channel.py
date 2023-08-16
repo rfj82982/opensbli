@@ -4,6 +4,25 @@
 from opensbli import *
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+# Input parameters for the simulation
+simulation_parameters = {
+'Re'	: '90.0',
+'gama'	: '1.4',
+'Minf'	: '0.1',
+'Pr'	: '0.72',
+'dt'	: '0.0002',
+'niter'	: '5000000',
+'block0np0'	: '16',
+'block0np1'	: '64',
+'Delta0block0'	: '2.0*M_PI/block0np0',
+'Delta1block0'	: '2.0/(block0np1-1)',
+"c0"	: '-1',
+"c1"	: '0',
+"SuthT"	: "110.4",
+"RefT"	: "273.0",
+"Twall"	: "1.0",
+}
+
 # Problem dimension
 ndim = 2
 # # Constants that are used
@@ -164,10 +183,6 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 
 # STEP 10
-# Populate the values of the constants like Re, Pr etc and the number of points for the
-# simulation etc. In the future reading thes from HDF5 would be provided
-
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', "c0", "c1", "SuthT", "RefT", "Twall"]
-values = ['90.0', '1.4', '0.1', '0.72', '0.0002', '5000000', '16', '64', '2.0*M_PI/block0np0', '2.0/(block0np1-1)', '-1', '0', "110.4", "273.0", "1.0"]
-substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')
