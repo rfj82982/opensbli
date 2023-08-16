@@ -4,9 +4,21 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+# Input parameters for the simulation
+simulation_parameters = {
+    "gama"                 : "1.4",
+    "dt"                   : "0.0002", 
+    "niter"                : "ceil(1.8/0.0002)", 
+    "block0np0"            : "240", 
+    "Delta0block0"         : "10.0/(block0np0-1)",
+    "eps"                  : "1e-15",
+    "TENO_CT"              : "1e-5",
+    "inv_rfact0_block0"    : "'1.0/Delta0block0"
+}
+
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 teno = False
-weno = False
+weno = True
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]
@@ -119,13 +131,13 @@ if teno or weno:
     if teno:
         LF = LFTeno(order=6, averaging=Avg, flux_type='LLF', combined=True)
     else:
-        LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF', combined=True)
+        LF = LFWeno(order=3, formulation='Z', averaging=Avg, flux_type='LLF')
     # Add to schemes
     schemes[LF.name] = LF
 else:
     fns = 'u0'
-    cent = StoreSome(4, fns)
-    # cent = Central(4)
+    # cent = StoreSome(4, fns)
+    cent = Central(4)
     schemes[cent.name] = cent
 # Time-stepping
 rk = RungeKuttaLS(3, formulation='SSP')
@@ -136,7 +148,6 @@ kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0')])
-
 h5.add_arrays([ DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2')])
 block.setio(copy.deepcopy(h5))
 
@@ -154,7 +165,6 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.0002', 'ceil(1.8/0.0002)', '240', '10.0/(block0np0-1)', '1.0e-16', '1.0e-5', '1.0/Delta0block0']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')

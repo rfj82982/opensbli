@@ -4,6 +4,18 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+# Input parameters for the simulation
+simulation_parameters = {
+    "gama"                 : "5.0/3.0",
+    "dt"                   : "0.0001",
+    "niter"                : "ceil(6.0/0.0001)",
+    "block0np0"            : "900",
+    "Delta0block0"         : "9.0/(block0np0-1)",
+    "eps"                  : "1e-15",
+    "TENO_CT"              : "1e-5",
+    "inv_rfact0_block0"    : "'1.0/Delta0block0"
+}
+
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 teno = True
 weno = False
@@ -156,7 +168,6 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'TENO_CT', 'inv_rfact0_block0']
-values = ['5.0/3.0', '0.0001', 'ceil(6/0.0001)', '900', '9.0/(block0np0-1)', '1.0e-5', '1.0/Delta0block0']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')

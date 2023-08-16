@@ -24,7 +24,7 @@ class ScalarMonitor(object):
 
 
 class SimulationMonitor(object):
-    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=12, NaNcheck=True, output_file=None):
+    def __init__(self, arrays, probe_locations, block, print_frequency=100, OPS_V2=True, fp_precision=12, NaN_check=None, output_file=None):
         """ Class to enable access of dataset values during the simulation.
         :arg list arrays: A list of DataSets to monitor during the simulation.
         :arg list probe_locations: A list of tuples giving the (i,j,k) grid index location of the probe.
@@ -57,7 +57,7 @@ class SimulationMonitor(object):
         self.block = block
         self.ndim = block.ndim
         self.filename = 'reductions.h'
-        self.NaNcheck = NaNcheck
+        self.NaN_check = NaN_check
         if hasattr(SimulationDataType.dtype, 'opsc'):
             self.dtype = SimulationDataType.opsc()
         else:
@@ -136,7 +136,11 @@ class SimulationMonitor(object):
 
     @property
     def add_NaN_check(self):
-        return ['ops_NaNcheck(%s);' % str(self.block.block_datasets['rho_B%d' % self.block.blocknumber])] # check density for now
+        print(self.NaN_check)
+        if self.NaN_check == None:
+            return ['ops_NaNcheck(%s);' % str(self.block.block_datasets['rho_B%d' % self.block.blocknumber])] # default to density if no array given
+        else:
+            return ['ops_NaNcheck(%s);' % self.NaN_check]
 
     @property
     def write_reductions_file(self):
@@ -206,7 +210,7 @@ class SimulationMonitor(object):
     @property
     def opsc_start(self):
         starting_code = ["// Data access for simulation monitoring"]
-        if self.NaNcheck:
+        if self.NaN_check:
             starting_code += self.add_NaN_check
         starting_code += self.initial_print + self.declare_stencils
         return starting_code
