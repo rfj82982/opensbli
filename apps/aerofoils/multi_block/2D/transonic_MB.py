@@ -6,8 +6,44 @@ from opensbli.multiblock.algorithm import TraditionalAlgorithmRKMB
 from opensbli.postprocess.airfoil import *
 from sympy.functions.elementary.piecewise import Piecewise, ExprCondPair
 import os
-
 import itertools
+
+simulation_parameters = {
+# Substitute simulation parameter values
+'gama'      :   '1.4',
+'Minf'      :   '0.2',
+'Pr'        :   '0.71',
+'Re'        :   '1.0e4',
+'dt'        :   '5.0e-5',
+'niter'     :   '100000',
+'sigma_filt'        :   '0.01',
+'SuthT'     :   '110.4',
+'RefT'      :   '273.15',
+'shock_factor'      :   '1.0',
+'Twall'     :   '1.0',
+# Block 0
+'block0np0'     :   '701',
+'block0np1'     :   '681',
+'Delta0block0'      :   '5.0/(block0np0 - 1.0)',
+'Delta1block0'      :   '22.5/(block0np1 - 1.0)',
+'inv_rfact0_block0'     :   '1.0/Delta0block0',
+'inv_rfact1_block0'     :   '1.0/Delta1block0',
+# Block 1
+'block1np0'     :   '2249',
+'block1np1'     :   '681',
+'Delta0block1'      :   '2.0461756979465546/(block1np0 - 1.0)',
+'Delta1block1'      :   '22.5/(block1np1 - 1.0)',
+'inv_rfact0_block1'     :   '1.0/Delta0block1',
+'inv_rfact1_block1'     :   '1.0/Delta1block1',
+# Block 2
+'block2np0'     :   '701',
+'block2np1'     :   '681',
+'Delta0block2'      :   '5.0/(block2np0 - 1.0)',
+'Delta1block2'      :   '22.5/(block2np1 - 1.0)',
+'inv_rfact0_block2'     :   '1.0/Delta0block2',
+'inv_rfact1_block2'     :   '1.0/Delta1block2',
+}
+
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
     kernels = []
     for block in multiblock_descriptor.blocks:
@@ -36,7 +72,6 @@ metric_vel = "Eq(U_i, D_i_j*u_j)"
 eqns = Einstein_expansion.expand(metric_vel, ndim, coordinate_symbol, [], constants)
 for eq in eqns:
     Einstein_expansion.optional_subs_dict[eq.lhs] = eq.rhs
-
 
 # NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
@@ -137,7 +172,7 @@ block1_bc.append(InterfaceBC(direction=0, side=1,  halos=[-2,2], name="block1_to
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Boundary-layer tripping
-tripped = True
+tripped = False
 direction, side = 1, 0
 if tripped:
     Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
@@ -198,7 +233,7 @@ multi_block.set_block_boundaries(mb_bcs)
 multi_block.set_equations([simulation_eq, constituent, metriceq])
 
 # Add statsistics gathering
-stats = True
+stats = False
 if stats:
     # Create the statistics equations, this shows another way of writing the equations
     from airfoil_stats import favre_averaged_stats
@@ -249,11 +284,8 @@ grid_hdf5 = iohdf5(**kwargs)
 grid_hdf5.add_arrays([x, y])
 # Stats HDF5 and write metrics to the grid file
 metrics_hdf5 = iohdf5(arrays=metriceq.grid_der_wks, **{'position': "init", 'iotype': 'Write', 'name': "metrics.h5"})
-# HDF5 output of statistics arrays
-kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
-stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
 # Set the I/O on the block
-multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5, stats_hdf5])
+multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5])
 # Perform the discretization
 multi_block.discretise()
 
@@ -290,21 +322,5 @@ alg = TraditionalAlgorithmRKMB(multi_block)
 OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
-# Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor', 'Twall']
-values = ['1.4', '0.73', '0.72', '3.0e6', '3.0e-5', '1000000', '0.01', '110.4', '268.67', '10', '1.0', '1.0']
-# Block 0
-constants += ['block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'inv_rfact0_block0', 'inv_rfact1_block0']
-values += ['1801', '1010', '5.0/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '1.0/Delta0block0', '1.0/Delta1block0']
-# Block 1
-constants += ['block1np0', 'block1np1', 'Delta0block1', 'Delta1block1', 'inv_rfact0_block1', 'inv_rfact1_block1']
-values += ['4999', '1010', '2.0461756979465546/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '1.0/Delta0block1', '1.0/Delta1block1']
-# Block 2
-constants += ['block2np0', 'block2np1', 'Delta0block2', 'Delta1block2', 'inv_rfact0_block2', 'inv_rfact1_block2']
-values += ['1801', '1010', '5.0/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '1.0/Delta0block2', '1.0/Delta1block2']
-
-# Add forcing modes
-constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
-values += ['0.05', '0.00833', '0.07', '0.07', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
-
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
