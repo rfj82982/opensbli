@@ -9,6 +9,70 @@ import os
 # Disable the gmpy library for this case to avoid deepcopy issues
 os.environ['MPMATH_NOGMPY'] = '1'
 
+# Simulation parameters
+simulation_parameters = {
+# Physical parameters
+'gama'      :   '1.4',
+'Minf'      :   '0.72',
+'Pr'        :   '0.71',
+'Re'        :   '5.0e5',
+'dt'        :   '5.0e-5',
+'niter'     :   '1000000',
+'sigma_filt'        :   '0.01',
+'SuthT'     :   '110.4',
+'RefT'      :   '273.15',
+'stat_frequency'        :   '100',
+'shock_factor'      :   '1.0',
+'Twall'     :   '1.0',
+'Lz'        :   '0.05',
+'span_factor'       :   'Lz/0.05',
+# Block 0
+'block0np0'     :   '701',
+'block0np1'     :   '681',
+'block0np2'     :   '50',
+'Delta0block0'      :   '5.0/(block0np0 - 1.0)',
+'Delta1block0'      :   '22.5/(block0np1 - 1.0)',
+'Delta2block0'      :   '0.05/block0np2',
+'inv_rfact0_block0'     :   '1.0/Delta0block0',
+'inv_rfact1_block0'     :   '1.0/Delta1block0',
+'inv_rfact2_block0'     :   '1.0/Delta2block0',
+# Block 1
+'block1np0'     :   '2249',
+'block1np1'     :   '681',
+'block1np2'     :   '50',
+'Delta0block1'      :   '2.0461756979465546/(block1np0 - 1.0)',
+'Delta1block1'      :   '22.5/(block1np1 - 1.0)',
+'Delta2block1'      :   '0.05/block1np2',
+'inv_rfact0_block1'     :   '1.0/Delta0block1',
+'inv_rfact1_block1'     :   '1.0/Delta1block1',
+'inv_rfact2_block1'     :   '1.0/Delta2block1',
+# Block 2
+'block2np0'     :   '701',
+'block2np1'     :   '681',
+'block2np2'     :   '50',
+'Delta0block2'      :   '5.0/(block2np0 - 1.0)',
+'Delta1block2'      :   '22.5/(block2np1 - 1.0)',
+'Delta2block2'      :   '0.05/block2np2',
+'inv_rfact0_block2'     :   '1.0/Delta0block2',
+'inv_rfact1_block2'     :   '1.0/Delta1block2',
+'inv_rfact2_block2'     :   '1.0/Delta2block2',
+# Add forcing modes
+'tripA'     :   '0.075', # trip amplitude
+'tripSigma'     :   '0.00833',
+'xts'       :   '0.1',
+'xtp'       :   '0.1',
+'omega_0'       :   '26', # temporal frequency
+'omega_1'       :   '88',
+'omega_2'       :   '200',
+'k_0'       :   '3.0', # wavenumbers
+'k_1'       :   '4.0',
+'k_2'       :   '4.0',
+'phi_0'     :   '0.0', # phase shift
+'phi_1'     :   'M_PI',
+'phi_2'     :   '-M_PI/2',
+}
+
+# Define the problem
 import itertools
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
     kernels = []
@@ -144,7 +208,8 @@ gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 tripped = True
 direction, side = 1, 0
 if tripped:
-    Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
+    from sympy import pi
+    Amp, sigma, xts, xtp, Lz, span_factor = symbols('tripA tripSigma xts xtp Lz span_factor', **{'cls':ConstantObject})
     # Time dependence
     # current_iter = multi_block.get_block(nblocks-1).get_temporal_schemes[0].iteration_number # Current iteration number
     current_iter = Globalvariable("iter", integer=True)
@@ -157,9 +222,9 @@ if tripped:
     x0, z0 = DataObject('x0'), DataObject('x2')
     conditional_expressions = []
     # Suction side trip
-    SS_trip = Amp*(exp(-(x0 - xts)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    SS_trip = Amp*(exp(-(x0 - xts)**2  / (2*sigma**2))*(sin(2*pi*k0 * z0 * span_factor/Lz)*sin(omega0*t + phi0) + sin(2*pi*k1 * z0 * span_factor/Lz)*sin(omega1*t + phi1) + sin(2*pi*k2 * z0 * span_factor/Lz)*sin(omega2*t + phi2)))
     # Pressure side trip
-    PS_trip = Amp*(exp(-(x0 - xtp)**2  / (2*sigma**2))*(sin(k0**2 * z0)*sin(omega0*t + phi0) + sin(k1**2 * z0)*sin(omega1*t + phi1) + sin(k2**2 * z0)*sin(omega2*t + phi2)))
+    PS_trip = Amp*(exp(-(x0 - xtp)**2  / (2*sigma**2))*(sin(2*pi*k0 * z0 * span_factor/Lz)*sin(omega0*t + phi0) + sin(2*pi*k1 * z0 * span_factor/Lz)*sin(omega1*t + phi1) + sin(2*pi*k2 * z0 * span_factor/Lz)*sin(omega2*t + phi2)))
     # Index in x direction, assuming anti-clockwise grid configuration here
     idx = multi_block.get_block(1).grid_indexes[0] # x index on block 1 (airfoil block)
     expr_condition_pairs = Piecewise((SS_trip, idx > ConstantObject('block1np0')/2), (PS_trip, idx < ConstantObject('block1np0')/2),  (0, True))
@@ -207,7 +272,7 @@ multi_block.set_block_boundaries(mb_bcs)
 multi_block.set_equations([simulation_eq, constituent, metriceq])
 
 # Add statsistics gathering
-stats = True
+stats = False
 if stats:
     # Create the statistics equations, this shows another way of writing the equations
     from airfoil_stats import favre_averaged_stats
@@ -255,18 +320,14 @@ x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 q_hdf5 = iohdf5(save_every=1000, **kwargs)
 q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
-q_hdf5.add_arrays([DataObject('kappa')])
 # Read in the grid file
 kwargs = {'iotype': "Read"}
 grid_hdf5 = iohdf5(**kwargs)
 grid_hdf5.add_arrays([x, y, z])
 # Stats HDF5 and write metrics to the grid file
 metrics_hdf5 = iohdf5(arrays=metriceq.grid_der_wks, **{'position': "init", 'iotype': 'Write', 'name': "metrics.h5"})
-# HDF5 output of statistics arrays
-kwargs = {'iotype': "Write", 'name': "stats_output.h5"}
-stats_hdf5 = iohdf5(arrays=stats_arrays, **kwargs)
 # Set the I/O on the block
-multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5, stats_hdf5])
+multi_block.setio([q_hdf5, grid_hdf5, metrics_hdf5])
 
 # Block 0 slicing
 grid_slice_hdf5_0 = iohdf5_slices(blocknumber=0, **{'iotype': "Init"})
@@ -378,22 +439,6 @@ for block in multi_block.blocks:
 # Create the OPS C code
 alg = TraditionalAlgorithmRKMB(multi_block)
 OPSC(alg, OPS_diagnostics=1)
-# NaN check and iteration counter
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)
-# Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'dt', 'niter', 'sigma_filt', 'SuthT', 'RefT', 'stat_frequency', 'shock_factor', 'Twall']
-values = ['1.4', '0.73', '0.72', '3.0e6', '3.0e-5', '1000000', '0.01', '110.4', '273.15', '100', '1.0', '1.0']
-# Block 0
-constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0']
-values += ['1099', '980', '50', '5.0/(block0np0 - 1.0)', '22.5/(block0np1 - 1.0)', '0.065/block0np2', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0']
-# Block 1
-constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1', 'inv_rfact0_block1', 'inv_rfact1_block1', 'inv_rfact2_block1']
-values += ['1495', '980', '50', '2.0461756979465546/(block1np0 - 1.0)', '22.5/(block1np1 - 1.0)', '0.05/block1np2', '1.0/Delta0block1', '1.0/Delta1block1', '1.0/Delta2block1']
-# Block 2
-constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2', 'inv_rfact0_block2', 'inv_rfact1_block2', 'inv_rfact2_block2']
-values += ['1099', '980', '50', '5.0/(block2np0 - 1.0)', '22.5/(block2np1 - 1.0)', '0.065/block2np2', '1.0/Delta0block2', '1.0/Delta1block2', '1.0/Delta2block2']
-# Add forcing modes
-constants += ['tripA', 'tripSigma', 'xts', 'xtp', 'omega_0', 'omega_1', 'omega_2', 'k_0', 'k_1', 'k_2', 'phi_0', 'phi_1', 'phi_2']
-values += ['0.05', '0.00833', '0.07', '0.07', '26', '88', '200', '120*M_PI', '160*M_PI', '160*M_PI', '0.0', 'M_PI', '-M_PI/2']
-
-substitute_simulation_parameters(constants, values)

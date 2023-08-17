@@ -36,7 +36,6 @@ class iohdf5(opensbliIO):
                         ret.kwargs[key.lower()] = kwargs[key].lower()
         else:
             # Default IO type is write to hdf5
-            print("Warning: IO type has not been specified for this HDF5 object.")
             ret.kwargs = {'iotype': "write"}
             # Default write placement is the end of the simulation
         # Position of write calls in the output
@@ -197,11 +196,13 @@ class iohdf5(opensbliIO):
                 code += ['sprintf(%s, \"%s.h5\");' % (var_name, name)]
             filename = var_name
         dataset_write = []
-        for ar in cls.arrays:
-            block_name = ar.base.blockname
-            dataset_write += ['ops_fetch_dat_hdf5_file(%s, %s);' % (ar, filename)]
-
-        # generate the block name
+        if len(cls.arrays) == 0:
+            raise ValueError("The IO class: {} does not have any arrays assigned to it for reading/writing from disk.".format(cls.kwargs["name"]))
+        else:
+            for ar in cls.arrays:
+                block_name = ar.base.blockname
+                dataset_write += ['ops_fetch_dat_hdf5_file(%s, %s);' % (ar, filename)]
+        # Generate the block name
         code += ['ops_fetch_block_hdf5_file(%s, %s);' % (block_name, filename)] + dataset_write
         # Write constants to the HDF5 output file, once per file (not per block)
         if cls.write_constants and cls.blocknumber == 0:

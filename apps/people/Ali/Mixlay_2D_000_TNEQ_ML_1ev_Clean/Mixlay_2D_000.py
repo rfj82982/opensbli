@@ -289,7 +289,7 @@ block.setio(copy.deepcopy(h5))
 arrays  = ['p','rhoev','T','rhoE','Tv']
 arrays  = [block.location_dataset('%s' % dset) for dset in arrays]
 indices = [ ('block0np0/4', '(block0np1-1)/2'),('block0np0/4', '(block0np1-1)/2'),('block0np0/4', '(block0np1-1)/2'),('block0np0/4', '(block0np1-1)/2'),('block0np0/4', '(block0np1-1)/2')] # ('block0np0/4', '(block0np1-1)/2')
-SM 		= SimulationMonitor(arrays, indices, block, print_frequency=2,fp_precision=12, output_file='output.log')
+SM 		= SimulationMonitor(arrays, indices, block, print_frequency=2,fp_precision=12, NaN_check='rhoN2_B0', output_file='output.log')
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -329,9 +329,6 @@ OPSC(alg) # ,OPS_V2=True
 # Add the data from "Input" section
 substitute_simulation_parameters(set_constants.keys(), set_constants.values())
 
-print_iteration_ops(NaN_check='rhoN2_B0')
-
-
 #############################################################################################################################################
 #																																			#
 # Refrences																																	#
@@ -339,8 +336,3 @@ print_iteration_ops(NaN_check='rhoN2_B0')
 # 	[1]: Unpacks the dictionaries in a single one																							#
 #			https://stackoverflow.com/questions/13361510/typeerror-unsupported-operand-types-for-dict-items-and-dict-items					#
 #############################################################################################################################################
-
-
-
-
-
