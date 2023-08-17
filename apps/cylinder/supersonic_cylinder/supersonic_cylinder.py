@@ -5,6 +5,25 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import pi, sin, cos, Abs, sqrt
 
+simulation_parameters = {
+'Re'        :   '300.0',
+'gama'      :   '1.4',
+'Minf'      :   '1.5',
+'Pr'        :   '0.71',
+'dt'        :   '0.0001',
+'niter'     :   '5000000',
+'block0np0'     :   '598',
+'block0np1'     :   '782',
+'Delta0block0'      :   'M_PI/(block0np0-1)',
+'Delta1block0'      :   '242.2/(block0np1-1)',
+'Twall'     :   '1.0',
+'SuthT'     :   '110.4',
+'RefT'      :   '273.15',
+'inv_rfact0_block0'     :   '1.0/Delta0block0',
+'inv_rfact1_block0'     :   '1.0/Delta1block0',
+'shock_factor'      :   '1.0',
+}
+
 # Problem dimension
 ndim = 2
 # # Constants that are used
@@ -132,12 +151,11 @@ block.set_block_boundaries(boundaries)
 kwargs = {'iotype': "Write", "write_constants" : True}
 h5 = iohdf5(save_every=5000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2'), DataObject('q3')])
+h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('kappa')])
 kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
 h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([h5, h5_read])
-
 
 # Set equations 
 block.set_equations([constituent, simulation_eq, initial, metriceq])
@@ -204,8 +222,6 @@ alg = TraditionalAlgorithmRK(block, SM)
 SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg)
-# Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'shock_factor']
-values = ['300.0', '1.4', '1.5', '0.71', '0.0001', '5000000', '598', '782', 'M_PI/(block0np0-1)', '242.2/(block0np1-1)', '1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '1.0']
-substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho', every=100)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')

@@ -5,6 +5,28 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import pi, sin, cos, Abs, sqrt
 
+simulation_parameters = {
+'Re'        :   '1500.0',   
+'gama'      :   '1.4',  
+'Minf'      :   '1.2',  
+'Pr'        :   '0.71', 
+'dt'        :   '0.0001',   
+'niter'     :   '5000000',  
+'block0np0'     :   '1572', 
+'block0np1'     :   '1605', 
+'block0np2'     :   '50',   
+'Delta0block0'      :   'M_PI/(block0np0)', 
+'Delta1block0'      :   '250.0/(block0np1-1)',  
+'Delta2block0'      :   '10.0/(block0np2)', 
+'Twall'     :   '1.0',  
+'SuthT'     :   '110.4',    
+'RefT'      :   '273.15',   
+'inv_rfact0_block0'     :   '1.0/Delta0block0', 
+'inv_rfact1_block0'     :   '1.0/Delta1block0', 
+'inv_rfact2_block0'     :   '1.0/Delta2block0', 
+'shock_factor'      :   '1.0',
+}
+
 # Problem dimension
 ndim = 3
 # # Constants that are used
@@ -90,7 +112,8 @@ else:
     rhou1 = "Eq(DataObject(u1), u1)"
     rhou2 = "Eq(DataObject(u2), u2)"
     rhoE = "Eq(DataObject(Et), p/(rho*(gama-1)) + 0.5*(u0**2 + u1**2 + u2**2))"
-eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]
+temp_eq = "Eq(GridVariable('temp'), DataObject(x2))"
+eqns = [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE, temp_eq]
 
 # parse the initial conditions
 initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
@@ -142,10 +165,38 @@ kwargs = {'iotype': "Write", "write_constants" : True}
 h5 = iohdf5(save_every=10000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('kappa'), DataObject('q0')])
+kwargs = {'iotype': "Read"}
 h5_read = iohdf5(**kwargs)
-h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
+h5_read.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('x2')])
 block.setio([h5, h5_read])
 
+# # Add slice writing capability, data dimension reduction
+# Add grid coordinates to the slices, once at the start of the simulation
+grid_slice_hdf5 = iohdf5_slices(**{'iotype': "Init"})
+# Surface above the cylinder, 5 points off the wall
+coords = [([DataObject('x0'), DataObject('x2')], 1, 5)]
+# x-y plane, mid span side view Lz/2
+coords += [([DataObject('x0'), DataObject('x1')], 2, 'block0np2/2')]
+# (y-z) Wake to outlet plane
+coords += [([DataObject('x1'), DataObject('x2')], 0, 'block0np0-1')]
+# (y-z) Plane on top of the cylinder
+coords += [([DataObject('x1'), DataObject('x2')], 0, '3*block0np0/4')]
+# Add to the initialisation object
+grid_slice_hdf5.add_slices(coords)
+
+# Q vector slices written out in time
+slices_hdf5 = iohdf5_slices(save_every=2500, **{'iotype': "Write"})
+# Surface above the cylinder, 5 points off the wall
+slices = [(q_vector, 1, 5)]
+# x-y plane, mid span side view Lz/2
+slices += [(q_vector, 2, 'block0np2/2')]
+# (y-z) Wake to outlet plane
+slices += [(q_vector, 0, 'block0np0-1')]
+# (y-z) Plane on top of the cylinder
+slices += [(q_vector, 0, '3*block0np0/4')]
+slices_hdf5.add_slices(slices)
+# Set both HDF5 slicing objects
+block.setio([grid_slice_hdf5, slices_hdf5])
 
 # Set equations 
 block.set_equations([constituent, simulation_eq, initial, metriceq])
@@ -163,7 +214,7 @@ DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, 
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=True, store_filter=True)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
@@ -211,7 +262,6 @@ arrays = [block.location_dataset('%s' % dset) for dset in arrays]
 indices = [(0, 50, 25), (0, 100, 25), (0, 200, 25), (0, 400, 25), (0, 700, 25), (0, 1200, 25), (0, 1500, 25)]
 SM = SimulationMonitor(arrays, indices, block, print_frequency=250, fp_precision=12, output_file='output.log')
 alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
-# Create algorithm
 
 # Create algorithm
 alg = TraditionalAlgorithmRK(block, SM)
@@ -219,8 +269,6 @@ alg = TraditionalAlgorithmRK(block, SM)
 SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
 OPSC(alg)
-# Simulation parameters
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0',  'Twall', 'SuthT', 'RefT', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'shock_factor']
-values = ['1500.0', '1.4', '1.2', '0.71', '0.0001', '5000000', '1572', '1605', '50', 'M_PI/(block0np0)', '242.2/(block0np1-1)', '10.0/(block0np2)','1.0', '110.4', '273.15', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1.0']
-substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho', every=100)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')

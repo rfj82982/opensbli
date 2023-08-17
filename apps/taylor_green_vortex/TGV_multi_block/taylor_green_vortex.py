@@ -97,8 +97,8 @@ def TGV_boundaries(block_number, match_conditions):
     xp = InterfaceBC(direction=0, side=1,  match=match_conditions[block_number][1])
     ym = InterfaceBC(direction=1, side=0,  match=match_conditions[block_number][2])
     yp = InterfaceBC(direction=1, side=1,  match=match_conditions[block_number][3])
-    zm = PeriodicBC(direction=2, side=0)
-    zp = PeriodicBC(direction=2, side=1)
+    zm = PeriodicBC(direction=2, side=0, full_depth=True)
+    zp = PeriodicBC(direction=2, side=1, full_depth=True)
     return [xm, xp, ym, yp, zm, zp]
 
 # Number of dimensions of the system to be solved

@@ -91,7 +91,7 @@ schemes = {}
 schemes[LF.name] = LF
 # cent = Central(4)
 fns = 'u0 u1 u2 T'
-cent = StoreSome(4, fns)
+cent = StoreSome(4, fns, merged=True)
 schemes[cent.name] = cent
 rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
@@ -111,11 +111,11 @@ boundaries = [[0, 0] for t in range(ndim)]
 # Left pressure extrapolation at x= 0, inlet conditions
 direction = 0
 side = 0
-boundaries[direction][side] = InletPressureExtrapolateBC(direction, side, scheme=ReducedAccess())
+boundaries[direction][side] = InletPressureExtrapolateBC(direction, side)
 # Right extrapolation at outlet
 direction = 0
 side = 1
-boundaries[direction][side] = ExtrapolationBC(direction, side, order=0, scheme=ReducedAccess())
+boundaries[direction][side] = ExtrapolationBC(direction, side, order=0)
 # Bottom no-slip isothermal wall
 direction = 1
 side = 0
@@ -125,7 +125,7 @@ for con in wall_const:
 # Isothermal wall condition
 rhoE_wall = parse_expr("Eq(DataObject(rhoE), DataObject(rho)*Twall/(gama*(gama-1.0)*Minf**2.0))", local_dict=local_dict)
 wall_eqns = [rhoE_wall]
-boundaries[direction][side] = IsothermalWallBC(direction, 0, wall_eqns, scheme=ReducedAccess())
+boundaries[direction][side] = IsothermalWallBC(direction, 0, wall_eqns)
 # Top dirichlet shock generator condition
 direction = 1
 side = 1
@@ -135,7 +135,7 @@ rhou1 = parse_expr("Eq(DataObject(rhou1), Piecewise((-0.058866065, (x0)>40.0), (
 rhoE = parse_expr("Eq(DataObject(rhoE), Piecewise((1.0590824, (x0)>40.0), (0.94644428042, True)))", local_dict=local_dict)
 
 upper_eqns = [x_loc, rho, rhou0, rhou1, rhoE]
-boundaries[direction][side] = DirichletBC(direction, side, upper_eqns, scheme=ReducedAccess())
+boundaries[direction][side] = DirichletBC(direction, side, upper_eqns)
 
 block.set_block_boundaries(boundaries)
 
