@@ -4,6 +4,29 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'Re'        :   '1600.0',
+'gama'      :   '1.4',
+'Minf'      :   '1.25',
+'Pr'        :   '0.71',
+'dt'        :   '0.0005',
+'niter'     :   '40000',
+'block0np0'     :   '256',
+'block0np1'     :   '256',
+'block0np2'     :   '256',
+'Delta0block0'      :   '2*M_PI/block0np0',
+'Delta1block0'      :   '2*M_PI/block0np1',
+'Delta2block0'      :   '2*M_PI/block0np2',
+'shock_factor'      :   '1',
+'inv_rfact0_block0'     :   '1.0/Delta0block0',
+'inv_rfact1_block0'     :   '1.0/Delta1block0',
+'inv_rfact2_block0'     :   '1.0/Delta2block0',
+'TENO_CT'       :   '1e-6',
+'eps'       :   '1.0e-30',
+'teno_a1'       :   '10.5',
+'teno_a2'       :   '4.5',
+}
+
 # Number of dimensions of the system to be solved
 ndim = 3
 # # Constants that are used
@@ -249,10 +272,6 @@ SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
-
-# NaN check and iteration counter
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0', 'shock_factor', 'inv_rfact0_block0', 'inv_rfact1_block0', 'inv_rfact2_block0', 'TENO_CT', 'eps', 'teno_a1', 'teno_a2']
-values = ['1600.0', '1.4', '1.25', '0.71', '0.0005', '40000', '256', '256', '256', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2', '1', '1.0/Delta0block0', '1.0/Delta1block0', '1.0/Delta2block0', '1e-6', '1.0e-30', '10.5', '4.5']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')
-

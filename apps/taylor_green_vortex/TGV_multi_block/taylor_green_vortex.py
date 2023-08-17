@@ -4,6 +4,44 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'Re'        :   '1600.0',
+'gama'      :   '1.4',
+'Minf'      :   '0.1',
+'Pr'        :   '0.71',
+'dt'        :   '0.003385',
+'niter'     :   '100',
+# Block parameters
+'block0np0'     :   '128',
+'block0np1'     :   '128',
+'block0np2'     :   '128',
+'Delta0block0'      :   'M_PI/block0np0',
+'Delta1block0'      :   'M_PI/block0np1',
+'Delta2block0'      :   '2*M_PI/block0np2',
+
+'block1np0'     :   '128',
+'block1np1'     :   '128',
+'block1np2'     :   '128',
+'Delta0block1'      :   'M_PI/block1np0',
+'Delta1block1'      :   'M_PI/block1np1',
+'Delta2block1'      :   '2*M_PI/block1np2',
+
+'block2np0'     :   '128',
+'block2np1'     :   '128',
+'block2np2'     :   '128',
+'Delta0block2'      :   'M_PI/block2np0',
+'Delta1block2'      :   'M_PI/block2np1',
+'Delta2block2'      :   '2*M_PI/block2np2',
+
+'block3np0'     :   '128',
+'block3np1'     :   '128',
+'block3np2'     :   '128',
+'Delta0block3'      :   'M_PI/block3np0',
+'Delta1block3'      :   'M_PI/block3np1',
+'Delta2block3'      :   '2*M_PI/block3np2',
+}
+
+# Initial condition on each block
 def TGV_initial_condition(block_number):
     # Create a simulation block
     block = SimulationBlock(ndim, block_number=block_number)
@@ -175,18 +213,6 @@ SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=5, OPS_V2=True)
-
-# NaN check and iteration counter
-print_iteration_ops(NaN_check='rho_B0')
-
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter']
-values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '100']
-constants += ['block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-constants += ['block1np0', 'block1np1', 'block1np2', 'Delta0block1', 'Delta1block1', 'Delta2block1']
-constants += ['block2np0', 'block2np1', 'block2np2', 'Delta0block2', 'Delta1block2', 'Delta2block2']
-constants += ['block3np0', 'block3np1', 'block3np2', 'Delta0block3', 'Delta1block3', 'Delta2block3']
-values += ['128', '128', '128', 'M_PI/block0np0', 'M_PI/block0np1', '2*M_PI/block0np2']
-values += ['128', '128', '128', 'M_PI/block1np0', 'M_PI/block1np1', '2*M_PI/block1np2']
-values += ['128', '128', '128', 'M_PI/block2np0', 'M_PI/block2np1', '2*M_PI/block2np2']
-values += ['128', '128', '128', 'M_PI/block3np0', 'M_PI/block3np1', '2*M_PI/block3np2']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')

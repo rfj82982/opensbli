@@ -4,6 +4,21 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'Re'        :   '1600.0',
+'gama'      :   '1.4',
+'Minf'      :   '0.1',
+'Pr'        :   '0.71',
+'dt'        :   '0.003385',
+'niter'     :   '5000',
+'block0np0'     :   '128',
+'block0np1'     :   '128',
+'block0np2'     :   '128',
+'Delta0block0'      :   '2*M_PI/block0np0',
+'Delta1block0'      :   '2*M_PI/block0np1',
+'Delta2block0'      :   '2*M_PI/block0np2',
+}
+
 # Number of dimensions of the system to be solved
 ndim = 3
 # # Constants that are used
@@ -149,8 +164,6 @@ alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
 
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=2, OPS_V2=True)
-
-# NaN check and iteration counter
-constants = ['Re', 'gama', 'Minf', 'Pr', 'dt', 'niter', 'block0np0', 'block0np1', 'block0np2', 'Delta0block0', 'Delta1block0', 'Delta2block0']
-values = ['1600.0', '1.4', '0.1', '0.71', '0.003385', '5000', '128', '128', '128', '2*M_PI/block0np0', '2*M_PI/block0np1', '2*M_PI/block0np2']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')
