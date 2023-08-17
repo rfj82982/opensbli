@@ -577,7 +577,10 @@ class TraditionalAlgorithmRKMB(object):
                         io_copy.dynamic_fname = False
                         after_time += [io_copy]
                     elif isinstance(place, InTheSimulation):
-                        t = (Equality((temporal_iteration + 1) % place.frequency, 0))
+                        if place.initial_condition:
+                            t = Or(Equality((temporal_iteration + 1) % place.frequency, 0), Equality(temporal_iteration, 0))
+                        else:
+                            t = (Equality((temporal_iteration + 1) % place.frequency, 0, evaluate=False))
                         cond = Condition(t)
                         io_copy = copy.deepcopy(io)
                         io_copy.dynamic_fname = True

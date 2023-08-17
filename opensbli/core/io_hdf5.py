@@ -68,17 +68,17 @@ class iohdf5(opensbliIO):
         return ret
 
     def get_algorithm_location(cls):
-        if cls.save_every:
-            cls.algorithm_place += [InTheSimulation(cls.save_every)]
         if cls.kwargs['iotype'] == "write":
             if cls.kwargs['position'] == "init":
                 cls.algorithm_place = [BeforeSimulationStarts()]
             else:
                 cls.algorithm_place += [AfterSimulationEnds()]
+            if cls.save_every:
+                cls.algorithm_place += [InTheSimulation(cls.save_every, initial_condition=True)]
         elif cls.kwargs['iotype'] == "read":
             cls.algorithm_place = [BeforeSimulationStarts()]
         else:
-            raise ValueError("")
+            raise ValueError("HDF5 class is missing an iotype.")
         return
 
     def add_arrays(cls, arrays):
