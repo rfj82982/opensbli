@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from opensbli.initialisation import GridBasedInitialisation
 from opensbli.core.opensbliobjects import DataObject, ConstantObject
 from opensbli.core.grid import GridVariable
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.core.kernel import Kernel
 import warnings
 # from scipy.optimize import curve_fit
@@ -28,7 +29,8 @@ class Boundary_layer_profile(object):
     :arg float Tinf: Dimensional free-stream temperature for Sutherland's law."""
 
     # def __init__(self, xmach, Pr, gama, Tw, Re, Tinf):
-    def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, blthickness):
+    # def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, blthickness):
+    def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref):
 
         self.y, self.u, self.T, self.scale = self.generate_boundary_layer_profile(Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref)
         # self.uref, self.tref, self.rhoref, self.blthickness 
@@ -343,19 +345,25 @@ class Boundary_layer_profile(object):
         # sumy=rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO
         self.cN2, self.cN, self.cO2, self.cO, self.cNO = cN2, cN, cO2, cO, cNO
 
-        # fig3,ax3=plt.subplots(2, 3)
-
-        # ax3[0,0].plot(cN2, y)
-        # ax3[0,1].plot(cN, y)
-        # ax3[0,2].plot(cO2, y)
-        # ax3[1,0].plot(cO, y)
-        # ax3[1,1].plot(cNO, y)
-
-        # plt.show()
+       
+        
 
         # blthickness, uref, tinf, rhoref = 
         print('input variables line one: ', Re, Me, self.tinf, self.Twall, Sc)
         print('input variables: ', pref, rhoref, self.ue, deltastar)
+        
+        # define constants
+        Twall_cpp = ConstantObject('Twall')
+        Twall_cpp.value = self.Twall
+        
+        CTD.add_constant(Twall_cpp)
+
+        # define constants
+        pref_cpp, rhoref_cpp, uref_cpp, blthickness_cpp = ConstantObject('pref'), ConstantObject('rhoref'), ConstantObject('uref'), ConstantObject('blthicknesss')
+        pref_cpp.value, rhoref_cpp.value, uref_cpp.value, blthickness_cpp.value = pref, rhoref, self.ue, deltastar
+
+        CTD.add_constant(pref_cpp); CTD.add_constant(rhoref_cpp); CTD.add_constant(uref_cpp); CTD.add_constant(blthickness_cpp)
+        
 
         # self.Twall = v[1]
         # print("The wall temperature is :", self.Twall)
@@ -437,7 +445,7 @@ class Initialise_Flatmix(GridBasedInitialisation):
         ret = super(Initialise_Flatmix, cls).__new__(cls)
         print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f." % (Re, xMach, Tinf))
         print("                                                     cN2e = %f, cNe = %f, cO2e = %f, cOe = %f, cNOe = %f." % (cN2e, cNe, cO2e, cOe, cNOe))
-        print("                    with given dimensional constants pref = %f, rhoref = %f, uref = %f, blthickness = %f." % (pref, rhoref, uref, blthickness,))
+        # print("                    with given dimensional constants pref = %f, rhoref = %f, uref = %f, blthickness = %f." % (pref, rhoref, uref, blthickness,))
 
         ret.coordinates = [x[1] for x in bl_directions]
         ret.bl_directions = bl_directions
@@ -463,9 +471,9 @@ class Initialise_Flatmix(GridBasedInitialisation):
         # get dimensional constants
         ret.Sc = ret.find_constant_values([Sc])[0]
         ret.pref = ret.find_constant_values([pref])[0]
-        ret.rhoref = ret.find_constant_values([rhoref])[0]
-        ret.uref = ret.find_constant_values([uref])[0]
-        ret.blthickness = ret.find_constant_values([blthickness])[0]
+        # ret.rhoref = ret.find_constant_values([rhoref])[0]
+        # ret.uref = ret.find_constant_values([uref])[0]
+        # ret.blthickness = ret.find_constant_values([blthickness])[0]
 
         return ret
 
@@ -989,7 +997,8 @@ class Initialise_Flatmix(GridBasedInitialisation):
         """ Solves the compressible boundary-layer equations via similarity solution."""
         Re, xMach, Tinf, Tw, Sc = self.Re, self.xMach, self.Tinf, self.Tw, self.Sc
         cN2e, cNe, cO2e, cOe, cNOe = self.cN2e, self.cNe, self.cO2e, self.cOe, self.cNOe
-        pref, rhoref, uref, blthickness = self.pref, self.rhoref, self.uref, self.blthickness
+        # pref, rhoref, uref, blthickness = self.pref, self.rhoref, self.uref, self.blthickness
+        pref = self.pref 
 
         adiabatic_condition, catalytic_condition = self.adiabatic_condition, self.catalytic_condition
 
@@ -997,7 +1006,7 @@ class Initialise_Flatmix(GridBasedInitialisation):
 
         Pr, gama = 0.72, 1.4  # Prandtl number, ratio of specific heats
         # bl = Boundary_layer_profile(xMach, Pr, gama, -1, Re, Tinf)  # -1 for Tw sets an adiabatic wall
-        bl = Boundary_layer_profile(Re, xMach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, blthickness)
+        bl = Boundary_layer_profile(Re, xMach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref)
         y, u, T, rho, n = bl.y, bl.u, bl.T, bl.rho, np.size(bl.y)
         uref, Tinf, rhoref, blthickness, rho = bl.uref, bl.tinf, bl.rhoref, bl.blthickness, bl.rho
         cN2, cN, cO2, cO, cNO = bl.cN2, bl.cN, bl.cO2, bl.cO, bl.cNO

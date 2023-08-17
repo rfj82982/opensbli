@@ -134,6 +134,12 @@ for index, eq in enumerate(flatten(constituent.equations)):
 
 latex.close()
 
+block = SimulationBlock(ndim, block_number=0)
+
+# Local dictionary for parsing the expressions
+local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
+
+
 # --------------------------------------------------------------------------------------------------------------------------------------------
 #																																			
 # grid generation and initial conditions																															
@@ -160,9 +166,11 @@ rhoO, rhoO2, rhoN, rhoN2, rhoNO, u, v, p, T ,f, ev, evequilO2, evequilN2, evequi
 Re, xMach, Tinf, Twall, Sc = 950.0, 2.0, 288.0, 288.0*1.71138101, 1.0
 cN2, cN, cO2, cO, cNO = 0.95, 0.05, 0.0, 0.0, 0.0
 adiabatic_condition, catalytic_condition = True, False
-sigOtoNe = (2.0*cO2/MO2+cO/MO+cNO/MNO)/(2.0*cN2/MN2+cN/MN+cNO/MNO)
 MN2, MN, MO2, MO, MNO = 28.0, 14.0, 32.0, 16.0, 30.0 # molar mass
-pref, rhoref, uref, blthickness = 100.0, 0.0011136546984423536, 713.0769048663936, 0.021092341667534868
+sigOtoNe = (2.0*cO2/MO2+cO/MO+cNO/MNO)/(2.0*cN2/MN2+cN/MN+cNO/MNO)
+
+# pref, rhoref, uref, blthickness = 100.0, 0.0011136546984423536, 713.0769048663936, 0.021092341667534868
+pref, rhoref, uref, blthickness = 1000.0, ConstantObject('rhoref'), ConstantObject('uref'), ConstantObject('blthicknesss')
 
 delta0block0m, delta1block0m = blthickness*400, blthickness*100
 delta0block0, delta1block0 = str(delta0block0m) + '/(block0np0-1)', str(delta1block0m) + '/(block0np1-1)'
@@ -273,8 +281,12 @@ OPSC(alg) # ,OPS_V2=True
 # --------------------------------------------------------------------------------------------------------------------------------------------
 
 # mixlayer conditions
-physical_constants = ['Re', 'Sc', 'uref', 'pref', 'rhoref', 'pexp', 'Twall', 'Twn']
-physical_values = ['1.0', str(Sc), str(uref), str(pref), str(rhoref), '0.0', str(Twall), '0.0']
+# physical_constants = ['Re', 'Sc', 'uref', 'pref', 'rhoref', 'pexp', 'Twall', 'Twn']
+# physical_values = ['1.0', str(Sc), str(uref), str(pref), str(rhoref), '0.0', str(Twall), '0.0']
+
+physical_constants = ['Re', 'Sc', 'pexp',  'Twn']
+physical_values = ['1.0', str(Sc), '0.0', '0.0']
+
 
 substitute_simulation_parameters(physical_constants, physical_values)
 
