@@ -6,6 +6,22 @@ from sympy import sin, cos, sinh, tanh, exp, pi
 #import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'Re'        :   '200.0',   
+'gama'      :   '1.4',   
+'Minf'      :   '0.4',   
+'Pr'        :   '0.72',   
+'Sc'        :   '1.0',   
+'dt'        :   '0.02',   
+'niter'     :   '1000',   
+'block0np0'     :   '81',   
+'block0np1'     :   '121',   
+'Delta0block0'      :   '10.0/(block0np0-1)',   
+'Delta1block0'      :   '1.0/(block0np1-1)',   
+'Ly'        :   '20.0',   
+'stretch'       :   '2.0',
+}
+
 # Number of dimensions of the system to be solved
 ndim = 2
 stats = False
@@ -180,8 +196,6 @@ SimulationDataType.set_datatype(Double)
 
 # Write the code for the algorithm
 OPSC(alg)
-
-constants = ['Re', 'gama', 'Minf', 'Pr', 'Sc', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Ly', 'stretch']
-values = ['200.0', '1.4', '0.4', '0.72', '1.0', '0.02', '1000', '81', '121', '10.0/(block0np0-1)', '1.0/(block0np1-1)', '20.0', '2.0']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')
