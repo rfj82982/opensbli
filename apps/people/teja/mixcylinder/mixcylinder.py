@@ -402,4 +402,4 @@ reaction_constants = ['Cf9','nf9','thetaf9','B91','B92','B93','B94','B95']
 reaction_values = ['6.440e17','-1.0','3.837e4','1.066','-0.833','-3.095','-0.084','0.004']
 substitute_simulation_parameters(reaction_constants, reaction_values)
 
-print_iteration_ops(NaN_check='rhoN2_B0')
+print_iteration_ops(NaN_check='rhoN2')

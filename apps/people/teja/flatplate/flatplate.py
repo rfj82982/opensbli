@@ -243,4 +243,4 @@ constants = ['gama', 'Minf', 'Pr', 'Re', 'Twall', 'dt', 'niter', 'block0np0', 'b
 values = ['1.4', '2.0', '0.72', '950.0', '1.67619431', '0.04', '25000000', '500', '250',
               '400.0/(block0np0-1)', '115.0/(block0np1-1)', '110.4', '288.0', '1e-15', '115.0', '5.0', '1.0e-30']
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho')

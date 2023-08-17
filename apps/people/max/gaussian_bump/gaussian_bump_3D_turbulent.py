@@ -149,11 +149,10 @@ schemes = {}
 weno_order = 5
 # averaging procedure to be used for the eigen system evaluation
 Avg = SimpleAverage([0, 1])
-# LLF scheme
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+# LF scheme
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 # add to schemes
-schemes[LLF.name] = LLF
-
+schemes[LF.name] = LF
 fns = 'u0 u1 u2 T'
 cent = StoreSome(4, fns)
 
@@ -259,7 +258,7 @@ block.set_block_boundaries(boundaries)
 arrays = ['p', 'p', 'p', 'p', 'p', 'p', 'p']
 #arrays = ['rhou0', 'rhou0', 'rhou0', 'rhou0', 'rhou0', 'rhou0', 'rhou0']
 arrays = [block.location_dataset('%s' % dset) for dset in arrays]
-indices = [(178, 45), (178, 72), (178, 96), (178, 118), (178, 139), (178, 160), (178, 176)]
+indices = [(178, 45, 'block0np2/2'), (178, 72, 'block0np2/2'), (178, 96, 'block0np2/2'), (178, 118, 'block0np2/2'), (178, 139, 'block0np2/2'), (178, 160, 'block0np2/2'), (178, 176, 'block0np2/2')] # len(locations) == block.ndim 
 SM = SimulationMonitor(arrays, indices, block, print_frequency=100, fp_precision=12, output_file='monitor.log')
 
 
@@ -302,9 +301,9 @@ block.setio(h5)
 block.set_equations([constituent, simulation_eq, initial, metriceq])
 block.discretise()
 
-alg = TraditionalAlgorithmRK(block)
+alg = TraditionalAlgorithmRK(block, SM)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
 
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(every=50, NaN_check='rho_B0')
+print_iteration_ops(every=50, NaN_check='rho')

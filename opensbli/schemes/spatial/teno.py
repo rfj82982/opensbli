@@ -566,7 +566,7 @@ class HLLCTeno(HLLCCharacteristic, Teno):
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
     def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC', positivity_preservation=False):
-        HLLCCharacteristic.__init__(self, physics, flux_type, averaging, positivity_preservation=positivity_preservation)
+        HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")

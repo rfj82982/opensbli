@@ -9,7 +9,8 @@ class Monitor(object):
     def __init__(self, block, flow_var, probe_loc, numbering):
         self.flow_var = flow_var
         self.probe_loc = probe_loc
-        assert len(probe_loc) == block.ndim
+        if len(probe_loc) != block.ndim:
+            raise ValueError("The number of probe indices (i,j,k) must match the dimensions of the problem (block.ndim).")
         self.probe_no = numbering
         return
 

@@ -677,7 +677,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, combined_reconstruction=False)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations

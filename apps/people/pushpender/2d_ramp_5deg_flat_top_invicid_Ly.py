@@ -152,10 +152,10 @@ schemes = {}
 weno_order = 5
 # averaging procedure to be used for the eigen system evaluation
 Avg = SimpleAverage([0, 1])
-# LLF scheme
-LLF = LLFWeno(weno_order, formulation='Z', averaging=Avg)
+# LF scheme
+LF = LFWeno(weno_order, formulation='Z', averaging=Avg)
 # add to schemes
-schemes[LLF.name] = LLF
+schemes[LF.name] = LF
 
 #fns = 'u0 u1 T'
 # cent = StoreSome(4, fns)
@@ -185,7 +185,7 @@ for con in grid_const:
 
 gridx0 = parse_expr("Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])", local_dict=local_dict)
 
-gridx1=parse_expr("Eq(DataObject(x1),Ly*sinh(b*block.deltas[1]*block.grid_indexes[1]/Ly)/sinh(b)-(sinh(b*block.deltas[1]*block.grid_indexes[1]/Ly)/sinh(b)-1.0)*0.5*tramp*(DataObject(x0)-xramp)*(1.0+tanh((block.deltas[0]*block.grid_indexes[0]-xramp)/(Rcorn+Rcurv*Lx*block.deltas[1]*block.grid_indexes[1]/Ly))))", local_dict=local_dict)
+gridx1=parse_expr("Eq(DataObject(x1),Ly*sinh(b*block.deltas[1]*block.grid_indexes[1]/115.0)/sinh(b)-(sinh(b*block.deltas[1]*block.grid_indexes[1]/115.0)/sinh(b)-1.0)*0.5*tramp*(DataObject(x0)-xramp)*(1.0+tanh((block.deltas[0]*block.grid_indexes[0]-xramp)/(Rcorn+Rcurv*Lx*block.deltas[1]*block.grid_indexes[1]/115.0))))", local_dict=local_dict)
 
 coordinate_evaluation = [gridx0, gridx1]
 
@@ -269,4 +269,4 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho')
