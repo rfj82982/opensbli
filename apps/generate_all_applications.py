@@ -30,6 +30,15 @@ directories = [\
 '/aerofoils/single_block/3D/',
 '/aerofoils/multi_block/2D/',
 '/aerofoils/multi_block/3D/',
+'/people/max/gaussian_bump/',
+'/people/pushpender/',
+'/people/Ali/Mixlay_0D_001_TCNEQ_2T_TvNR_1ev_Clean/',
+'/people/Ali/Mixlay_2D_000_TNEQ_ML_1ev_Clean/',
+'/people/teja/flatplate/',
+'/people/teja/transition/',
+'/people/teja/mixtransition/',
+'/people/teja/mixflat/',
+'/people/teja/mixcylinder/',
 ]
 file_names = [\
 'wave.py',
@@ -60,6 +69,15 @@ file_names = [\
 'CRM_3D.py',
 'transonic_MB.py',
 'transonic_MB.py',
+'gaussian_bump_3D_turbulent.py',
+'2d_ramp_5deg_flat_top_invicid_Ly.py',
+'Mixlay_2D_010.py',
+'Mixlay_2D_000.py',
+'flatplate.py',
+'transition17.py',
+'mixflat_transition.py',
+'mixflat_N2.py',
+'mixcylinder.py',
 ]
 
 assert len(directories) == len(file_names)
