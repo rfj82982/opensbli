@@ -4,8 +4,19 @@ from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
-ndim = 2
+simulation_parameters = {
+'gama'      :       '1.4',
+'Minf'      :       '2.0',
+'dt'        :       '0.1',
+'niter'     :       '10000',
+'block0np0'     :       '457',
+'block0np1'     :       '255',
+'Delta0block0'      :       '350.0/(block0np0-1)',
+'Delta1block0'      :       '115.0/(block0np1-1)',
+}
 
+# Define the problem
+ndim = 2
 sc1 = "**{\'scheme\':\'Weno\'}"
 # Define the compresible Navier-Stokes equations in Einstein notation.
 a = "Conservative(rhou_j,x_j,%s)" % sc1
@@ -142,6 +153,7 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
-values = ['1.4', '2.0', '0.1', '10000', '457', '255', '350.0/(block0np0-1)', '115.0/(block0np1-1)']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')
+

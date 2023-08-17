@@ -3,6 +3,20 @@ from opensbli import *
 import numpy as np
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'gama'      :   '1.4',
+'Minf'      :   '2.0',
+'dt'        :   '0.0001',
+'niter'     :   '50000',
+'block0np0'     :   '512',
+'block0np1'     :   '512',
+'Delta0block0'      :   '1.0/block0np0',
+'Delta1block0'      :   '1.0/block0np1',
+'TENO_CT'       :   '1e-5',
+'eps'       :   '1e-15',
+}
+
+# Define the problem
 ndim = 2
 # Specify TENO order and initialise characteristic scheme.
 sc1 = "**{\'scheme\':\'Weno\'}"
@@ -108,8 +122,6 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-
-
-constants = ['gama', 'Minf', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'TENO_CT', 'eps']
-values = ['1.4', '2.0', '0.0001', '50000', '512', '512', '1.0/block0np0', '1.0/block0np1', '1e-5', '1e-15']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')

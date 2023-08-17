@@ -5,6 +5,16 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import pi, sin, pprint
 
+simulation_parameters = {
+'gama'      :   '1.4',
+'dt'        :   '0.0005',
+'niter'     :   '5000',
+'block0np0'     :   '128',
+'block0np1'     :   '128',
+'Delta0block0'      :   '2.0/(block0np0)',
+'Delta1block0'      :   '2.0/(block0np1)',
+}
+
 # Number of dimensions of the system to be solved
 ndim = 2
 
@@ -142,9 +152,6 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-
-# Add the simulation parameters to the C code
-constants = ['gama', 'dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0']
-values = ['1.4', '0.0005', '5000', '128', '128', '2.0/(block0np0)', '2.0/(block0np1)']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho_B0', every=100)

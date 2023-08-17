@@ -4,6 +4,30 @@ import copy
 from opensbli.utilities.katzer_init import Initialise_Katzer
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
+simulation_parameters = {
+'gama'      :   '1.4',
+'Minf'      :   '2.0',
+'Pr'        :   '0.72',
+'Re'        :   '950.0',
+'Twall'     :   '1.67619431',
+'dt'        :   '0.04',
+'niter'     :   '250000',
+'block0np0'     :   '500',
+'block0np1'     :   '250',
+'Delta0block0'      :   '400.0/(block0np0-1)',
+'Delta1block0'      :   '115.0/(block0np1-1)',
+'SuthT'     :   '110.4',
+'RefT'      :   '288.0',
+'eps'       :   '1e-15',
+'TENO_CT'       :   '1e-5',
+'Lx1'       :   '115.0',
+'by'        :   '5.0',
+'teno_a1'       :   '10.5',
+'teno_a2'       :   '4.5',
+'epsilon'       :   '1.0e-30',
+}
+
+# Define the problem
 ndim = 2
 sc1 = "**{\'scheme\':\'Teno\'}"
 # Define the compresible Navier-Stokes equations in Einstein notation.
@@ -142,9 +166,6 @@ block.discretise()
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-# Substitute simulation parameter values
-constants = ['gama', 'Minf', 'Pr', 'Re', 'Twall', 'dt', 'niter', 'block0np0', 'block0np1',
-                 'Delta0block0', 'Delta1block0', 'SuthT', 'RefT', 'eps', 'TENO_CT', 'Lx1', 'by', 'teno_a1', 'teno_a2', 'epsilon']
-values = ['1.4', '2.0', '0.72', '950.0', '1.67619431', '0.04', '250000', '500', '250',
-              '400.0/(block0np0-1)', '115.0/(block0np1-1)', '110.4', '288.0', '1e-15', '1e-5', '115.0', '5.0','10.5', '4.5', '1.0e-30']
-substitute_simulation_parameters(constants, values)
+# Add the simulation constants to the OPS C code
+substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
+print_iteration_ops(NaN_check='rho')
