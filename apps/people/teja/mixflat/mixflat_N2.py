@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # --------------------------------------------------------------------------------------------------------------------------------------------
-# mixflat44, recreating dimensional mixflat30 case
-#          - debugging mode: removed scalar to simplify the equations
+# mixflat_N2 - pure N2 frozen flow, should be a dimensional extension of flatplate
 #
 # author. gnsa1e21, 2023
 # university of southampton
@@ -13,7 +12,13 @@ from sympy import sin, cos, sinh, tanh, exp, pi, log
 #import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from opensbli.utilities.flatmix_init import Initialise_Flatmix
+# from opensbli.utilities.mixflat_init import Initialise_MixFlat
 
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# define equations																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 # Number of dimensions of the system to be solved
 ndim = 2
 stats = False
@@ -26,7 +31,7 @@ mass_NO = "Eq(Der(rhoNO,t), - Skew(rhoNO*u_j,x_j) + Der(mu/(Re*Sc)*Der(yNO,x_j),
 momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
 evib = "Eq(Der(rhoev,t), - Skew(rhoev*u_j,x_j) + (rhoO2*eveqO2+rhoN2*eveqN2+rhoNO*eveqNO - rho*ev)/tau +Der(mu/(Re*Sc)*(evO2*Der(yO2,x_j)+evN2*Der(yN2,x_j)+evNO*Der(yNO,x_j)),x_j) - Der(qv_j,x_j) )" # + wdotO2*evO2+wdotN2*evN2+wdotNO*evNO
 energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) +Der(mu/(Re*Sc)*Rhat*T*(5.0/(2.0*MO)*Der(yO,x_j)+5.0/(2.0*MN)*Der(yN,x_j)+7.0/(2.0*MO2)*Der(yO2,x_j)+7.0/(2.0*MN2)*Der(YN2,x_j)+7.0/(2.0*MNO)*Der(YNO,x_j)),x_j) + Der(mu/(Re*Sc)*4.1868e6*(dhO/MO*Der(YO,x_j)+dhN/MN*Der(YN,x_j)+dhNO/MNO*Der(YNO,x_j)),x_j) + Der(mu/(Re*Sc)*(evO2*Der(yO2,x_j)+evN2*Der(yN2,x_j)+evNO*Der(yNO,x_j)),x_j) - Der(q_j,x_j) - Der(qv_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-# scalar = "Eq(Der(rhof,t), - Skew(rhof*u_j,x_j) + Der(mu/(Re*Sc)*Der(f,x_j),x_j))" # non-reacting scalar is useful as a (diffusing) marker of original fluid regions
+scalar = "Eq(Der(rhof,t), - Skew(rhof*u_j,x_j) + Der(mu/(Re*Sc)*Der(f,x_j),x_j))" # non-reacting scalar is useful as a (diffusing) marker of original fluid regions
 
 # Substitutions used in the equations
 stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))" 
@@ -48,16 +53,18 @@ thetavset = "Eq(thetavnum, (thetavO2*rhoO2/MO2+thetavN2*rhoN2/MN2+thetavNO*rhoNO
 # make substitutions
 substitutions = [stress_tensor, heat_flux, heat_flux_vib, evibration, density, molesum, molesumM, hformation, timeconst, thetavset]
 
+
 # Constants that are used
 constants = ["Re", "Sc", "uref", "pref", "rhoref", "pexp", "Rhat", "MO", "MO2", "MN", "MN2", "MNO","rhoEref"]
 constants=constants+["dhO", "dhN", "dhNO", "thetavO2", "thetavN2", "thetavNO"]
+
 
 # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
 
 # Variable relations used in the system
 velocity = "Eq(u_i, rhou_i/rho)"
-# mixturefraction = "Eq(f, rhof/rho)"
+mixturefraction = "Eq(f, rhof/rho)"
 # energyam = "Eq(E, rhoE/rho)"				# Added to involve rhoE in the equaation
 pressure = "Eq(p, Rhat*T*(rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO))"
 temperature = "Eq(T, (rhoE -rhoev - dhf - rho*(1./2.)*(KD(_i,_j)*u_i*u_j))/(Rhat*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))) )"
@@ -92,12 +99,13 @@ molefractionN = "Eq(yN, rhoN/(MN*ysum))"
 molefractionN2 = "Eq(yN2, rhoN2/(MN2*ysum))"
 molefractionNO = "Eq(yNO, rhoNO/(MNO*ysum))"
 
+
 # Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
 eq = EinsteinEquation()
 
 # Expand the simulation equations
 simulation_eq = SimulationEquations()
-base_eqns = [mass_O, mass_O2, mass_N, mass_N2, mass_NO, momentum, evib, energy]
+base_eqns = [mass_O, mass_O2, mass_N, mass_N2, mass_NO, momentum, evib, energy, scalar]
 for i, base in enumerate(base_eqns):
 	base_eqns[i]=eq.expand(base, ndim, coordinate_symbol, substitutions, constants)
 
@@ -106,7 +114,7 @@ for eqn in base_eqns:
 
 # Expand the constituent relations
 constituent = ConstituentRelations()  
-constituent_eqns = [velocity, pressure, temperature, viscosity, conductivity, conductivity_vib, molefractionO, molefractionO2, molefractionN, molefractionN2, molefractionNO, evequilO2, evequilN2, evequilNO, evvO2, evvN2, evvNO, timefactorO2, timefactorN2, timefactorNO, tempv] # Added energy am
+constituent_eqns = [velocity, pressure, temperature, mixturefraction, viscosity, conductivity, conductivity_vib, molefractionO, molefractionO2, molefractionN, molefractionN2, molefractionNO, evequilO2, evequilN2, evequilNO, evvO2, evvN2, evvNO, timefactorO2, timefactorN2, timefactorNO, tempv] # Added energy am
 for i, CR in enumerate(constituent_eqns):
 	constituent_eqns[i] = eq.expand(CR, ndim, coordinate_symbol, substitutions, constants)
 
@@ -126,11 +134,11 @@ for index, eq in enumerate(flatten(constituent.equations)):
 
 latex.close()
 
-# Create a simulation block
-block = SimulationBlock(ndim, block_number=0)
-
-# Local dictionary for parsing the expressions
-local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# grid generation and initial conditions																															
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 
 dx, dy = block.deltas
 x, y = symbols('x0:%d' % ndim, **{'cls': DataObject})
@@ -143,23 +151,34 @@ grid_equations= []
 x0=i*dx
 x1=Lx1*sinh(by*j*dy/Lx1)/sinh(by)
 
-
 # Added in magic to make it work - Rhys Nov 2022
 initial_equations = []
 uref, pref, rhoref,rhoEref, Rhat, MO, MO2, MN, MN2, MNO, dhO, dhN, dhNO, thetavO2, thetavN2, thetavNO, Tref = symbols('uref pref rhoref rhoEref Rhat MO MO2 MN MN2 MNO dhO dhN dhNO thetavO2 thetavN2 thetavNO Tref', **{'cls': ConstantObject})
 rhoO, rhoO2, rhoN, rhoN2, rhoNO, u, v, p, T ,f, ev, evequilO2, evequilN2, evequilNO,evO2, evN2, evNO, Tv = symbols('rhoO, rhoO2, rhoN, rhoN2, rhoNO, u, v, p, T, f, ev, evequilO2, evequilN2, evequilNO,evO2, evN2, evNO, Tv', **{'cls': GridVariable})
 
-# Mach 2.0 catalytic wall case -- multispecies
-Re, xMach, Tinf, Twall, Sc = 950.0, 2.0, 288.0, 288.0*1.6830671432146926, 1.0
-cN2, cN, cO2, cO, cNO = 1.0, 0.00, 0.0, 0.0, 0.0
-adiabatic_condition, catalytic_condition = True, True
+# Mach 2.0 non-catalytic wall case
+Re, xMach, Tinf, Twall, Sc = 950.0, 2.0, 288.0, 288.0*1.71138101, 1.0
+cN2, cN, cO2, cO, cNO = 0.95, 0.05, 0.0, 0.0, 0.0
+adiabatic_condition, catalytic_condition = True, False
 sigOtoNe = (2.0*cO2/MO2+cO/MO+cNO/MNO)/(2.0*cN2/MN2+cN/MN+cNO/MNO)
 MN2, MN, MO2, MO, MNO = 28.0, 14.0, 32.0, 16.0, 30.0 # molar mass
-pref, rhoref, uref, blthickness = 1000.0, 0.011693374333644712, 691.9863517884603, 0.0021111429665721802
-scale = 2.2941899233001712
+pref, rhoref, uref, blthickness = 100.0, 0.0011136546984423536, 713.0769048663936, 0.021092341667534868
 
 delta0block0m, delta1block0m = blthickness*400, blthickness*100
 delta0block0, delta1block0 = str(delta0block0m) + '/(block0np0-1)', str(delta1block0m) + '/(block0np1-1)'
+
+
+# # Mach 6.0 non-catalytic wall case -- N2 ----------------------------------------------------------------------------------------------
+# Re, xMach, Tinf, Twall, Sc = 950.0, 6.0, 288.0, 288.0*6.868697232381297, 1.0
+# cN2, cN, cO2, cO, cNO = 1.0, 0.00, 0.0, 0.0, 0.0
+# adiabatic_condition, catalytic_condition = True, True
+# sigOtoNe = (2.0*cO2/MO2+cO/MO+cNO/MNO)/(2.0*cN2/MN2+cN/MN+cNO/MNO)
+# MN2, MN, MO2, MO, MNO = 28.0, 14.0, 32.0, 16.0, 30.0 # molar mass
+# pref, rhoref, uref, blthickness = 100.0, 0.0011693374333644712, 2075.9590553653807, 0.007037143221907268
+
+# delta0block0m, delta1block0m = blthickness*400, blthickness*100
+# delta0block0, delta1block0 = str(delta0block0m) + '/(block0np0-1)', str(delta1block0m) + '/(block0np1-1)'
+
 
 ## Ensure the grid size passed to the initialisation routine matches the grid sizes used in the simulation parameters
 polynomial_directions = [(False, DataObject('x0')), (True, DataObject('x1'))]
@@ -179,7 +198,13 @@ metriceq =  MetricsEquation()
 metriceq.generate_transformations(ndim, coordinate_symbol, [(False, False), (True, False)], 2)
 simulation_eq.apply_metrics(metriceq)
 
-# Create a schemes dictionary to be used for discretisation
+
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# create a schemes dictionary to be used for discretisation																													
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 schemes = {}
 # low storage
 fns = 'u0 u1 T'
@@ -189,23 +214,27 @@ schemes[cent.name] = cent
 rk = RungeKutta(3)
 schemes[rk.name] = rk
 
-# Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# boundary conditions																													
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 boundaries = []
-direction=0
-# boundaries += [DirichletBC(0, 0, initial_equations)]
-# boundaries += [InletPressureExtrapolateBC(0, 0, scheme=ReducedAccess())]
 
 boundaries += [InletTransferBC(0, 0, scheme=Carpenter())]
 boundaries += [ExtrapolationBC(0, 1, order=0, scheme=Carpenter())]
-
-direction=1
-boundaries += [catalyticWallBC(1, 0, scheme=Carpenter())]
-
+boundaries += [nonCatalyticIsothermalWallBC(1,0, scheme=Carpenter())]
 boundaries += [ZeroGradientOutletBC(1, 1)]
 
 block.set_block_boundaries(boundaries)
 
-# set the IO class to write out arrays
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# read/write definitions and output arrays																												
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=1000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays + [x, y])
@@ -237,6 +266,12 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg) # ,OPS_V2=True
 
 
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# define constants, in line with intialisation above																												
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 # mixlayer conditions
 physical_constants = ['Re', 'Sc', 'uref', 'pref', 'rhoref', 'pexp', 'Twall', 'Twn']
 physical_values = ['1.0', str(Sc), str(uref), str(pref), str(rhoref), '0.0', str(Twall), '0.0']
@@ -253,7 +288,7 @@ physical_values    = [  str(cN2), str(cN), str(cO2), str(cO), str(cNO), str(sigO
 substitute_simulation_parameters(concentration_data, physical_values)
 
 numerical_constants= ['dt', 'niter', 'block0np0', 'block0np1', 'Delta0block0', 'Delta1block0', 'Lx1', 'by']
-numerical_values=['1e-9', '4000000', '875', '250', delta0block0, delta1block0, str(delta1block0m), '5.0']
+numerical_values=['1e-9', '4000000', '500', '250', delta0block0, delta1block0, str(delta1block0m), '5.0']
 
 substitute_simulation_parameters(numerical_constants, numerical_values)
 

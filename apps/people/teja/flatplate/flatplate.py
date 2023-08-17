@@ -8,10 +8,16 @@
 
 from opensbli import *
 import copy
-from opensbli.utilities.katzer_init import Initialise_Katzer
+from opensbli.utilities.flat_init import Initialise_Flatplate 
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 from sympy import sin, cos, sinh, tanh, exp, pi, log
 
+
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# define equations																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 
 ndim = 2
 
@@ -20,10 +26,6 @@ ndim = 2
 mass = "Eq(Der(rho, t), - Der(rhou_j, x_j))"
 
 # Feiereisen quadratic skew-symmetric momentum
-# TODO add the refernece paper
-# we expand convective and viscous parts separately and add them later
-# this demonstrates how OpenSBLI equations can be used to build equations
-
 QSSFm = "(1/2) * (Conservative(rhou_i*u_j, x_j) + rhou_j* Der(u_i,x_j) + u_i * Der(rhou_j,x_j))"
 momentum = "Eq(Der(rhou_i, t), - Der(p, x_i) + Der(tau_i_j, x_j) - KD(_i,_j)*c_j )"
 
@@ -86,51 +88,31 @@ for eqn in constituent_eqns:
 simulation_eq.apply_metrics(metriceq)
 
 
-
-# # Adaptive TENO with modified Ducros sensor
-# SS = ShockSensor()
-# shock_sensor, sensor_array = SS.ducros_equations(block, coordinate_symbol, metriceq)
-# # Add shock Ducros sensor to constituent relations
-# constituent.add_equations(shock_sensor)
-# store_sensor = True
-# teno_order = 5
-# Avg = RoeAverage([0, 1])
-# LLF = LLFTeno(teno_order, formulation='adaptive', averaging=Avg, sensor=sensor_array, store_sensor=True)
-# schemes = {}
-# schemes[LLF.name] = LLF
-# # cent = Central(4)
-# fns = 'u0 u1 u2 T'
-# cent = StoreSome(4, fns)
-# schemes[cent.name] = cent
-# rk = RungeKuttaLS(3, formulation='SSP')
-# schemes[rk.name] = rk
-# block.set_discretisation_schemes(schemes)
-
-# # STEP 3
-# # Create the dictionary of schemes
-# schemes = {}
-# # Central scheme for spatial discretisation and add to the schemes dictionary
-# cent = Central(4)
-# schemes[cent.name] = cent
-# # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-# rk = RungeKuttaLS(3)
-# schemes[rk.name] = rk
-# # Set the discretisation schemes to be used (a python dictionary)
-# block.set_discretisation_schemes(schemes)
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# assign central scheme																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
-# fns = 'u0 u1 T'
-# cent = StoreSome(4, fns)
-cent = Central(4)
+fns = 'u0 u1 T'
+cent = StoreSome(4, fns)
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 # Set the discretisation schemes to be used (a python dictionary)
 block.set_discretisation_schemes(schemes)
+
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# boundary conditions																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 
 
 local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
@@ -170,9 +152,15 @@ boundaries[direction][side] = ZeroGradientOutletBC(1, 1)
 
 block.set_block_boundaries(boundaries)
 
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# initial condition																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 # Perform initial condition
-# Reynolds number, Mach number and free-stream temperature for the initial profile
-Re, xMach, Tinf = 950.0, 2.0, 288.0
+# Reynolds number, Mach number and free-stream temperature for the initial profile, additional Twall added
+Re, xMach, Tinf, Twall = 950.0, 2.0, 288.0, 1.67619431
 ## Ensure the grid size passed to the initialisation routine matches the grid sizes used in the simulation parameters
 polynomial_directions = [(False, DataObject('x0')), (True, DataObject('x1'))]
 n_poly_coefficients = 50
@@ -182,39 +170,18 @@ for con in grid_const:
 gridx0 = parse_expr("Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])", local_dict=local_dict)
 gridx1 = parse_expr("Eq(DataObject(x1), Lx1*sinh(by*block.deltas[1]*block.grid_indexes[1]/Lx1)/sinh(by))", local_dict=local_dict)
 coordinate_evaluation = [gridx0, gridx1]
-initial = Initialise_Katzer(polynomial_directions, n_poly_coefficients,  Re, xMach, Tinf, coordinate_evaluation)
 
-# # initial conditions
-# dx, dy = block.deltas
-# x, y = symbols('x0:%d' % ndim, **{'cls': DataObject})
-# i, j = block.grid_indexes
-# nx, ny, Lx1, by = symbols('block0np0 block0np1 Lx1 by', **{'cls': ConstantObject}) 
-# Lx=nx*dx
-# q_vector=flatten(simulation_eq.time_advance_arrays)
-# grid_equations= []
-# # stretch_eqn=0.5*Ly*sinh(stretch*(j-(ny-1)/2)/((ny-1)/2))/sinh(stretch)
-# stretch_eqn=Lx1*sinh(by*dy*j/Lx1)/sinh(by)
+# Isothermal wall with a specified wall temperature (works for a larger range),
+# initial = Initialise_Flatplate(polynomial_directions, n_poly_coefficients, Re, xMach, Tinf, Twall=Twall, adiabaticwall_condition=True, coordinate_evaluations=coordinate_evaluation)
 
-# grid_equations += [Eq(x, i*dx), Eq(y,stretch_eqn)]
+# Adiabtic wall, the code produce default conditions for an adiabatic wall.
+initial = Initialise_Flatplate(polynomial_directions, n_poly_coefficients, Re, xMach, Tinf, coordinate_evaluations=coordinate_evaluation)
 
-
-# # Initial conditions as strings
-# u0 = "Eq(GridVariable(u0), 1.0)" # need to find a way to update these. 
-# u1 = "Eq(GridVariable(u1), 0.0,)"
-# p = "Eq(GridVariable(p), 1/(gama*Minf*Minf))"
-# r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
-
-# rho = "Eq(DataObject(rho), r)"
-# rhou0 = "Eq(DataObject(rhou0), r*u0)"
-# rhou1 = "Eq(DataObject(rhou1), r*u1)"
-# rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2))"
-
-# eqns = [u0, u1, p, r, rho, rhou0, rhou1, rhoE]
-
-# initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
-# initial = GridBasedInitialisation()
-# initial.add_equations(grid_equations + initial_equations)
-
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# read/write options																														
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
 
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=1000000, **kwargs)
@@ -228,19 +195,25 @@ j = block.grid_indexes[1]
 grid_condition = j >= 169
 F = BinomialFilter(block, order=10, grid_condition=grid_condition)
 
-# # Set equations on the block and discretise
+# Set equations on the block and discretise
 block.set_equations([constituent, simulation_eq, initial, metriceq])
-# # Set the equations to be solved on the block
-# block.set_equations([constituent, simulation_eq, initial, metriceq] + F.equation_classes)# + SFD.equation_classes)
 block.discretise()
 
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Substitute simulation parameter values
+
+# --------------------------------------------------------------------------------------------------------------------------------------------
+#																																			
+# define consstants
+#                   Note: str(xMach), str(Twall), str(Re) and str(Tinf) staying consistent with the definitions above																														#
+#																																			
+# --------------------------------------------------------------------------------------------------------------------------------------------
+
 constants = ['gama', 'Minf', 'Pr', 'Re', 'Twall', 'dt', 'niter', 'block0np0', 'block0np1',
                  'Delta0block0', 'Delta1block0', 'SuthT', 'RefT', 'eps', 'Lx1', 'by', 'epsilon']
-values = ['1.4', '2.0', '0.72', '950.0', '1.67619431', '0.04', '25000000', '500', '250',
-              '400.0/(block0np0-1)', '115.0/(block0np1-1)', '110.4', '288.0', '1e-15', '115.0', '5.0', '1.0e-30']
+values = ['1.4', str(xMach), '0.72', str(Re), str(Twall), '0.04', '25000000', '500', '250',
+              '400.0/(block0np0-1)', '115.0/(block0np1-1)', '110.4', str(Tinf), '1e-15', '115.0', '5.0', '1.0e-30']
 substitute_simulation_parameters(constants, values)
-print_iteration_ops(NaN_check='rho')
+print_iteration_ops(NaN_check='rho', every=1000)

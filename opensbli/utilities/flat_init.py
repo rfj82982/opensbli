@@ -232,7 +232,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
     :arg int n_coeffs: Desired number of coefficients for the polynomial fit.
     :arg float Re: Reynolds number.
     :arg float xMach: Free-stream Mach number"""
-    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall, Adiabatic_condition, coordinate_evaluations=None):
+    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall=1.0, adiabaticwall_condition=True, coordinate_evaluations=None):
         ret = super(Initialise_Flatplate, cls).__new__(cls)
         print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f. T_wall = %f. " % (Re, xMach, Tinf, Twall))
         ret.coordinates = [x[1] for x in bl_directions]
@@ -244,7 +244,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
         ret.equations = []
         ret.xMach = ret.find_constant_values([xMach])[0]
         ret.Twall = ret.find_constant_values([Twall])[0]
-        ret.Adiabatic_condition = ret.find_constant_values([Adiabatic_condition])[0]
+        ret.Adiabatic_condition = ret.find_constant_values([adiabaticwall_condition])[0]
         return ret
 
     def find_constant_values(self, input):
