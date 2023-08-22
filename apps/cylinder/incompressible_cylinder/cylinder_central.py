@@ -141,7 +141,7 @@ h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([h5, h5_read])
 
 # Add SFD filtering
-SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75)
+SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75, formulation='reset_f')
 j = block.grid_indexes[1]
 grid_condition = j >= 169
 F = BinomialFilter(block, order=10, grid_condition=grid_condition)

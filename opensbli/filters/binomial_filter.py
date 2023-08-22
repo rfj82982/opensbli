@@ -44,7 +44,7 @@ class BinomialFilter(object):
         N = self.order
         self.weights = [binomial(N, i)/2.0**N for i in range(N + 1)]
         self.locations = [i for i in range(-int(N/2.0), int(N/2.0)+1)]
-        print("Using a binomial filter of order %d for block %d." % (N, self.filter_no))
+        print("Using a binomial boundary filter of order %d for block %d." % (N, self.filter_no))
         return
 
     def create_stencil(self, block, q, direction):

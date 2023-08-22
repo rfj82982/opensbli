@@ -357,9 +357,9 @@ class TraditionalAlgorithmRK(object):
             # TODO V2 import Double datatype
             self.dtype = "double"
 
-        for name in blocks[0].block_kernel_names:
-            print(name)
-        # exit()
+        # for name in blocks[0].block_kernel_names:
+        #     print(name)
+        # # exit()
         self.check_temporal_scheme(blocks)
         self.prg = MainPrg()
         self.add_block_names(blocks)
