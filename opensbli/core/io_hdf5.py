@@ -57,7 +57,7 @@ class iohdf5(opensbliIO):
             cls.save_every = None
         # HDF5 timing switch
         HDF5_timer = ConstantObject('HDF5_timing', integer=True)
-        HDF5_timer.value = 1
+        HDF5_timer.value = 0 # no timing of I/O by default
         HDF5_timer.datatype = Int()
         CTD.add_constant(HDF5_timer)
 

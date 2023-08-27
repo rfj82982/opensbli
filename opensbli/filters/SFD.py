@@ -10,6 +10,7 @@ vfilt: filtered solution
 v : conservative variables
 
 Ported to OpenSBLI (D.Lusher 05/2020). Original version by Dr. Andrea Sansica.
+Updated with periodic reset function (D. Lusher 08/2023).
 --------------------------------------------------------------------------------------------
 Some notes:
     initialize vfilt = v at the first time iteration
@@ -125,7 +126,6 @@ class SFD(object):
             reset_equations = self.reset_f()
         elif self.formulation == 'reset_q':
             reset_equations = self.reset_q()
-        pprint(reset_equations)
         # Create the conditional expression based on the reset frequency
         cond1 = ExprCondPair(reset_equations, check)
         cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)

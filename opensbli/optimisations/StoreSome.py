@@ -14,7 +14,7 @@ class StoreSome(Central):
     """ Low-storage algorithms to reduce memory intensity and the number of global storage arrays.
         S.P. Jammy et al. Journal of Computational Science. Vol 36, September 2019 10.015."""
 
-    def __init__(self, order, der_fns_to_store, merged=False, group_stored=False, level=1):
+    def __init__(self, order, der_fns_to_store, merged=True, group_stored=False, level=1):
         """ Set up the scheme.
         :arg int order: The order of accuracy of the scheme."""
         Central.__init__(self, order)
@@ -95,8 +95,8 @@ class StoreSome(Central):
             self.update_range_of_constituent_relations(der, block)
             v = der
             expr = OpenSBLIEq(v.work, v._discretise_derivative(self, block))
-            # if self.merged: # combine the branch conditions
-            #     expr = self.merge_conditionals([expr], block)
+            if self.merged: # combine the branch conditions
+                expr = self.merge_conditionals([expr], block)
             ker.add_equation(expr)
             ker.set_grid_range(block)
             self.local_kernels[v] = ker
@@ -314,7 +314,9 @@ class StoreSome(Central):
                         gv = GridVariable('d2_%s_d%s' % (var_name, directions[der.args[1].direction]))
                     else:
                         raise ValueError("Only first and second derivatives are supported in StoreSome.")
-                    assert str(gv) not in names # no repeated grid variable names
+                    if str(gv) in names:
+                        print("WARNING: Duplicated derivative {} in StoreSome due to using old Skew operator.".format(str(gv)))
+                    # assert str(gv) not in names # no repeated grid variable names
                     names.append(str(gv))
                     # Evaluate the expression and assign to the local grid variable
                     grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
@@ -325,7 +327,6 @@ class StoreSome(Central):
             return grid_variable_evaluations+discrete_equations
         else:
             return None
-
 
     def generate_name(self, der, block, identity):
         # Make a name for the local derivative evaluation

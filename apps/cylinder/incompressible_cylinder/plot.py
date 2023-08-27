@@ -44,11 +44,9 @@ class plotFunctions(object):
         d_m = group["%s" % (dataset)].attrs['d_m']
         size = group["%s" % (dataset)].shape
         read_start = [abs(d) for d in d_m]
-        read_end = [s-abs(d) for d, s in zip(d_m, size)]
+        read_end = [s-abs(d) for d, s in zip(d_m, size)] # include the interface line in the plot
         if len(read_end) == 2:
-            read_data = group["%s" % (dataset)].value[read_start[0]:read_end[0], read_start[1]:read_end[1]]
-        elif len(read_end) == 3:
-            read_data = group["%s" % (dataset)].value[read_start[0]:read_end[0], read_start[1]:read_end[1], read_start[2]:read_end[2]]
+            read_data = group["%s" % (dataset)][read_start[0]:read_end[0], read_start[1]:read_end[1]+1]
         else:
             raise NotImplementedError("")
         return read_data
@@ -86,6 +84,7 @@ class Plot(plotFunctions):
             levels = numpy.linspace(min_val, max_val, n_levels)
             fig = plt.figure()
             self.contour_local(fig, levels, "%s" % name, var)
+            plt.show()
             plt.savefig(directory + "output_%s.pdf" % name, bbox_inches='tight')
             plt.clf()
         f.close()

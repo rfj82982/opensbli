@@ -11,31 +11,30 @@ simulation_parameters = {
 'Minf'		:	'0.1',
 'Pr'		:	'0.71',
 'dt'		:	'0.0001',
-'niter'		:	'1000000',
-'block0np0'		:	'357',
-'block0np1'		:	'179',
+'niter'		:	'3000000',
+'block0np0'		:	'360',
+'block0np1'		:	'380',
 'Delta0block0'		:	'M_PI/(block0np0)',
-'Delta1block0'		:	'120.0/(block0np1-1)',
+'Delta1block0'		:	'100.0/(block0np1-1)',
 'Twall'		:	'1.0',
 }
 
 # Problem dimension
 ndim = 2
-# Define the compresible Navier-Stokes equations in Einstein notation, by default the scheme is Central no need to
-mass = "Eq(Der(rho,t), - Skew(rho*u_j,x_j))"
-momentum = "Eq(Der(rhou_i,t) , - Skew(rhou_i*u_j, x_j) - Der(p,x_i)  + Der(tau_i_j,x_j))"
-energy = "Eq(Der(rhoE,t), - Skew(rhoE*u_j,x_j) - Conservative(p*u_j,x_j) + Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j))"
-
-# Substitutions used in the equations
-stress_tensor = "Eq(tau_i_j, (1.0/Re)*(Der(u_i,x_j)+ Der(u_j,x_i)- (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
-heat_flux = "Eq(q_j, (1.0/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
-
-substitutions = [stress_tensor, heat_flux]
 # Constants that are used
 constants = ["Re", "Pr", "gama", "Minf", "mu"]
 
 # symbol for the coordinate system in the equations
 coordinate_symbol = "x"
+conservative = True
+NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant', debug=False)
+
+mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+# Expand the simulation equations, for this create a simulation equations class
+simulation_eq = SimulationEquations()
+simulation_eq.add_equations(mass)
+simulation_eq.add_equations(momentum)
+simulation_eq.add_equations(energy)
 
 # Constituent relations used in the system
 velocity = "Eq(u_i, rhou_i/rho)"
@@ -45,29 +44,16 @@ temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 # Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
 einstein_eq = EinsteinEquation()
 
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-
-# Expand mass and add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(mass, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand momentum add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-# Expand energy equation add the expanded equations to the simulation equations
-eqns = einstein_eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
-simulation_eq.add_equations(eqns)
-
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
 # Expand momentum add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Expand pressure add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 # Expand temperature add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, substitutions, constants)
+eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 metriceq = MetricsEquation()
@@ -103,8 +89,8 @@ schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
 # Low storage optimisation for the central scheme
 fns = 'u0 u1 T'
-# cent = StoreSome(4, fns)
-cent = Central(4)
+cent = StoreSome(4, fns)
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
 rk = RungeKuttaLS(3)
@@ -132,7 +118,7 @@ block.set_block_boundaries(boundaries)
 
 # Set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=1000, **kwargs)
+h5 = iohdf5(save_every=50000, **kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0'), DataObject('x1')])
 kwargs = {'iotype': "Read"}
@@ -141,9 +127,9 @@ h5_read.add_arrays([DataObject('x0'), DataObject('x1')])
 block.setio([h5, h5_read])
 
 # Add SFD filtering
-SFD = SFD(block, chifilt=0.1, omegafilt=1.0/0.75, formulation='reset_f')
+SFD = SFD(block, chifilt=0.25, omegafilt=0.2*pi, formulation='standard')
 j = block.grid_indexes[1]
-grid_condition = j >= 169
+grid_condition = j >= 360
 F = BinomialFilter(block, order=10, grid_condition=grid_condition)
 
 # Set the equations to be solved on the block
@@ -156,8 +142,8 @@ block.discretise()
 
 arrays = ['u1', 'u1', 'u1', 'u1', 'u1', 'u1', 'u1']
 arrays = [block.location_dataset('%s' % dset) for dset in arrays]
-indices = [(178, 45), (178, 72), (178, 96), (178, 118), (178, 139), (178, 160), (178, 176)]
-SM = SimulationMonitor(arrays, indices, block, print_frequency=250, fp_precision=12, output_file='output.log')
+indices = [(0, 45), (0, 72), (0, 96), (0, 118), (0, 139), (0, 160), (0, 176)]
+SM = SimulationMonitor(arrays, indices, block, print_frequency=250, fp_precision=12, output_file='cylinder_probes.log')
 alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
 
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
