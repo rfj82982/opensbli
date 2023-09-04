@@ -13,12 +13,11 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=10, optimized=False, sigma=0.3333333, wall_control=False, airfoil=True, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.3333333, airfoil=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
         self.depth = int(width/2.0)
-        self.wall_control = wall_control
         self.ndim = block.ndim
         self.block = block
         self.filter_directions = filter_directions
@@ -146,15 +145,13 @@ class ExplicitFilter(object):
     def create_stencil(self, direction):
         """ Indexes the datasets based on the width of the filter stencil."""
         output = []
-        # Spatially control the strength to reduce filter in the boundary-layer
-        st = GridVariable('strength')
-        error_indicator = ConstantObject('error_indicator')
-        error_indicator.value = 0.5
-        CTD.add_constant(error_indicator)
-        cases = []
         # Create conditions for adaptive filtering strength
-        # Apply filtering if needed over the entire [-5, 5] range in this direction
         if self.airfoil: # Targeted adaptive filter for airfoil buffet cases
+        # Spatially control the strength to reduce filter in the boundary-layer
+            st = GridVariable('strength')
+            error_indicator = ConstantObject('error_indicator')
+            error_indicator.value = 0.5
+            CTD.add_constant(error_indicator)
             locations = self.locations
             fmax = increment_dataset(self.Ren, direction, locations[0])
             for loc in locations[1:]:
@@ -165,6 +162,9 @@ class ExplicitFilter(object):
             inner2 = ExprCondPair(0.01, True)
             inner_pw = OpenSBLIEq(st, Piecewise(*[inner1, inner2]))
             output += [GroupedPiecewise(ExprCondPair(inner_pw, Equality(self.filter_mask, 0)), ExprCondPair(OpenSBLIEq(st, 1.0), True))]
+        else:
+            # Regular application
+            st = 1
 
         if self.filter_type == 'DRP':
             for dset_id, dset in enumerate(self.q_vector):
@@ -240,7 +240,6 @@ class ExplicitFilter(object):
         # Pressure gradient sensor for targeted filtering
         SS = ShockSensor()
         output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
-        # output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
         Ren_output = output_eqns[-1].rhs
         self.Ren = block.location_dataset('Ren_sensor')
         output_eqns = [OpenSBLIEq(self.Ren, Ren_output)]
@@ -312,8 +311,7 @@ class ExplicitFilter(object):
             self.equation_classes += [mask_UDF, error_UDF]
 
         # Check for non-periodic boundaries
-        if self.wall_control:
-            self.detect_wall_boundaries()
+        self.detect_wall_boundaries()
         # Create a kernel at the end of the time loop, every iteration (no frequency)
         start_number = block.blocknumber*10 + self.nblocks
         for direction in self.filter_directions:
