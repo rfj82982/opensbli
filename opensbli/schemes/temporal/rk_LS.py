@@ -69,7 +69,7 @@ class RungeKuttaLS(Scheme):
         cls.stage_coeffs = ConstantIndexed('rkA', cls.stage)
         cls.niter_symbol = ConstantObject('niter', integer=True)
         cls.niter_symbol.datatype = Int()
-        cls.iteration_number = Globalvariable("iter", force_int=True, integer=True)
+        cls.iteration_number = Globalvariable("iter", integer=True)
         cls.iteration_number._value = None
         cls.iteration_number.datatype = Int()
         # As iteration number is used in a for loop we dont add them to constants to declare
@@ -79,7 +79,7 @@ class RungeKuttaLS(Scheme):
         # Variables to hold the simulation time and starting iteration
         cls.start_time = ConstantObject('simulation_time', restart=True)
         cls.start_time.value = 0.0
-        cls.start_iter = ConstantObject('start_iter', integer=True, restart=True)
+        cls.start_iter = ConstantObject('start_iter', restart=True, integer=True)
         cls.start_iter.value = 0
         cls.start_iter.datatype = Int()
         cls.temporal_iteration.restart = cls.start_iter

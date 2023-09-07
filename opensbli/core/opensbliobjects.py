@@ -579,12 +579,13 @@ class Globalvariable(EinsteinTerm, GlobalValue):
 
     is_commutative = True
 
-    def __new__(cls, label, force_int=False, restart=False, **kwargs):
+    def __new__(cls, label, restart=False, **kwargs):
         ret = super(Globalvariable, cls).__new__(cls, label, **kwargs)
-        if force_int:
-            ret._datatype = Int()
-        else:
-            ret._datatype = SimulationDataType()
+        if 'integer' in kwargs:
+            if kwargs['integer']:
+                ret._datatype = Int()
+            else:
+                ret._datatype = SimulationDataType()
         ret.is_input = True
         ret._value = "Input"
         ret.restart = restart
