@@ -160,12 +160,9 @@ class iohdf5(opensbliIO):
         # Constants to always write to HDF5
         code += ['ops_write_const_hdf5(\"iter\", 1, \"int\", (char*)&iter, %s);' % ("filename")]
         code += ['}\n\n']
-        const_file = open('constants.h', 'w')
+        const_file = open('io.h', 'w')
         const_file.write('\n'.join(flatten(code)))
         const_file.close()
-        io_file = open('io.h', 'w')
-        io_file.write('#include "constants.h"\n\n')
-        io_file.close()
         return
 
     def hdf5write_opsc_code(cls):

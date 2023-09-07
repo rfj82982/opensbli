@@ -388,7 +388,7 @@ class OPSC(object):
             elif str(key) == 'iter': # current iteration counter
                 code += ['const int *%s' % key]
             elif isinstance(key, ReductionVariable):
-                if key.intent == 'OPS_INC': # summation reduction variables
+                if key.reduction_type == 'OPS_INC': # summation reduction variables
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
                 elif val == 'input':
                     code += ['const %s *%s' % (key.datatype.opsc(), key)]
@@ -532,23 +532,27 @@ class OPSC(object):
 
     def before_main(self, algorithm):
         """ Adds the required preamble to the main opensbli.cpp file and declares the simulation constants."""
-        out = ['#include <stdlib.h> \n#include <string.h> \n#include <math.h>']
+        out = ['#include <stdlib.h> \n#include <string.h> \n#include <math.h> \n#include <constants.h>' ]
         from opensbli.core.kernel import ConstantsToDeclare
         # Declare a restart flag and loop variables globally
-        out += ["%s %s;" % ('int', 'restart')]
-        out += ["%s %s;" % ('int', 'iter')]
-        out += ["%s %s;" % ('int', 'stage')]
-        out += ["%s %s;" % ('double', 'tstart')]
+        constant_declarations = ["%s %s;" % ('int', 'restart')]
+        constant_declarations += ["%s %s;" % ('int', 'iter')]
+        constant_declarations += ["%s %s;" % ('int', 'stage')]
+        constant_declarations += ["%s %s;" % ('double', 'tstart')]
 
+        # Write the constants to a separate file instead
         for d in sorted(ConstantsToDeclare.constants, key=lambda x: str(x)):
             if isinstance(d, ConstantObject):
-                out += ["%s %s;" % (d.datatype.opsc(), d)]
+                constant_declarations += ["%s %s;" % (d.datatype.opsc(), d)]
             elif isinstance(d, ConstantIndexed):
                 if not d.inline_array:
                     indices = ''
                     for s in d.shape:
                         indices = indices + '[%d]' % s
-                    out += ["%s %s%s;" % (d.datatype.opsc(), d.base.label, indices)]
+                    constant_declarations += ["%s %s%s;" % (d.datatype.opsc(), d.base.label, indices)]
+        const_file = open('constants.h', 'w')
+        const_file.write('\n'.join(flatten(constant_declarations)))
+        const_file.close()
         # Declare the simulation blocks
         for b in algorithm.block_descriptions:
             out += ['#define OPS_%dD' % b.ndim]
