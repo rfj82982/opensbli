@@ -6,7 +6,7 @@
 
 from sympy import flatten, Equality, pprint
 from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, ConstantObject,\
-    GlobalValue, GroupedPiecewise, Constant, ReductionVariable
+    GlobalValue, GroupedPiecewise, Constant, ReductionVariable, DataSetBase, Globalvariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.grid import Grididx
 from opensbli.core.datatypes import SimulationDataType
@@ -292,11 +292,19 @@ class Kernel(object):
         inouts = ins.intersection(outs)
         ins = ins.difference(inouts)
         outs = outs.difference(inouts)
+        # Add global variables
+        if self.global_variables:
+            # We need to write the size of an array for global indexed
+            global_ins, global_outs = self.global_variables
+            ins = (*ins, *global_ins)
+            outs = (*outs, *global_outs)
         # Check for any reduction variables in the kernel
         rvs_in = self.rhs_reduction_variables
-        # rvs_in = rvs_in.intersection(rvs_in)
         rvs_out = self.lhs_reduction_variables
-        # rvs_out = rvs_out.intersection(rvs_out)
+        # Add Reduction variables
+        ins = (*ins, *rvs_in)
+        outs = (*outs, *rvs_out)
+
         if len(self.equations) == 0:
             raise ValueError("Kernel %s does not have any equations." % self.computation_name)
         range_of_eval = self.total_range()
@@ -307,38 +315,48 @@ class Kernel(object):
         # TODO check the dtype from the dataset
         sim_dtype = SimulationDataType.opsc()
         code += ['ops_par_loop(%s, \"%s\", %s, %s, %s' % (name, self.computation_name, block_name, self.ndim, iter_name)]
+        # Step 1: Input quantities
         for i in sorted(ins, key=lambda x: str(x)):
-            code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]  # WARNING dtype
+            if isinstance(i, ReductionVariable):
+                if i.intent != 'OPS_INC': # summation reduction variables are not an input
+                    code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
+            elif isinstance(i, DataSetBase):
+                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
+            elif isinstance(i, Globalvariable):
+                code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (i, 1, i.datatype.opsc(), self.opsc_access['ins'])]
+            # elif isinstance(i, ConstantIndexed):
+            #     code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (i, 1, sim_dtype, self.opsc_access['ins'])]
+            else:
+                raise ValueError("Found unknown datatype {} in kernel inputs.".format(i))
+        # Step 2: Output quantities
         for o in sorted(outs, key=lambda x: str(x)):
-            code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]  # WARNING dtype
+            if isinstance(o, ReductionVariable):
+                code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (o, 1, sim_dtype, o.intent)]
+            elif isinstance(o, DataSetBase):
+                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]
+            elif isinstance(o, Globalvariable):
+                code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (o, 1, o.datatype.opsc(), self.opsc_access['outs'])]
+            else:
+                raise ValueError("Found unknown datatype {} in kernel outputs.".format(o))
+        # Step 3: Input & Output quantities
         for io in sorted(inouts, key=lambda x: str(x)):
-            code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], sim_dtype, self.opsc_access['inouts'])]  # WARNING dtype
+            # Only DataSets are Read/Write
+            code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], sim_dtype, self.opsc_access['inouts'])]
+
+        # Add indexed constants (e.g. rkA, rkB)
         if self.IndexedConstants:
             for c in sorted(self.IndexedConstants, key=lambda x: str(x)):
                 code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (c, 1, sim_dtype, self.opsc_access['ins'])]
-        if self.global_variables:
-            # We need to write the size of an array for global indexed
-            global_ins, global_outs = self.global_variables
-            if global_ins.intersection(global_outs):
-                raise NotImplementedError("Input output of global variables is not implemented")
-            for c in sorted(global_ins, key=lambda x: str(x)):
-                code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (c, 1, c.datatype.opsc(), self.opsc_access['ins'])]
-            for c in sorted(global_outs, key=lambda x: str(x)):
-                code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (c, 1, c.datatype.opsc(), self.opsc_access['outs'])]
+
+        # i,j,k identifier in OPS
         if self.grid_indices_used:
             code += ["ops_arg_idx()"]
-        # Add any reduction variables
-        for r in sorted(rvs_out, key=lambda x: str(x)):
-            code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, r.intent)]
-        for r in sorted(rvs_in, key=lambda x: str(x)):
-            if r.intent != 'OPS_INC': # summation reduction variables are not an input
-                code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (r, 1, sim_dtype, 'OPS_READ')]
-        code = [',\n'.join(code) + ');\n\n']  # WARNING dtype
 
+        code = [',\n'.join(code) + ');\n\n']
         # Write out the reduction result if required
         if len(rvs_out) > 0:
             for r in rvs_out:
-                code = code = [',\n\n\n'.join(code) + 'ops_reduction_result(%s, &%s);\n' % (str(r), r.value)]
+                code += ['ops_reduction_result(%s, &%s);\n' % (str(r), r.value)]
         code = iter_name_code + code
         return code
 

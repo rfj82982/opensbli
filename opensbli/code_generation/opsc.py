@@ -435,7 +435,6 @@ class OPSC(object):
             other_inputs += ", const int *idx"  # WARNING hard coded here
         else:
             other_inputs = ''
-        # print header_dictionary
         code = ["void %s(" % kernel.kernelname + self.kernel_header(header_dictionary, idx_constants) + other_inputs + ')' + '\n{']
         ops_accs = [OPSAccess(no) for no in range(len(all_dataset_inps))]
         OPSCCodePrinter.dataset_accs_dictionary = dict(zip(all_dataset_inps, ops_accs))
