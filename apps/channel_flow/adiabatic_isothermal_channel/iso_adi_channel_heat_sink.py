@@ -122,10 +122,11 @@ boundaries += [PeriodicBC(direction, side=0, halos=[-2,2])]
 boundaries += [PeriodicBC(direction, side=1, halos=[-2,2])]
 # Isothermal wall in x1 direction
 Twall = ConstantObject("Twall")
-wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
-lower_wall_eq = wall_energy[:]
+# wall_energy = [Eq(q_vector[-1], Twall*q_vector[0] / (gama * Minf**2.0 * (gama - S.One)))]
+# lower_wall_eq = wall_energy[:]
 direction = 1
-boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
+# boundaries += [IsothermalWallBC(direction, 0, lower_wall_eq)]
+boundaries += [IsothermalWall_ZeroPressureGradBC(direction, 0, None)]
 # Side 1 (top) boundary
 boundaries += [AdiabaticWall_CarpenterBC(direction, 1)]
 # Periodic boundaries in x2 direction
@@ -200,7 +201,7 @@ simulation_eq.apply_metrics(metriceq)
 block.set_equations([constituent, simulation_eq, initial, metriceq] + stat_equation_classes)
 
 # Dispersion relation preserving filters
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.1, wall_control=True, airfoil=False, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=False, sigma=0.1, airfoil=False, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # STEP 3
@@ -245,7 +246,7 @@ def create_exchange_calls_codes(block, dsets):
     arrays = [block.location_dataset(a) for a in flatten(dsets)]
     for direction in [0,2]:
         for side in [0,1]:
-            BC = PeriodicBC(direction, side, full_depth=True)
+            BC = PeriodicBC(direction, side, halos=[-5, 5], full_depth=True)
             kernels += [BC.apply(arrays, block)]
     return kernels
 
@@ -282,4 +283,4 @@ OPSC(alg, OPS_V2=True)
 # STEP 10
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
-print_iteration_ops()
+print_iteration_ops(NaN_check='rho')
