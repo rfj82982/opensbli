@@ -128,31 +128,19 @@ class Constant(object):
 
 
 class ReductionVariable(EinsteinTerm, Constant):
-    """A constant object which can have Einstein indices to be expanded. This is used to
-    differentiate between different Einstein terms, which are used in differentiation.
-
-    **Used during parsing and Einstein expansion process**
+    """Base class for ReductionVariables, to perform OPS reduction operations.
 
     :param str label: name of the constant object
     :returns: declared constant
     :rtype: ReductionVariable """
     is_commutative = True
 
-    def __new__(cls, label, intent, **kwargs):
+    def __new__(cls, label, **kwargs):
         ret = super(ReductionVariable, cls).__new__(cls, label, **kwargs)
         ret.is_constant = True
         ret.is_input = True
-        if intent == 'max':
-            ret.intent = 'OPS_MAX'
-        elif intent == 'min':
-            ret.intent = 'OPS_MIN'
-        elif intent == 'sum':
-            ret.intent = 'OPS_INC'
-        else:
-            raise ValueError("Reduction variables require an intent: min, max, or sum.")
         ret._datatype = SimulationDataType()
         ret.value = '%s_out' % str(label)
-        # ret.usage = None
         return ret
 
     def __hash__(self):
@@ -165,22 +153,65 @@ class ReductionVariable(EinsteinTerm, Constant):
 
     @property
     def datatype(self):
-        """Numeric datatype of the ReductionVariable.
-
-        :returns: Numerical datatype (see :class:`.SimulationDataType`)
-        :rtype: str """
         return self._datatype
 
     @datatype.setter
     def datatype(self, dtype):
-        """Set the data type of the ReductionVariable."""
+        """Set the type of the ReductionVariable."""
         self._datatype = dtype
 
-    # @property
-    # def usage(self):
-    #     """Input/output status of the ReductionVariable.
-    #     :rtype: str """
-    #     return self.usage
+
+class ReductionSum(ReductionVariable):
+    is_commutative = True
+
+    def __new__(cls, label, **kwargs):
+        ret = super(ReductionSum, cls).__new__(cls, label, **kwargs)
+        ret._reduction_type = 'OPS_INC'
+        return ret
+
+    @property
+    def reduction_type(self):
+        return self._reduction_type
+
+    @reduction_type.setter
+    def reduction_type(self, rtype):
+        """Set the type of the ReductionVariable."""
+        self._reduction_type = rtype
+
+
+class ReductionMax(ReductionVariable):
+    is_commutative = True
+
+    def __new__(cls, label, **kwargs):
+        ret = super(ReductionMax, cls).__new__(cls, label, **kwargs)
+        ret._reduction_type = 'OPS_MAX'
+        return ret
+
+    @property
+    def reduction_type(self):
+        return self._reduction_type
+
+    @reduction_type.setter
+    def reduction_type(self, rtype):
+        """Set the type of the ReductionVariable."""
+        self._reduction_type = rtype
+
+class ReductionMin(ReductionVariable):
+    is_commutative = True
+
+    def __new__(cls, label, **kwargs):
+        ret = super(ReductionMin, cls).__new__(cls, label, **kwargs)
+        ret._reduction_type = 'OPS_MIN'
+        return ret
+
+    @property
+    def reduction_type(self):
+        return self._reduction_type
+
+    @reduction_type.setter
+    def reduction_type(self, rtype):
+        """Set the data type of the ReductionVariable."""
+        self._reduction_type = rtype
 
 class ConstantObject(EinsteinTerm, Constant):
     """A constant object which can have Einstein indices to be expanded. This is used to

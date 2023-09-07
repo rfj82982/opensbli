@@ -6,7 +6,7 @@
 
 from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min, symbols, sqrt, And, Piecewise, pi, sin
 from sympy.core.numbers import Zero
-from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionVariable
+from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionMax
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel, ConstantsToDeclare
 from opensbli.core.grid import GridVariable as gv
@@ -414,7 +414,7 @@ class Characteristic(EigenSystem):
                 reduction_names = [name+'_minus'+'_max'+'_B%d' % block_no] + [name+'_max'+'_B%d' % block_no] + [name+'_plus'+'_max'+'_B%d' % block_no] 
             else:
                 reduction_names = [name+'_max'+'_B%d' % block_no for _ in range(block.ndim)] + [name+'_plus'+'_max'+'_B%d' % block_no] + [name+'_minus'+'_max'+'_B%d' % block_no]
-            reduction_vars = [ReductionVariable(x, 'max') for x in reduction_names]
+            reduction_vars = [ReductionMax(x) for x in reduction_names]
 
             symbolic_matrix = zeros(*(block.ndim+2, block.ndim+2))
             for i in range(block.ndim+2):

@@ -1,7 +1,7 @@
 """ Calculates the maximum of the residuals over the domain, to check convergence to a steady state."""
 
 from sympy import symbols, exp, pprint
-from opensbli.core.opensbliobjects import DataObject, ConstantObject, ReductionVariable
+from opensbli.core.opensbliobjects import DataObject, ConstantObject, ReductionSum
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation, SimulationEquations
 from opensbli.postprocess.post_process_eq import *
 from opensbli.core.kernel import ConstantsToDeclare as CTD
@@ -33,7 +33,7 @@ class ResidualMonitor(object):
                 no_residuals = len(eqn_class.equations) + 1
         reduction_dsets = [block.location_dataset('Residual%d' % (i)) for i in range(no_residuals)]
         reduction_names = ['L2_R%d' % i for i in range(no_residuals)]
-        reduction_vars = [ReductionVariable(x, 'sum') for x in reduction_names]
+        reduction_vars = [ReductionSum(x) for x in reduction_names]
         # Create reduction equations
         output_equations = [OpenSBLIEq(x, reduction_dsets[i]**2) for i, x in enumerate(reduction_vars)]
         filter_class.add_equations(output_equations)

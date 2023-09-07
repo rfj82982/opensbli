@@ -76,7 +76,7 @@ class MultiBlock():
         if len(initial_conditions.keys()) != self.nblocks:
             raise ValueError("Please specify the correct number of initial conditions for the number of blocks.")
         for b in self.blocks:
-            b.set_equations([copy.deepcopy(e) for e in initial_conditions[b.blocknumber]])
+            b.set_equations([copy.deepcopy(e) for e in [initial_conditions[b.blocknumber]]])
         return
     
     def discretise(self):

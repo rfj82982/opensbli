@@ -218,7 +218,7 @@ class Kernel(object):
         reductions_lhs = self.lhs_reduction_variables
         reductions_rhs = self.rhs_reduction_variables
         # # Remove summation reduction variables from the right-hand side as they are not an input
-        reductions_rhs = filter(lambda x:x.intent!='OPS_INC', reductions_rhs)
+        reductions_rhs = filter(lambda x:x.reduction_type!='OPS_INC', reductions_rhs)
         reductions_rhs = set(reductions_rhs)
         return reductions_rhs, reductions_lhs
     
@@ -318,7 +318,7 @@ class Kernel(object):
         # Step 1: Input quantities
         for i in sorted(ins, key=lambda x: str(x)):
             if isinstance(i, ReductionVariable):
-                if i.intent != 'OPS_INC': # summation reduction variables are not an input
+                if i.reduction_type != 'OPS_INC': # summation reduction variables are not an input
                     code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
             elif isinstance(i, DataSetBase):
                 code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
@@ -331,7 +331,7 @@ class Kernel(object):
         # Step 2: Output quantities
         for o in sorted(outs, key=lambda x: str(x)):
             if isinstance(o, ReductionVariable):
-                code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (o, 1, sim_dtype, o.intent)]
+                code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (o, 1, sim_dtype, o.reduction_type)]
             elif isinstance(o, DataSetBase):
                 code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]
             elif isinstance(o, Globalvariable):
@@ -352,11 +352,11 @@ class Kernel(object):
         if self.grid_indices_used:
             code += ["ops_arg_idx()"]
 
-        code = [',\n'.join(code) + ');\n\n']
+        code = [',\n'.join(code) + ');\n']
         # Write out the reduction result if required
         if len(rvs_out) > 0:
             for r in rvs_out:
-                code += ['ops_reduction_result(%s, &%s);\n' % (str(r), r.value)]
+                code += ['ops_reduction_result(%s, &%s);' % (str(r), r.value)]
         code = iter_name_code + code
         return code
 
