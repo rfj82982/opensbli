@@ -232,7 +232,7 @@ grid_condition = j >= 642
 BF = BinomialFilter(block, order=6, directions=[0,1,2], grid_condition=grid_condition, sigma=0.2)
 block.set_equations(BF.equation_classes)
 
-DRP = ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.333333, wall_control=True, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.333333, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing

@@ -139,7 +139,7 @@ block.setio(copy.deepcopy(h5))
 # set the equations to be solved on the block
 
 # Dispersion relation preserving filters
-DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
+DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, multi_block=None)
 block.set_equations(DRP.equation_classes)
 
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])

@@ -104,7 +104,7 @@ if add_random:
     kwargs = {'iotype': "Read"}
     h5_read = iohdf5(**kwargs)
     h5_read.add_arrays([DataObject('random_nums')])
-    block.setio([copy.deepcopy(h5), h5_read])
+    block.setio([h5_read])
     from opensbli.utilities.helperfunctions import output_hdf5
     # Change grid size here if desired
     npoints = [512, 512]

@@ -122,5 +122,5 @@ SimulationDataType.set_datatype(Double)
 OPSC(alg)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
-print_iteration_ops(NaN_check='rho_B0')
+print_iteration_ops(NaN_check='rho')
 

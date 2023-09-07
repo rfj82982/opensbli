@@ -146,7 +146,7 @@ initial_equations += [Eq(q_vector[2],rho*vpert)]
 initial_equations += [Eq(q_vector[3],p/(gama-1.0)+0.5*rho*(uref**2+vpert**2))]
 initial_equations += [Eq(q_vector[4],rho*fref)]
 
-# parse the initial conditions
+initial conditions
 initial = GridBasedInitialisation()
 initial.add_equations(grid_equations + initial_equations)
 
@@ -158,9 +158,11 @@ simulation_eq.apply_metrics(metriceq)
 
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
+fns = 'u0 u1 T'
+# cent = StoreSome(4, fns)
 cent = Central(4)
 schemes[cent.name] = cent
-rk = RungeKutta(3)
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'

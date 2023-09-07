@@ -36,9 +36,10 @@ directories = [\
 '/people/Ali/Mixlay_2D_000_TNEQ_ML_1ev_Clean/',
 '/people/teja/flatplate/',
 '/people/teja/transition/',
-'/people/teja/mixtransition/',
-'/people/teja/mixflat/',
+#'/people/teja/mixtransition/',
+#'/people/teja/mixflat/',
 '/people/teja/mixcylinder/',
+'/vortex_core/2D/',
 ]
 file_names = [\
 'wave.py',
@@ -75,9 +76,10 @@ file_names = [\
 'Mixlay_2D_000.py',
 'flatplate.py',
 'transition17.py',
-'mixflat_transition.py',
-'mixflat_N2.py',
+#'mixflat_transition.py',
+#'mixflat_N2.py',
 'mixcylinder.py',
+'vortex_core.py',
 ]
 
 assert len(directories) == len(file_names)
@@ -86,6 +88,9 @@ print('\33[4m' + "Found %d OpenSBLI applications." % len(file_names) + '\033[0m'
 owd = os.getcwd()
 # Optional diff between the generated codes
 check_diff = False
+generate = True
+compile_test = True
+OPS_translator_path = '~/software/OPS/ops_translator/c/ops.py'
 if check_diff:
     import difflib
     # Set a directory containing previously generated C codes
@@ -105,6 +110,17 @@ with open(os.devnull, 'w') as devnull:
                 text1, text2 = open(file1).readlines(), open(file2).readlines()
                 for line in difflib.unified_diff(text1, text2):
                     print(line)
+            if generate:
+                output_code = subprocess.call(["python3.8 {} opensbli.cpp".format(OPS_translator_path)], shell=True, cwd=owd+directory, stdout=devnull)
+                if output_code == 0:
+                    print('\33[92m' + "%s translated successfully." % fname + '\033[0m')
+            if compile_test:
+                try:
+                    proc = subprocess.Popen(["make -B opensbli_openmp"], shell=True, cwd=owd+directory, stdout=devnull, stderr=subprocess.PIPE)
+                    for line in proc.stderr:
+                        if "error" in str(line) and "linker command failed" not in str(line):
+                            print("Compilation error: {}".format(line))
+                except:
+                        print("Compile failed.")
         else:
             print('\33[91m' + "Generation of %s has failed." % fname + '\033[0m')
-            exit()

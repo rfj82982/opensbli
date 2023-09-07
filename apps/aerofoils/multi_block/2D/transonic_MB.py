@@ -42,6 +42,20 @@ simulation_parameters = {
 'Delta1block2'      :   '22.5/(block2np1 - 1.0)',
 'inv_rfact0_block2'     :   '1.0/Delta0block2',
 'inv_rfact1_block2'     :   '1.0/Delta1block2',
+# Add forcing modes
+'tripA'     :   '0.075', # trip amplitude
+'tripSigma'     :   '0.00833',
+'xts'       :   '0.1',
+'xtp'       :   '0.1',
+'omega_0'       :   '26', # temporal frequency
+'omega_1'       :   '88',
+'omega_2'       :   '200',
+'k_0'       :   '3.0', # wavenumbers
+'k_1'       :   '4.0',
+'k_2'       :   '4.0',
+'phi_0'     :   '0.0', # phase shift
+'phi_1'     :   'M_PI',
+'phi_2'     :   '-M_PI/2',
 }
 
 def create_exchange_calls_codes(multiblock_descriptor, dsets):
@@ -172,12 +186,12 @@ block1_bc.append(InterfaceBC(direction=0, side=1,  halos=[-2,2], name="block1_to
 # Isothermal wall in x1 direction
 gama, Minf, Twall = symbols('gama Minf Twall', **{'cls': ConstantObject})
 # Boundary-layer tripping
-tripped = False
+tripped = True
 direction, side = 1, 0
 if tripped:
     Amp, sigma, xts, xtp = symbols('tripA tripSigma xts xtp', **{'cls':ConstantObject})
     # Time dependence
-    # current_iter = multi_block.get_block(nblocks-1).get_temporal_schemes[0].iteration_number # Current iteration number
+    # Current iteration number
     current_iter = Globalvariable("iter", integer=True)
     dt, omega0, omega1, omega2 = symbols('dt omega_0 omega_1 omega_2', **{'cls': ConstantObject})
     t = dt*current_iter 
@@ -288,7 +302,7 @@ for no, block in enumerate(multi_block.blocks):
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.33333333, wall_control=True, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, sigma=0.33333333, airfoil=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
