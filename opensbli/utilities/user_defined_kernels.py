@@ -67,9 +67,6 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
         # Equations that depend on these derivative evaluations
         merged_kernel.add_equation(no_derivatives)
         merged_kernel.ranges = block.ranges[:]
-        # for eqn in merged_kernel.equations:
-        #     pprint(eqn)
-        # exit()
         return [merged_kernel]
 
 

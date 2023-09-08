@@ -34,7 +34,7 @@ constants = ["Re", "Pr", "gama", "Minf"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-teno = False
+teno = True
 einstein_eq = EinsteinEquation()
 # Central scheme plus WENO filtering, otherwise pure TENO
 if not teno:
@@ -66,42 +66,18 @@ else:
         simulation_eq.add_equations(eqn)
 
 # Constituent relations
-if conservative:
-    pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
-    velocity = "Eq(u_i, rhou_i/rho)"
-    enthalpy = "Eq(H, (rhoE + p) / rho)"
-else:
-    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
-    enthalpy = "Eq(H, Et + p / rho)"
-
+pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+velocity = "Eq(u_i, rhou_i/rho)"
+enthalpy = "Eq(H, (rhoE + p) / rho)"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**(1.5)*(1.4042)/(T+0.40417)))" ## Modified sutherland law
 speed_of_sound = "Eq(a, (gama*p/rho)**0.5)"
 
-
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
-# Expand momentum and add the expanded equations to the constituent relations
-if conservative:
-    velocity = "Eq(u_i, rhou_i/rho)"
-    eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+for input_eqn in [velocity, pressure, temperature, enthalpy, viscosity, speed_of_sound]:
+    eqns = einstein_eq.expand(input_eqn, ndim, coordinate_symbol, [], constants)
     constituent.add_equations(eqns)
-
-# Expand pressure and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-# Expand temperature and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-# Expand enthalpy and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(enthalpy, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-# # Expand viscosity and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-# # Expand viscosity and add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(speed_of_sound, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
 
 # Create a simulation block
 block = SimulationBlock(ndim, block_number=0, conservative=conservative)
@@ -203,11 +179,6 @@ block.setio(copy.deepcopy(h5))
 # DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
 # block.set_equations(DRP.equation_classes)
 
-if not teno:
-    # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='HLLC', airfoil=False, store_filter=True)
-    block.set_equations(WF.equation_classes)
-
 ## Post-processing for TGV case, kinetic energy and enstrophy reductions
 # Velocity in 3D
 vel = symbols("u0:%d"%ndim,  **{'cls':DataObject})
@@ -243,8 +214,9 @@ dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
 post.add_equations(dil)
 
 # Evaluate quantities required for dissipation measures
-rho_m, KE, eps_D, eps_S = ReductionVariable('rho_m', 'sum'), ReductionVariable('KE', 'sum'), ReductionVariable('dilatation_dissipation', 'sum'), ReductionVariable('enstrophy_dissipation', 'sum')
-rho_eqn = OpenSBLIEq(rho_m, rho_m + DataObject('rho'))
+# rhom, KE, eps_D, eps_S = ReductionVariable('rhom', **{'reduction_type' : 'sum'}), ReductionVariable('KE', **{'reduction_type' : 'sum'}), ReductionVariable('dilatation_dissipation', **{'reduction_type' : 'sum'}), ReductionVariable('enstrophy_dissipation', **{'reduction_type' : 'sum'})
+rhom, KE, eps_D, eps_S = ReductionSum('rhom'), ReductionSum('KE'), ReductionSum('dilatation_dissipation'), ReductionSum('enstrophy_dissipation')
+rho_eqn = OpenSBLIEq(rhom, rhom + DataObject('rho'))
 ke_eqn = OpenSBLIEq(KE, KE + 0.5*DataObject('rho')*sum([u**2 for u in vel]))
 dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*DataObject('mu')*divV**2)
 enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + DataObject('mu')*(wx**2 + wy**2 + wz**2))
@@ -261,9 +233,9 @@ if not teno:
     WF.update_periodic_boundary(block, halos=[-5,5])
 
 # Simulation monitor
-arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rho_m']
+arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rhom']
 probe_locations = [(None), (None), (None), (None)]
-SM = SimulationMonitor(arrays, probe_locations, block, output_file='TGV_out.log', print_frequency=100)
+SM = SimulationMonitor(arrays, probe_locations, block, output_file='TGV.log', print_frequency=100)
 # Add the simulation monitor to the algorithm
 alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
 

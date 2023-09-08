@@ -317,9 +317,10 @@ class OPSC(object):
         self.OPS_diagnostics = OPS_diagnostics
         self.MultiBlock = False
         self.dtype = algorithm.dtype
+        self.nblocks = len(algorithm.block_descriptions)
         # Check if the simulation monitoring should be written to an output log file
         if algorithm.simulation_monitor:
-            if algorithm.simulation_monitor.output_file:
+            if len(algorithm.simulation_monitor.output_files) > 0:
                 self.monitoring_output_file = True
             else:
                 self.monitoring_output_file = False
@@ -526,7 +527,8 @@ class OPSC(object):
         if self.OPS_diagnostics > 1:
             output += [WriteString("ops_timing_output(std::cout);")]
         if self.monitoring_output_file:
-            output += [WriteString("fclose(f);")]
+            for i in range(self.nblocks):
+                output += [WriteString("fclose(f%d);" % i)]
         output += [WriteString("ops_exit();")]
         return output
 
@@ -563,8 +565,9 @@ class OPSC(object):
         # Include optional simulation monitoring reductions file
         if algorithm.simulation_monitor:
             out += ['#include \"%s\"' % algorithm.simulation_monitor.filename]
-            if algorithm.simulation_monitor.output_file:
-                out += ['FILE *f = fopen(\"%s\", \"a\");' % str(algorithm.simulation_monitor.output_file)]
+            if len(algorithm.simulation_monitor.output_files) > 0:
+                for i in range(self.nblocks):
+                    out += ['FILE *f%d = fopen(\"%s\", \"a\");' % (i, str(algorithm.simulation_monitor.output_files[i]))]
         return out
 
     def opsc_def_decs(self, algorithm):

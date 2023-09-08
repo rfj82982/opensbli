@@ -259,13 +259,13 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Simulation monitors
 # Density at entrance plane, lower wall, midspan
-arrays = ['rho_B0']
+arrays = ['rho']
 probe_locations = [(0, 0, '(block0np2-1)/2')]
 # u velocity at entrance plane, 1 point off the wall, midspan
-arrays += ['u0_B0']
+arrays += ['u0']
 probe_locations += [(0, 1, '(block0np2-1)/2')]
 # Temperature at entrance plane, 1st point off lower wall, midspan
-arrays += ['T_B0']
+arrays += ['T']
 probe_locations += [(0, 1, '(block0np2-1)/2')]
 SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100)
 # STEP 7
