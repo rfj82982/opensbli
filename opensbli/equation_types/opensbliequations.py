@@ -4,7 +4,7 @@
    @details base classes for different type of equations used in opensbli
 """
 
-from opensbli.core.opensbliobjects import DataSet, ConstantObject, DataSetBase, DataObject, GroupedPiecewise
+from opensbli.core.opensbliobjects import DataSet, ConstantObject, DataSetBase, DataObject, GroupedPiecewise, ReductionVariable, ReductionSum, ReductionMax, ReductionMin
 from opensbli.core.opensblifunctions import TemporalDerivative
 from sympy import flatten, preorder_traversal
 from sympy import Equality, Function, pprint, srepr
@@ -167,6 +167,24 @@ class OpenSBLIEquation(Equality):
         replacements = {}
         for d in self.atoms(DataObject):
             replacements[d] = block.location_dataset(d)
+        args = [a.subs(replacements) for a in self.args]
+        return type(self)(*args)
+
+    def convert_reduction_vars(self, block):
+        """ Make ReductionVariables block-specific quantities to avoid name conflicts when nblocks > 1."""
+        replacements = {}
+        # Check for reduction variables
+        for d in self.atoms(ReductionVariable):
+            # Give the reduction variable a block-specific name
+            name = d.name + '_B%d' % block.blocknumber
+            if d.reduction_type == 'OPS_INC':
+                replacements[d] = ReductionSum(name)
+            elif d.reduction_type == 'OPS_MAX':
+                replacements[d] = ReductionMax(name)
+            elif d.reduction_type == 'OPS_MIN':
+                replacements[d] = ReductionMin(name)
+            else:
+                raise ValueError("Unknown reduction variable type detected: {}".format(name))
         args = [a.subs(replacements) for a in self.args]
         return type(self)(*args)
 

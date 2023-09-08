@@ -6,7 +6,7 @@
 from opensbli.core.grid import Grid
 from sympy import Equality
 from opensbli.core.boundary_conditions.bc_core import BoundaryConditionTypes
-from opensbli.core.opensbliobjects import ConstantObject, DataObject, DataSetBase, GroupedPiecewise
+from opensbli.core.opensbliobjects import ConstantObject, DataObject, DataSetBase, GroupedPiecewise, ReductionVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, ConstituentRelations
 from opensbli.equation_types.metric import MetricsEquation
 from sympy import flatten, eye, pprint, Integer
@@ -168,10 +168,14 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
             if isinstance(eq, _known_equation_types):
                 store_equations[no] = eq.convert_to_datasets(self)
                 consts = consts.union(eq.atoms(ConstantObject))
+                if len(eq.atoms(ReductionVariable)) > 0:
+                    store_equations[no] = store_equations[no].convert_reduction_vars(self)
             elif isinstance(eq, Equality):
                 new_eq = OpenSBLIEq(eq.lhs, eq.rhs)
                 consts = consts.union(new_eq.atoms(ConstantObject))
                 store_equations[no] = new_eq.convert_to_datasets(self)
+                if len(eq.atoms(ReductionVariable)) > 0:
+                    store_equations[no] = store_equations[no].convert_reduction_vars(self)
             elif isinstance(eq, DataObject):
                 store_equations[no] = self.location_dataset(str(eq))
             else:  # Integers and Floats from Eigensystem entering here

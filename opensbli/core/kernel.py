@@ -261,7 +261,8 @@ class Kernel(object):
             if isinstance(eq, Equality):
                 latex.write_expression(eq)
             elif isinstance(eq, GroupedPiecewise):
-                print("Should be doing latex for grouped piecewise")  # TODO
+                for term in eq.args:
+                    latex.write_expression(term)
         return
 
     def total_range(self):

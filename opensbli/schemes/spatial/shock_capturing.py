@@ -1165,7 +1165,7 @@ class HLLCCharacteristic(Characteristic):
             F, F1 = derivatives[i].args[0], increment_dataset(derivatives[i].args[0], dire, 1)
             LF = Rational(1,2)*(F+F1 + alpha*(q - q1))
             F_fixed[i] = (1 - theta_rho*theta_pressure)*LF + theta_rho*theta_pressure*flux_vars[i]
-            pprint(F_fixed)
+            # pprint(F_fixed)
 
         # Set the corrected flux
         output_eqns += [OpenSBLIEq(flux_vars[i], F_fixed[i]) for i in range(ndim+2)]
