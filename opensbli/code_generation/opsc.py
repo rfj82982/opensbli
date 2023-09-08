@@ -554,8 +554,7 @@ class OPSC(object):
         const_file.write('\n'.join(flatten(constant_declarations)))
         const_file.close()
         # Declare the simulation blocks
-        for b in algorithm.block_descriptions:
-            out += ['#define OPS_%dD' % b.ndim]
+        out += ['#define OPS_%dD' % algorithm.block_descriptions[0].ndim]
         out += ['#include \"ops_seq.h\"']
         for b in algorithm.block_descriptions:
             out += ['#include \"%s_kernels.h\"' % b.block_name]
