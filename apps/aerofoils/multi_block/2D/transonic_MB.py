@@ -243,7 +243,6 @@ mb_bcs[2] = block2_bc
 # Set the multi block boundary conditions
 multi_block.set_block_boundaries(mb_bcs)
 
-
 # Add post-processing of vorticity/dilatation fields using new code features
 # Velocity in 2D
 vel = symbols("u0:%d"%ndim,  **{'cls':DataObject})
@@ -292,7 +291,7 @@ if stats:
 else:
     stat_equation_classes, stats_arrays = [], []
 
-multi_block.set_equations(stat_equation_classes)
+# multi_block.set_equations(stat_equation_classes)
 
 # Add filters to each block
 filters = {0:[], 1:[], 2:[]}
@@ -375,12 +374,12 @@ for block in multi_block.blocks:
                 eq.Kernels += filter_swaps
 
 arrays = ['u1', 'u1', 'u1', 'u1', 'u1', 'u1', 'u1']
-arrays = [block.location_dataset('%s' % dset) for dset in arrays]
-indices = [(25, 1), (50, 1), (150, 1), (250, 1), (350, 1), (450, 1), (550, 1)]
-SM = SimulationMonitor(arrays, indices, multi_block.get_block(2), print_frequency=250, fp_precision=12, output_file='output.log')
+arrays = [[block.location_dataset('%s' % dset) for dset in arrays] for _ in range(nblocks)]
+indices = [[(25, 1), (50, 1), (150, 1), (250, 1), (350, 1), (450, 1), (550, 1)] for _ in range(nblocks)]
+# SM = SimulationMonitor(arrays, indices, multi_block.get_block(2), print_frequency=250, fp_precision=12, output_file='output.log')
 
 # Create the OPS C code
-alg = TraditionalAlgorithmRKMB(multi_block, simulation_monitor=SM)
+alg = TraditionalAlgorithmRKMB(multi_block)#, simulation_monitor=SM)
 OPSC(alg, OPS_diagnostics=1)
 # NaN check and iteration counter
 print_iteration_ops(NaN_check='rho', every=100, nblocks=nblocks)

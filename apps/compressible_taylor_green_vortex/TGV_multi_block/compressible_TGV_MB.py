@@ -1,218 +1,174 @@
 #!/usr/bin/env python
-# Import all the functions from opensbli
 from opensbli import *
 import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
-
+from TGV_setup import * # Multi-block configuration of blocks and initial condition
+###################################################################################################
 simulation_parameters = {
 'Re'        :   '1600.0',
 'gama'      :   '1.4',
-'Minf'      :   '0.1',
+'Minf'      :   '1.25',
 'Pr'        :   '0.71',
-'dt'        :   '0.003385',
-'niter'     :   '100',
-# Block parameters
-'block0np0'     :   '128',
-'block0np1'     :   '128',
-'block0np2'     :   '128',
-'Delta0block0'      :   'M_PI/block0np0',
-'Delta1block0'      :   'M_PI/block0np1',
-'Delta2block0'      :   '2*M_PI/block0np2',
-
-'block1np0'     :   '128',
-'block1np1'     :   '128',
-'block1np2'     :   '128',
-'Delta0block1'      :   'M_PI/block1np0',
-'Delta1block1'      :   'M_PI/block1np1',
-'Delta2block1'      :   '2*M_PI/block1np2',
-
-'block2np0'     :   '128',
-'block2np1'     :   '128',
-'block2np2'     :   '128',
-'Delta0block2'      :   'M_PI/block2np0',
-'Delta1block2'      :   'M_PI/block2np1',
-'Delta2block2'      :   '2*M_PI/block2np2',
-
-'block3np0'     :   '128',
-'block3np1'     :   '128',
-'block3np2'     :   '128',
-'Delta0block3'      :   'M_PI/block3np0',
-'Delta1block3'      :   'M_PI/block3np1',
-'Delta2block3'      :   '2*M_PI/block3np2',
+'dt'        :   '0.0005',
+'niter'     :   '40000',
+'shock_factor'      :   '1',
+'TENO_CT'       :   '1e-6',
+'eps'       :   '1.0e-16',
+'teno_a1'       :   '10.5',
+'teno_a2'       :   '4.5',
 }
-
-# Initial condition on each block
-def TGV_initial_condition(block_number):
-    # Create a simulation block
-    block = SimulationBlock(ndim, block_number=block_number)
-    # Local dictionary for parsing the expressions
-    local_dict = {"block": block, "GridVariable": GridVariable, "DataObject": DataObject}
-    # Set the local coordinates
-    if block_number == 0:
-        x0 = "Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])"
-        x1 = "Eq(DataObject(x1), block.deltas[1]*block.grid_indexes[1])"
-    elif block_number == 1 :
-        x0 = "Eq(DataObject(x0), M_PI + block.deltas[0]*block.grid_indexes[0])"
-        x1 = "Eq(DataObject(x1), block.deltas[1]*block.grid_indexes[1])"
-    elif block_number == 2:
-        x0 = "Eq(DataObject(x0), block.deltas[0]*block.grid_indexes[0])"
-        x1 = "Eq(DataObject(x1), M_PI + block.deltas[1]*block.grid_indexes[1])"
-    elif block_number == 3:
-        x0 = "Eq(DataObject(x0), M_PI + block.deltas[0]*block.grid_indexes[0])"
-        x1 = "Eq(DataObject(x1), M_PI + block.deltas[1]*block.grid_indexes[1])"
-    else:
-        raise NotImplementedError("The multi-block case has been defined for 4 blocks.")
-    # z coordinate
-    x2 = "Eq(DataObject(x2), block.deltas[2]*block.grid_indexes[2])"       
-    coords = [parse_expr(eq, local_dict=local_dict) for eq in [x0, x1, x2]]
-
-    # Initial conditions as strings
-    u0 = "Eq(GridVariable(u0),sin(DataObject(x0))*cos(DataObject(x1))*cos(DataObject(x2)))"
-    u1 = "Eq(GridVariable(u1),-cos(DataObject(x0))*sin(DataObject(x1))*cos(DataObject(x2)))"
-    u2 = "Eq(GridVariable(u2), 0.0)"
-    p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*DataObject(x0))+cos(2.0*DataObject(x1)))*(2.0 + cos(2.0*DataObject(x2))))"
-    r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
-    # Conservative form
-    if conservative:
-        rho = "Eq(DataObject(rho), r)"
-        rhou0 = "Eq(DataObject(rhou0), r*u0)"
-        rhou1 = "Eq(DataObject(rhou1), r*u1)"
-        rhou2 = "Eq(DataObject(rhou2), r*u2)"
-        rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
-    else:
-        rho = "Eq(DataObject(rho), r)"
-        rhou0 = "Eq(DataObject(u0), u0)"
-        rhou1 = "Eq(DataObject(u1), u1)"
-        rhou2 = "Eq(DataObject(u2), u2)"
-        rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"
-    # Parse the initial conditions
-    vortex_condition = [parse_expr(eq, local_dict=local_dict) for eq in [u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]]
-    
-    init_class = GridBasedInitialisation()
-    init_class.add_equations(coords + vortex_condition)
-    return [init_class]
-
-def TGV_boundaries(block_number, match_conditions):
-    xm = InterfaceBC(direction=0, side=0,  match=match_conditions[block_number][0])
-    xp = InterfaceBC(direction=0, side=1,  match=match_conditions[block_number][1])
-    ym = InterfaceBC(direction=1, side=0,  match=match_conditions[block_number][2])
-    yp = InterfaceBC(direction=1, side=1,  match=match_conditions[block_number][3])
-    zm = PeriodicBC(direction=2, side=0, full_depth=True)
-    zp = PeriodicBC(direction=2, side=1, full_depth=True)
-    return [xm, xp, ym, yp, zm, zp]
-
+##################################################################################################
 # Number of dimensions of the system to be solved
 ndim = 3
-nblocks = 4
+nblocks = 2
 multi_block = MultiBlock(ndim, nblocks)
-SimulationDataType.set_datatype(Double)
-
-# Number of dimensions of the system to be solved
-ndim = 3
+# Add block-specific simulation parameters
+simulation_parameters = generate_simulation_parameters(simulation_parameters, multi_block)
 # # Constants that are used
-constants = ["Re", "Pr", "gama", "Minf", "mu"]
-# # symbol for the coordinate system in the equations
-coordinate_symbol = "x"
-# symbol for the coordinate system in the equations
-conservative = False
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
-
-mass, momentum, energy = NS.mass, NS.momentum, NS.energy
-# Expand the simulation equations, for this create a simulation equations class
-simulation_eq = SimulationEquations()
-simulation_eq.add_equations(mass)
-simulation_eq.add_equations(momentum)
-simulation_eq.add_equations(energy)
-
-# Constituent relations used in the system
-velocity = "Eq(u_i, rhou_i/rho)"
-if conservative:
-    pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
-    velocity = "Eq(u_i, rhou_i/rho)"
+constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
+teno = True
+einstein_eq = EinsteinEquation()
+# Central scheme plus WENO filtering, otherwise pure TENO
+if not teno:
+    NS = NS_Split('KGP', ndim, constants, coordinate_symbol="x", conservative=True, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
+    mass, momentum, energy = NS.mass, NS.momentum, NS.energy
+    # Expand the simulation equations, for this create a simulation equations class
+    simulation_eq = SimulationEquations()
+    simulation_eq.add_equations([mass, momentum, energy])
 else:
-    pressure = "Eq(p, rho*(gama-1)*(Et - (1/2)*(KD(_i,_j)*u_i*u_j)))"
-
+    sc1 = "**{\'scheme\':\'Teno\'}"
+    # Define the compresible Navier-Stokes equations in Einstein notation.
+    mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % sc1
+    momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s) + Der(tau_i_j,x_j) )" % sc1
+    energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s) - Der(q_j,x_j) + Der(u_i*tau_i_j ,x_j) )" % sc1
+    stress_tensor = "Eq(tau_i_j, (mu/Re)*(Der(u_i,x_j)+ Der(u_j,x_i) - (2/3)* KD(_i,_j)* Der(u_k,x_k)))"
+    heat_flux = "Eq(q_j, (-mu/((gama-1)*Minf*Minf*Pr*Re))*Der(T,x_j))"
+    # Substitutions
+    substitutions = [stress_tensor, heat_flux]
+    base_eqns = [mass, momentum, energy]
+    # Expand the base equations
+    for i, base in enumerate(base_eqns):
+        base_eqns[i] = einstein_eq.expand(base, ndim, "x", substitutions, constants)
+    simulation_eq = SimulationEquations()
+    for eqn in base_eqns:
+        simulation_eq.add_equations(eqn)
+##################################################################################################
+# Constituent relations
+pressure = "Eq(p, (gama-1)*(rhoE - (1/2)*rho*(KD(_i,_j)*u_i*u_j)))"
+velocity = "Eq(u_i, rhou_i/rho)"
+enthalpy = "Eq(H, (rhoE + p) / rho)"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-
+viscosity = "Eq(mu, (T**(1.5)*(1.4042)/(T+0.40417)))" ## Modified sutherland law
+speed_of_sound = "Eq(a, (gama*p/rho)**0.5)"
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
-einstein_eq = EinsteinEquation()
-
-# Expand momentum add the expanded equations to the constituent relations
-if conservative:
-    eqns = einstein_eq.expand(velocity, ndim, coordinate_symbol, [], constants)
+for input_eqn in [velocity, pressure, temperature, enthalpy, viscosity, speed_of_sound]:
+    eqns = einstein_eq.expand(input_eqn, ndim, "x", [], constants)
     constituent.add_equations(eqns)
-
-# Expand pressure add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(pressure, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-
-# Expand temperature add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(temperature, ndim, coordinate_symbol, [], constants)
-constituent.add_equations(eqns)
-
-# Set the initial conditions on each of the blocks
-mb_initial_conditions = {0:None, 1:None, 2:None, 3:None}
-for i in range(nblocks):
-    init_eq = TGV_initial_condition(i)
-    mb_initial_conditions[i] = init_eq
-multi_block.set_initial_conditions(mb_initial_conditions)
-
+##################################################################################################
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
-fns = 'u0 u1 u2 T'
-cent = Central(4)#, fns)
+fns = 'u0 u1 u2'
+cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKutta(3)
+rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
-
-# Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
-mb_bcs = {0:None, 1:None, 2:None, 3:None}
-# Matching conditions
-match_conditions = {0: None, 1:None, 2:None, 3:None}
-match_conditions[0] = [(1, 0, 1, True), (1, 0, 0, True), (2, 1, 1, True), (2, 1, 0, True)]
-match_conditions[1] = [(0, 0, 1, True), (0, 0, 0, True), (3, 1, 1, True), (3, 1, 0, True)]
-match_conditions[2] = [(3, 0, 1, True), (3, 0, 0, True), (0, 1, 1, True), (0, 1, 0, True)]
-match_conditions[3] = [(2, 0, 1, True), (2, 0, 0, True), (1, 1, 1, True), (1, 1, 0, True)]
-
-for i in range(nblocks):
-    mb_bcs[i] = TGV_boundaries(i, match_conditions)
-# set the boundaries for the block
+if teno:
+    halos = [-4, 4]
+    teno_order = 6
+    Avg = RoeAverage([0, 1])
+    LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF')
+    schemes[LF.name] = LF
+else:
+    halos = [-2, 2]
+    exit()
+    # WENO filter for shock-capturing
+    # WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='HLLC', airfoil=False, store_filter=True)
+    # block.set_equations(WF.equation_classes)
+# Set the discretisation schemes
+multi_block.set_discretisation_schemes(schemes)
+##################################################################################################
+# Set the initial conditions on each of the blocks
+mb_initial_conditions = TGV_initial_condition(multi_block)
+multi_block.set_initial_conditions(mb_initial_conditions)
+##################################################################################################
+mb_bcs = TGV_boundaries(multi_block, halos)
 multi_block.set_block_boundaries(mb_bcs)
-
-# Input/output arguments
+##################################################################################################
+# # Add DRP filtering on each block
+# filter_list = []
+# for no, block in enumerate(multi_block.blocks):
+#     filter_list += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.2, multi_block=multi_block).equation_classes]
+# multi_block.set_filters(filter_list)
+##################################################################################################
+## Post-processing for TGV case, kinetic energy and enstrophy reductions
+# Velocity in 3D
+vel = symbols("u0:%d"%ndim,  **{'cls':DataObject})
+# Vorticity-z
+wx, wy, wz = symbols("wx wy wz",  **{'cls':GridVariable})
+# coordinates
+coord = symbols("x0:%d"%ndim,  **{'cls':CoordinateObject})
+# Matrix of derivatives
+der_matrix = Matrix(ndim,ndim,[CentralDerivative(u,x) for u in vel for x in coord])
+post = UserDefinedEquations()
+post.kernel_merge = True
+post.algorithm_place = InTheSimulation(frequency=100)
+post.computation_name = 'Taylor-Green vortex post-processing'
+post.order = 10000000 # appear at the end of the kernels at the end of the time-loop
+# # X vorticity
+vortx = Eq(wx, der_matrix[2,1] - der_matrix[1,2])
+# Y vorticity
+vorty = Eq(wy, der_matrix[0,2] - der_matrix[2,0])
+# Z vorticity
+vortz = Eq(wz, der_matrix[1,0] - der_matrix[0,1])
+# Dilatation
+divV = symbols("divV", **{'cls':DataObject})
+dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
+post.add_equations([vortx, vorty, vortz, dil])
+# Evaluate reduction quantities required for dissipation measures
+rhom, KE, eps_D, eps_S = ReductionSum('rhom'), ReductionSum('KE'), ReductionSum('dilatation_dissipation'), ReductionSum('enstrophy_dissipation')
+rho_eqn = OpenSBLIEq(rhom, rhom + DataObject('rho'))
+ke_eqn = OpenSBLIEq(KE, KE + 0.5*DataObject('rho')*sum([u**2 for u in vel]))
+dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*DataObject('mu')*divV**2)
+enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + DataObject('mu')*(wx**2 + wy**2 + wz**2))
+post.add_equations([rho_eqn, ke_eqn, dilatation_eqn, enstrophy_eqn])
+##################################################################################################
+multi_block.set_equations([simulation_eq, constituent, post])
+##################################################################################################
+q_vector = simulation_eq.time_advance_arrays
 x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(save_every=10000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z])
+h5.add_arrays(q_vector + [x, y, z])
 multi_block.setio([h5])
-
-
-# Add DRP filtering on each block
-filter_list = []
-for no, block in enumerate(multi_block.blocks):
-    filter_list += [ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=multi_block).equation_classes]
-multi_block.set_filters(filter_list)
-
-# set the equations to be solved on the block
-multi_block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq)])
-# set the discretisation schemes
-multi_block.set_discretisation_schemes(schemes)
-
+##################################################################################################
+# Slicing output
+for bn in range(nblocks):
+    coordinate_slice = iohdf5_slices(blocknumber=bn, **{'iotype': "Init"})
+    coordinate_slice.add_slices([([DataObject('x1'), DataObject('x2')], 0, 'block%dnp0/2' % bn)])
+    q_slice = iohdf5_slices(save_every=1000, blocknumber=bn, **{'iotype': "Write"})
+    q_slice.add_slices([(q_vector, 0, 'block%dnp0/2' % bn)])
+    multi_block.setio([coordinate_slice, q_slice])
+##################################################################################################
 # Discretise the equations on the block
 multi_block.discretise()
-
-# create an algorithm from the discretised computations
-alg = TraditionalAlgorithmRKMB(multi_block)
-
-# set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
+# Apply a periodic BC for WENO filter
+if not teno:
+    WF.update_periodic_boundary(block, halos=[-5,5])
+##################################################################################################
+# Simulation monitor
+arrays = [['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rhom', 'p'] for _ in range(nblocks)] # monitor the same quantities on every block
+probe_locations = [[(None), (None), (None), (None), (3, 4, 5)] for _ in range(nblocks)]
+SM = SimulationMonitor(arrays, probe_locations, multi_block, output_file='TGV.log', print_frequency=100)
+##################################################################################################
+alg = TraditionalAlgorithmRKMB(multi_block, SM)
 SimulationDataType.set_datatype(Double)
-
+##################################################################################################
 # Write the code for the algorithm
 OPSC(alg, OPS_diagnostics=5, OPS_V2=True)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
-print_iteration_ops(NaN_check='rho')
+print_iteration_ops(NaN_check='rho', nblocks=nblocks)
+##################################################################################################

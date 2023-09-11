@@ -129,10 +129,11 @@ fns = 'u0 u1 u2'
 cent = StoreSome(4, fns)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKuttaLS(3, formulation='SSP')
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 if teno:
+    halos = [-4,4]
     teno_order = 6
     Avg = RoeAverage([0, 1])
     # Adaptive changing of TENO CT coefficients paired with a shock-sensor
@@ -146,14 +147,18 @@ if teno:
     else:
         # LF = LFTeno(teno_order, averaging=Avg, flux_type='LLF')
         LF = HLLCTeno(teno_order, averaging=Avg, flux_type='HLLC-LM')
+else:
+    halos = [-2, 2]
+    exit()
     schemes[LF.name] = LF
+block.set_discretisation_schemes(schemes)
 
 boundaries = []
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
 if not teno:
-    halos = [-2,2]
+    
 else:
-    halos = [-4,4]
+    
 # Set periodic boundary with desired halo depth
 for direction in range(ndim):
     boundaries += [PeriodicBC(direction, 0, halos=halos)]
@@ -178,7 +183,7 @@ block.setio(copy.deepcopy(h5))
 # Dispersion relation preserving filters
 # DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', optimized=True, sigma=0.2, wall_control=False, multi_block=None)
 # block.set_equations(DRP.equation_classes)
-
+##################################################################################################
 ## Post-processing for TGV case, kinetic energy and enstrophy reductions
 # Velocity in 3D
 vel = symbols("u0:%d"%ndim,  **{'cls':DataObject})
@@ -194,37 +199,24 @@ post.algorithm_place = InTheSimulation(frequency=100)
 post.computation_name = 'Taylor-Green vortex post-processing'
 post.order = 10000000 # appear at the end of the kernels at the end of the time-loop
 # # X vorticity
-vortx = der_matrix[2,1] - der_matrix[1,2]
-# vortx = metriceq.apply_transformation(vortx)
-vortx = Eq(wx, vortx)
-post.add_equations(vortx)
+vortx = Eq(wx, der_matrix[2,1] - der_matrix[1,2])
 # Y vorticity
-vorty = der_matrix[0,2] - der_matrix[2,0]
-# vorty = metriceq.apply_transformation(vorty)
-vorty = Eq(wy, vorty)
-post.add_equations(vorty)
+vorty = Eq(wy, der_matrix[0,2] - der_matrix[2,0])
 # Z vorticity
-vortz = der_matrix[1,0] - der_matrix[0,1]
-# vortz = metriceq.apply_transformation(vortz)
-vortz = Eq(wz, vortz)
-post.add_equations(vortz)
-# # Dilatation
-divV = symbols("divV", **{'cls':GridVariable})
+vortz = Eq(wz, der_matrix[1,0] - der_matrix[0,1])
+# Dilatation
+divV = symbols("divV", **{'cls':DataObject})
 dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
-post.add_equations(dil)
-
-# Evaluate quantities required for dissipation measures
-# rhom, KE, eps_D, eps_S = ReductionVariable('rhom', **{'reduction_type' : 'sum'}), ReductionVariable('KE', **{'reduction_type' : 'sum'}), ReductionVariable('dilatation_dissipation', **{'reduction_type' : 'sum'}), ReductionVariable('enstrophy_dissipation', **{'reduction_type' : 'sum'})
+post.add_equations([vortx, vorty, vortz, dil])
+# Evaluate reduction quantities required for dissipation measures
 rhom, KE, eps_D, eps_S = ReductionSum('rhom'), ReductionSum('KE'), ReductionSum('dilatation_dissipation'), ReductionSum('enstrophy_dissipation')
 rho_eqn = OpenSBLIEq(rhom, rhom + DataObject('rho'))
 ke_eqn = OpenSBLIEq(KE, KE + 0.5*DataObject('rho')*sum([u**2 for u in vel]))
 dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*DataObject('mu')*divV**2)
 enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + DataObject('mu')*(wx**2 + wy**2 + wz**2))
 post.add_equations([rho_eqn, ke_eqn, dilatation_eqn, enstrophy_eqn])
-
+##################################################################################################
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial, post])
-# set the discretisation schemes
-block.set_discretisation_schemes(schemes)
 
 # Discretise the equations on the block
 block.discretise()
