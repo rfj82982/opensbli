@@ -42,9 +42,11 @@ class ConstantsToDeclare(object):
     def sort_constants():
         """ Sort the constants with rational constants printed last."""
         regular = [c for c in ConstantsToDeclare.constants if not c.rational]
-        rational = [c for c in ConstantsToDeclare.constants if c.rational]
+        rational = sorted([c for c in ConstantsToDeclare.constants if c.rational], key=lambda x: str(x))
         ConstantsToDeclare.constants = regular + rational
-        return 
+        return
+
+
 
 
 def copy_block_attributes(block, otherclass):

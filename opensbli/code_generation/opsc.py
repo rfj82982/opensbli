@@ -17,6 +17,7 @@ from opensbli.core.datatypes import SimulationDataType
 from sympy import Pow, Idx, pprint, count_ops
 import os
 import logging
+from collections import OrderedDict
 LOG = logging.getLogger(__name__)
 BUILD_DIR = os.getcwd()
 
@@ -27,7 +28,7 @@ class RationalCounter():
     def __init__(self):
         self.name = 'rc%d'
         self.rational_counter = 0
-        self.existing = {}
+        self.existing = OrderedDict()
 
     @property
     def increase_rational_counter(self):
@@ -36,7 +37,8 @@ class RationalCounter():
 
     def get_next_rational_constant(self, numerical_value):
         from opensbli.core.kernel import ConstantsToDeclare
-        name = self.name % self.rational_counter
+        # name = self.name % self.rational_counter
+        name = self.name
         self.increase_rational_counter
         ret = ConstantObject(name, rational=True) # Don't write rational constants to the HDF files
         ret.value = numerical_value
@@ -74,10 +76,12 @@ class OPSCCodePrinter(C99CodePrinter):
             p, q = int(expr.p), int(expr.q)
             return '%d.0/%d.0' % (p, q)
         else:
-            if expr in rc.existing:
-                return self._print(rc.existing[expr])
-            else:
-                return self._print(rc.get_next_rational_constant(expr))
+            pass
+            # print(expr)
+            # if expr in rc.existing:
+            #     return self._print(rc.existing[expr])
+            # else:
+            #     return self._print(rc.get_next_rational_constant(expr))
 
     def _print_Mod(self, expr):
         """ All modulus functions are expressed as fmod currently and no integer values."""
@@ -212,16 +216,23 @@ def pow_to_constant(expr):
     inverse_terms = {}
     # Change the name of Rational counter to rcinv
     orig_name = rc.name
-    rc.name = 'rcinv%d'
 
     for at in expr.atoms(Pow):
         # Remove common 1 / (gama - 1) factors
         if at is (1 / (ConstantObject('gama') - 1)):
+            # print(at)
+            rc.name = 'inv_' + 'gamma_m1'
             if at in rc.existing:
                 inverse_terms[at] = rc.existing[at]
             else:
                 inverse_terms[at] = rc.get_next_rational_constant(at)
         if _coeff_isneg(at.exp) and isinstance(at.base, ConstantObject):
+            if (at.exp < -1):
+                name = 'inv' + str(int(abs(at.exp))) + str(at.base)
+                rc.name = name
+            else:
+                name = 'inv' + str(at.base)
+                rc.name = name
             if at in rc.existing:
                 inverse_terms[at] = rc.existing[at]
             else:
