@@ -178,7 +178,11 @@ class SimulationMonitor(object):
         if self.NaN_check == None:
             return ['ops_NaNcheck(%s);' % str(block.block_datasets['rho_B%d' % block.blocknumber])] # default to density if no array given
         else:
-            return ['ops_NaNcheck(%s_B%d);' % (self.NaN_check, block.blocknumber)]
+            if "_B%d" % block.blocknumber in self.NaN_check:
+                name = self.NaN_check
+            else:
+                name = '%s_B%d' % (self.NaN_check, block.blocknumber)
+            return ['ops_NaNcheck(%s);' % (name)]
 
     @property
     def write_reductions_file(self):

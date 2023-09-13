@@ -184,7 +184,7 @@ schemes = {}
 fns  				= 'u0 u1 T'
 cent 				= StoreSome(4,fns)
 schemes[cent.name] 	= cent
-rk 					= RungeKutta(3)
+rk 					= RungeKuttaLS(3)
 schemes[rk.name] 	= rk
 block.set_discretisation_schemes(schemes)
 
