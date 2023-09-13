@@ -350,7 +350,9 @@ initial_equations = [
 initial = GridBasedInitialisation()
 initial.add_equations(grid_equations + initial_equations)
 
-
+## Add filtering to selected q vector variables
+DRP = ExplicitFilter(block, [0,1], q_vector = simulation_eq.time_advance_arrays, width=11, filter_type='DRP', optimized=False, sigma=0.2, multi_block=None)
+block.set_equations(DRP.equation_classes)
 #########################################################################################################################
 #																														#
 # Printouts & Monitor Points / Latex																					#

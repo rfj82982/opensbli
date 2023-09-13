@@ -13,7 +13,7 @@ from opensbli.core.kernel import ConstantsToDeclare as CTD
 class ExplicitFilter(object):
     """ Selective filtering from Bogey & Bailly, A family of low dispersive and low dissipative explicit
     schemes for flow and noise computations, JoCP (2004) 194-214."""
-    def __init__(self, block, filter_directions, filter_type='DRP', width=11, frequency=25, optimized=False, sigma=0.3333333, airfoil=False, multi_block=False):
+    def __init__(self, block, filter_directions, filter_type='DRP', q_vector = None, width=11, frequency=25, optimized=False, sigma=0.3333333, airfoil=False, multi_block=False):
         self.width, self.optimized = width, optimized
         directions = ['x', 'y', 'z']
         print("Using a %s filter with stencil width %d for block %d, in directions: %s." % (filter_type, self.width, block.blocknumber, [directions[x] for x in filter_directions]))
@@ -32,20 +32,25 @@ class ExplicitFilter(object):
         self.filter_type = filter_type
         # Arrays to filter
         # Conservative variables
-        if block.conservative:
-            if self.ndim == 2:
-                q = ['rho', 'rhou0', 'rhou1', 'rhoE']
-            elif self.ndim == 3:
-                q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
-            self.q_vector = [block.location_dataset(x) for x in flatten(q)]
-        else:
-            if self.ndim == 2:
-                q = ['rho', 'u0', 'u1', 'Et']
-            elif self.ndim == 3:
-                q = ['rho', 'u0', 'u1', 'u2', 'Et']
-            self.q_vector = [block.location_dataset('rho')] + [block.location_dataset('rho')*block.location_dataset('%s' % x) for x in q[1:]]
-            self.lhs = [block.location_dataset(x) for x in q]
-
+        if q_vector == None:
+            if block.conservative:
+                if self.ndim == 2:
+                    q = ['rho', 'rhou0', 'rhou1', 'rhoE']
+                elif self.ndim == 3:
+                    q = ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']
+                self.q_vector = [block.location_dataset(x) for x in flatten(q)]
+            else:
+                if self.ndim == 2:
+                    q = ['rho', 'u0', 'u1', 'Et']
+                elif self.ndim == 3:
+                    q = ['rho', 'u0', 'u1', 'u2', 'Et']
+                self.q_vector = [block.location_dataset('rho')] + [block.location_dataset('rho')*block.location_dataset('%s' % x) for x in q[1:]]
+                self.lhs = [block.location_dataset(x) for x in q]
+        else: # User specifies which time-advance quantities need to be filtered
+            q = flatten(q_vector)
+            self.q_vector = [block.location_dataset(x) for x in q]
+            print(self.q_vector)
+            # exit()
         self.temp_arrays = [block.location_dataset('%s_RKold' % x) for x in q]
         self.freq = ConstantObject('filter_frequency')
         self.freq.value = frequency
