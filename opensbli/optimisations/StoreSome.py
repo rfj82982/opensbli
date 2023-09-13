@@ -300,10 +300,11 @@ class StoreSome(Central):
         if cds:
             # Sort by grouping variables
             if group:
+                # Sort derivative evaluations by direction (x, y, z) and then by name
                 if equation_type == 'Convective':
-                    cds = sorted(cds, key=lambda x: x.args[1].direction)
+                    cds = sorted(cds, key=lambda x: (x.args[1].direction, str(x.args[0])))
                 elif equation_type == 'Viscous':
-                    cds = sorted(cds, key=lambda x: str(x.args[0]))
+                    cds = sorted(cds, key=lambda x: (x.args[1].direction, str(x.args[0]), x.order))
             for i, der in enumerate(cds):
                 self.update_range_of_constituent_relations(der, block)
                 if level == 1:
