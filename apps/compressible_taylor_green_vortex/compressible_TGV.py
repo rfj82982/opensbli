@@ -152,13 +152,8 @@ else:
     exit()
     schemes[LF.name] = LF
 block.set_discretisation_schemes(schemes)
-
 boundaries = []
-# Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
-if not teno:
-    
-else:
-    
+
 # Set periodic boundary with desired halo depth
 for direction in range(ndim):
     boundaries += [PeriodicBC(direction, 0, halos=halos)]

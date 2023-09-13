@@ -4,11 +4,23 @@
 """
 from opensbli.core.datatypes import SimulationDataType
 from opensbli.core.block import SimulationBlock
+from opensbli.core.opensbliobjects import DataSet, DataObject
 from opensbli.multiblock.blockcollection import MultiBlock
 
 class Monitor(object):
     def __init__(self, block, flow_var, probe_loc, numbering):
-        self.flow_var = flow_var + '_B%d' % block.blocknumber
+        if isinstance(flow_var, DataSet):
+            self.flow_var = flow_var
+        elif isinstance(flow_var, DataObject):
+            self.flow_var = str(DataObject) + '_B%d' % block.blocknumber
+        elif isinstance(flow_var, str):
+            if '_B%d' % block.blocknumber in flow_var:
+                self.flow_var = flow_var
+            else:
+                self.flow_var = flow_var + '_B%d' % block.blocknumber
+        else:
+            raise ValueError("Unknown simulation monitor input: {}".format(flow_var))
+        print(self.flow_var)
         self.probe_loc = probe_loc
         self.block = block
         if len(probe_loc) != block.ndim:
@@ -27,7 +39,7 @@ class ScalarMonitor(object):
         return
 
 class SimulationMonitor(object):
-    def __init__(self, arrays, probe_locations, blocks, print_frequency=100, OPS_V2=True, fp_precision=12, NaN_check=None, output_file=None):
+    def __init__(self, arrays, probe_locations, blocks, print_frequency=100, OPS_V2=True, fp_precision=12, NaN_check=None, output_file='output.log'):
         """ Class to enable access of dataset values during the simulation.
         :arg list arrays: A list of DataSets to monitor during the simulation.
         :arg list probe_locations: A list of tuples giving the (i,j,k) grid index location of the probe.
