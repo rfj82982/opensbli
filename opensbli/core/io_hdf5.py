@@ -151,7 +151,7 @@ class iohdf5(opensbliIO):
     def constant_writing_opsc_code(cls):
         """ Writes the constants defined in the simulation to the HDF5 output files."""
         code = []
-        user_constants = [x for x in CTD.constants if isinstance(x, ConstantObject)]
+        user_constants = sorted([x for x in CTD.constants if isinstance(x, ConstantObject)], key=lambda x: str(x))
         user_constants = [x for x in user_constants if not x.rational]
         # Write a separate function for constant writing
         code += ['void write_constants(const char* %s){' % "filename"]

@@ -10,8 +10,8 @@ from opensbli.core.grid import GridVariable
 from opensbli.core.kernel import ConstantsToDeclare as CTD
 # from opensbli.core.kernel import Kernel
 import warnings
+from opensbli.equation_types.opensbliequations import OpenSBLIEq
 # from scipy.optimize import curve_fit
-# from opensbli.equation_types.opensbliequations import OpenSBLIEq
 
 plt.style.use('classic')
 
