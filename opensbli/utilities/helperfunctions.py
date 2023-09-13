@@ -205,11 +205,15 @@ def print_iteration_ops(simulation_name='opensbli', every=100, NaN_check=None, n
         fflush(stdout);"""  % (every, every)
             if NaN_check is not None:
                 for i in range(nblocks):
+                    if '_B%d' % i in NaN_check:
+                        name = NaN_check
+                    else:
+                        name = NaN_check + '_B%d' % i
                     if i == 0:
                         lines[no+2] += """
-        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+        ops_NaNcheck(%s);\n""" % name
                     else:
-                        lines[no+2] += """        ops_NaNcheck(%s_B%d);\n""" % (NaN_check, i)
+                        lines[no+2] += """        ops_NaNcheck(%s);\n""" % name
                 lines[no+2] += """        ops_timers(&inner_start, &elapsed_inner_start);\n"""
 
                 lines[no+2] += """}\n""" 

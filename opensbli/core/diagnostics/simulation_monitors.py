@@ -20,7 +20,6 @@ class Monitor(object):
                 self.flow_var = flow_var + '_B%d' % block.blocknumber
         else:
             raise ValueError("Unknown simulation monitor input: {}".format(flow_var))
-        print(self.flow_var)
         self.probe_loc = probe_loc
         self.block = block
         if len(probe_loc) != block.ndim:
@@ -150,7 +149,7 @@ class SimulationMonitor(object):
         if self.ndim == 1:
             stencil_name = 'stencil_%d_00_1' % M.block.blocknumber
         elif self.ndim == 2:
-            stencil_name = 'stencil_%d_00_00_00_2' % M.block.blocknumber
+            stencil_name = 'stencil_%d_00_00_2' % M.block.blocknumber
         else:
             stencil_name = 'stencil_%d_00_00_00_3' % M.block.blocknumber
         output_code = ["ops_par_loop(monitor_%d_%s, \"Reduction %s_%d\", %s, %d, monitor_range_%d_%s," % (number, name, name, number, M.block.blockname, self.ndim, number, name)]

@@ -8,14 +8,15 @@
 # university of southampton
 # --------------------------------------------------------------------------------------------------------------------------------------------
 
+# Import all the functions from opensbli
 from opensbli import *
-import copy
-from opensbli.utilities.katzer_init import Initialise_Katzer
-from opensbli.utilities.helperfunctions import substitute_simulation_parameters, output_hdf5, print_iteration_ops
+from sympy import sin, cos, sinh, tanh, exp, pi, log
+#import copy
+from opensbli.utilities.helperfunctions import substitute_simulation_parameters
+from opensbli.utilities.flatmix_init import Initialise_Flatmix
 from opensbli.utilities.oblique_shock import ShockConditions
-from sympy import tan, pi, tanh, sinh, cosh, exp, cos, sin
+
 import time_averaging
-from opensbli.utilities.mixflat_init import Initialise_MixFlat
 # settings to turn on statistics gathering & read from restart file
 stats = True
 restart = True
@@ -347,7 +348,7 @@ rhoref, uref, ydomain, blthickness = 0.11693, 585.1815, 0.00025439*110, 0.000254
 
 
 # initial = Initialise_Katzer(polynomial_directions, n_poly_coefficients, Re, xMach, Tinf, coordinate_evaluations=coordinate_evaluation)
-initial = Initialise_MixFlat(polynomial_directions, n_poly_coefficients,  Re, xMach, Tinf, rhoref, uref, ydomain, blthickness, coordinate_evaluation)
+initial = Initialise_Flatmix(polynomial_directions, n_poly_coefficients,  Re, xMach, Tinf, Twall, Sc, adiabatic_condition, catalytic_condition, cN2, cN, cO2, cO, cNO, pref, rhoref, uref, blthickness, coordinate_evaluation)
 
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(arrays=simulation_eq.time_advance_arrays, save_every=5000, **kwargs)
@@ -456,4 +457,4 @@ reaction_constants = ['Cf9','nf9','thetaf9','B91','B92','B93','B94','B95']
 reaction_values = ['6.440e17','-1.0','3.837e4','1.066','-0.833','-3.095','-0.084','0.004']
 substitute_simulation_parameters(reaction_constants, reaction_values)
 
-print_iteration_ops(NaN_check='rhoN2_B0')
+print_iteration_ops(NaN_check='rhoN2')

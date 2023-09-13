@@ -410,7 +410,7 @@ OPSC(alg) # ,OPS_V2=True
 # Add the data from "Input" section
 substitute_simulation_parameters(set_constants.keys(), set_constants.values())
 
-print_iteration_ops(NaN_check='rhoN2_B0')
+print_iteration_ops(NaN_check='rhoN2')
 
 
 #############################################################################################################################################

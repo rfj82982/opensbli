@@ -187,7 +187,7 @@ class RungeKuttaLS(Scheme):
         :arg list zipped: List of tuples containing the intermediate, solution and residual arrays for each equation being solved.
         :arg object block: OpenSBLI SimulationBlock.
         :returns: list: List of the two discretised Kernels required for the RK scheme."""
-        solution_update_kernel = Kernel(block, "Temporal solution advancement")
+        solution_update_kernel = Kernel(block, computation_name="Temporal solution advancement")
         # Update the range of evaluation
         solution_update_kernel.set_grid_range(block)
         # Update the solution and stages

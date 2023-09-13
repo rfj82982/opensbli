@@ -1,18 +1,17 @@
 from opensbli.utilities.numerical_functions import spline, splint
-from sympy import Piecewise, exp
+from sympy import Piecewise
 from scipy.integrate import odeint
 import numpy as np
 import numpy.polynomial.polynomial as poly
 import matplotlib.pyplot as plt
-from opensbli.initialisation import GridBasedInitialisation
+# from opensbli.initialisation import GridBasedInitialisation
 from opensbli.core.opensbliobjects import DataObject, ConstantObject
 from opensbli.core.grid import GridVariable
 from opensbli.core.kernel import ConstantsToDeclare as CTD
-from opensbli.core.kernel import Kernel
+# from opensbli.core.kernel import Kernel
 import warnings
 # from scipy.optimize import curve_fit
-from opensbli.equation_types.opensbliequations import OpenSBLIEq
-
+# from opensbli.equation_types.opensbliequations import OpenSBLIEq
 
 plt.style.use('classic')
 
@@ -355,7 +354,6 @@ class Boundary_layer_profile(object):
         # define constants
         Twall_cpp = ConstantObject('Twall')
         Twall_cpp.value = self.Twall
-        
         CTD.add_constant(Twall_cpp)
 
         # define constants
@@ -431,6 +429,7 @@ class Boundary_layer_profile(object):
         self.dTdy = (-1.83333333333334*T[0]+3.00000000000002*T[1]-1.50000000000003*T[2]+0.333333333333356*T[3]-8.34657956545823e-15*T[4]+1.06910315192207e-15*T[5])/dy
         return y, u, T, scale
 
+from opensbli.initialisation import GridBasedInitialisation
 class Initialise_Flatmix(GridBasedInitialisation):
     """ Generates the initialiastion equations for the boundary-layer profile.
 
@@ -800,6 +799,7 @@ class Initialise_Flatmix(GridBasedInitialisation):
 
         cOe, cNe, cO2e, cN2e, cNOe = ConstantObject('cOe'), ConstantObject('cNe'), ConstantObject('cO2e'), ConstantObject('cN2e'), ConstantObject('cNOe')
         sigOtoNe = ConstantObject('sigOtoNe')
+        CTD.add_constant(sigOtoNe)
 
         # rho_eqn = OpenSBLIEq(rho, 1.0/T)
         # rho_store = OpenSBLIEq(DataObject('rho'), rhoN2 + rhoN + rhoO2 + rhoO + rhoNO )

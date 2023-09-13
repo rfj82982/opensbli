@@ -5,7 +5,6 @@
 """
 
 from opensbli.core.opensbliobjects import DataSet, ConstantObject, DataSetBase, DataObject, GroupedPiecewise, ReductionVariable, ReductionSum, ReductionMax, ReductionMin
-from opensbli.core.opensblifunctions import TemporalDerivative
 from sympy import flatten, preorder_traversal
 from sympy import Equality, Function, pprint, srepr
 
@@ -460,6 +459,7 @@ class SimulationEquations(Discretisation, Solution):
 
     @property
     def time_advance_arrays(cls):
+        from opensbli.core.opensblifunctions import TemporalDerivative
         TD_fns = []
         for c in cls.equations:
             if isinstance(c, list):
@@ -555,6 +555,7 @@ class NonSimulationEquations(Discretisation):
 
     @property
     def time_advance_arrays(cls):
+        from opensbli.core.opensblifunctions import TemporalDerivative
         TD_fns = []
         for c in cls.equations:
             if isinstance(c, list):

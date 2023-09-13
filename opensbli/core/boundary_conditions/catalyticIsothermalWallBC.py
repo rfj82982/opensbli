@@ -12,6 +12,7 @@ from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.opensbliobjects import ConstantObject
 from opensbli.utilities.helperfunctions import increment_dataset
 from opensbli.core.grid import GridVariable
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 
 class catalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBase, WallBC):
@@ -80,7 +81,9 @@ class catalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBase, 
         MNO,MN2,MN,MO,MO2 = ConstantObject('MNO'),ConstantObject('MN2'),ConstantObject('MN'),ConstantObject('MO'),ConstantObject('MO2') # setting rhoNO density for catalytic wall
         dhNO,dhN2,dhN,dhO,dhO2 = ConstantObject('dhNO'),ConstantObject('dhN2'),ConstantObject('dhN'),ConstantObject('dhO'),ConstantObject('dhO2') # setting rhoNO density for catalytic wall
         sigOtoNe = ConstantObject('sigOtoNe') # ratio of freestream O-N, currently definied in the main script
-
+        CTD.add_constant(sigOtoNe)
+        CTD.add_constant(ConstantObject('gama'))
+        CTD.add_constant(ConstantObject('Minf'))
         # definite physical variables
         rN2v, rNv, rO2v, rOv, rNOv = PhysicsVariable('rhoN2'), PhysicsVariable('rhoN'), PhysicsVariable('rhoO2'), PhysicsVariable('rhoO'), PhysicsVariable('rhoNO')
         energy_storev, evib_storev = PhysicsVariable('rhoE'), PhysicsVariable('rhoev')

@@ -4,13 +4,11 @@ from scipy.integrate import odeint
 import numpy as np
 import numpy.polynomial.polynomial as poly
 import matplotlib.pyplot as plt
-from opensbli.initialisation import GridBasedInitialisation
+from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.opensbliobjects import DataObject, ConstantObject
 from opensbli.core.grid import GridVariable
-from opensbli.core.kernel import Kernel
 import warnings
 # from scipy.optimize import curve_fit
-from opensbli.equation_types.opensbliequations import OpenSBLIEq
 
 
 plt.style.use('classic')
@@ -180,6 +178,7 @@ class Boundary_layer_profile(object):
         return y, u, T, scale
 
 
+from opensbli.initialisation import GridBasedInitialisation
 class Initialise_Katzer(GridBasedInitialisation):
     """ Generates the initialiastion equations for the boundary-layer profile.
 
@@ -239,7 +238,7 @@ class Initialise_Katzer(GridBasedInitialisation):
         self.equations += self.eqns
 
         self.equations = block.dataobjects_to_datasets_on_block(self.equations)
-        print(self.order)
+        from opensbli.core.kernel import Kernel
         kernel1 = Kernel(block, computation_name="Grid_based_initialisation%d" % self.order)
         kernel1.set_grid_range(block)
         schemes = block.discretisation_schemes

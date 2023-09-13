@@ -24,7 +24,7 @@ cases = {
 #'/Delery_bump/viscous/'    : #'viscous_shock_delery_aerofoil.py',
 '/transitional_SBLI/'   : 'transitional_SBLI.py',
 '/cylinder/supersonic_cylinder/'    : 'supersonic_cylinder.py',
-'/compressible_taylor_green_vortex/TGV_multi_block/'    : 'compressible_TGV_MB.py.py',
+'/compressible_taylor_green_vortex/TGV_multi_block/'    : 'compressible_TGV_MB.py',
 '/compressible_taylor_green_vortex/'    : 'compressible_TGV.py',
 '/aerofoils/single_block/2D/'   : 'CRM_2D.py',
 '/aerofoils/single_block/3D/'   : 'CRM_3D.py',
@@ -79,11 +79,13 @@ with open(os.devnull, 'w') as devnull:
                 if output_code == 0:
                     print('\33[92m' + "%s translated successfully." % fname + '\033[0m')
             if compile_test:
+                if not os.path.isfile('Makefile'):
+                    print('\33[91m' + "No Makefile for case: {}".format(directory) + '\033[0m')
                 try:
                     proc = subprocess.Popen(["make -B opensbli_openmp"], shell=True, cwd=owd+directory, stdout=devnull, stderr=subprocess.PIPE)
                     for line in proc.stderr:
                         if "error" in str(line) and "linker command failed" not in str(line):
-                            print("Compilation error: {}".format(line))
+                            print('\33[91m' + "Compilation error: {}".format(line) + '\033[0m')
                 except:
                         print("Compile failed.")
         else:

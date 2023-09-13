@@ -120,8 +120,8 @@ class RungeKutta(Scheme):
         return
 
     def create_discretisation_kernel(cls, zipped, block):
-        solution_update_kernel = Kernel(block, "Temporal solution advancement")
-        stage_update_kernel = Kernel(block, "Sub stage advancement")
+        solution_update_kernel = Kernel(block, computation_name="Temporal solution advancement")
+        stage_update_kernel = Kernel(block, computation_name="Sub stage advancement")
         # Update the range of evaluation
         solution_update_kernel.set_grid_range(block)
         stage_update_kernel.set_grid_range(block)
