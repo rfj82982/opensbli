@@ -11,7 +11,7 @@ from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
 from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable
-from sympy import Symbol, flatten, Rational
+from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
 from sympy import Pow, Idx, pprint, count_ops
@@ -73,8 +73,9 @@ class OPSCCodePrinter(C99CodePrinter):
         Otherwise optimisations will be performed for rational constants that are evaluated
         at the start of the program to reduce divisions."""
         if self.settings_opsc.get('rational', True):
+            expr = nsimplify(expr)
             p, q = int(expr.p), int(expr.q)
-            return '%d.0/%d.0' % (p, q)
+            return '(%d.0/%d.0)' % (p, q)
         else:
             pass
             # print(expr)
@@ -148,10 +149,10 @@ class OPSCCodePrinter(C99CodePrinter):
         return str(expr)
 
     def _print_Pow(self, expr):
-        """ Replace pow function calls with direct multiplication. Modified from stackexchange: 65534432."""
+        """ Replace pow function calls with direct multiplication."""
         PREC = precedence(expr)
         if expr.exp in range(2, 7):
-            return '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp))
+            return '(' + '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp)) + ')'
         elif expr.exp in range(-6, 0):
             return '1.0/(' + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
         elif expr.exp == Rational(3,2):
