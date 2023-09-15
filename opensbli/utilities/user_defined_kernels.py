@@ -4,7 +4,6 @@ from opensbli.core.kernel import Kernel
 from sympy import flatten, pprint, Equality
 from opensbli.core.opensbliobjects import GroupedPiecewise
 
-
 class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
     """User defined equations. No checking is performed.
     Just forms a kernel on the range and places the kernel in the algorithm place passed as an
@@ -101,9 +100,9 @@ class UserDefinedEquations(NonSimulationEquations, Discretisation, Solution):
                 no_derivatives += [eq]
             else: # Need to compute the derivative
                 cls.equations = [eq]
-            for sc in spatialschemes:
-                # Constituent relations are returned
-                evaluations.append(schemes[sc].discretise(cls, block))
+            # for sc in spatialschemes:
+            #     # Constituent relations are returned
+            evaluations.append(schemes[str(CentralDerivative)].discretise(cls, block)) # only Central should be used
             UDF_derivative_kernels.append(cls.Kernels[:])
             # Reset discretized Kernels and equations for this equation
             cls.Kernels = []
