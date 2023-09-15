@@ -386,8 +386,18 @@ class OPSC(object):
                     raise ValueError("The code and the formatted line are not same")
             else:
                 formatted_code += [code]
-
         return formatted_code
+
+    def check_failed_central(self, code, kernel):
+        """ Warns the user and exits code-generation if one of the CentralDerivatives failed to discretize and a code was not produced."""
+        for line in code:
+            if "CentralDerivative" in line:
+                print('\33[91m' + "WARNING: Code generation failed to discretize derivative: {} in kernel: '{}', this code will not compile.".format(line, kernel.computation_name) + '\033[0m')
+                exit()
+            elif "Not supported in C" in line:
+                print('\33[91m' + "WARNING: Code generation failed to discretize derivative: {} in kernel: '{}', this code will not compile.".format(line, kernel.computation_name) + '\033[0m')
+                exit()
+        return
 
     def kernel_header(self, tuple_list, idx_constants):
         code = []
@@ -528,6 +538,8 @@ class OPSC(object):
             out = indent_code(out)
             out = self.wrap_long_lines(out)
             files[k.block_number].write('\n'.join(out))
+            # Check for any failed discretisation
+            self.check_failed_central(out, k)
         for f in files:
             f.write("#endif\n")
         files = [f.close() for f in files]

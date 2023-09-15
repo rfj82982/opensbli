@@ -115,7 +115,7 @@ class NS_Split(object):
             print("Convective terms are using the Kennedy-Gruber-Pirozzoli split form.")
             self.split = KGP(conservative, energy_formulation, self.inviscid)
         else:
-            raise NotImplementedError("Only Feierisen and KGP splitting methods are implemented.")
+            raise NotImplementedError("Only Feiereisen and KGP splitting methods are implemented.")
 
         self.conservative = conservative
         self.coordinate_symbol = coordinate_symbol

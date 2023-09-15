@@ -19,11 +19,12 @@ class WENOFilter(NonSimulationEquations):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=False, flux_type='LLF', airfoil=False):
+    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=False, flux_type='LLF', airfoil=False, formulation='Z'):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         self.reconstruction_kernels = []
         self.residual_kernels = []
         self.flux_type = flux_type
+        self.formulation = formulation
         self.airfoil = airfoil
         self.hybrid = False
         if block.conservative:
@@ -437,9 +438,9 @@ class WENOFilter(NonSimulationEquations):
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
         if self.flux_type == 'LLF' or self.flux_type == 'GLF':
-            WS = LFWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            WS = LFWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         elif self.flux_type == 'HLLC' or self.flux_type == 'HLLC-LM':
-            WS = HLLCWeno(scheme_order, formulation='Z', flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            WS = HLLCWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         else:
             raise ValueError("Please input a valid flux splitting type: LLF, GLF, HLLC, HLLC-LM.")
         self.halo_type = set()
