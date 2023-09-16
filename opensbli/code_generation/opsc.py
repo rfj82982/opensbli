@@ -10,7 +10,7 @@ from sympy.utilities.iterables import is_sequence
 from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
-from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable
+from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable, DataObject
 from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
@@ -330,6 +330,7 @@ class OPSC(object):
         self.MultiBlock = False
         self.dtype = algorithm.dtype
         self.nblocks = len(algorithm.block_descriptions)
+        self.const_fname = 'constants.h'
         # Check if the simulation monitoring should be written to an output log file
         if algorithm.simulation_monitor:
             if len(algorithm.simulation_monitor.output_files) > 0:
@@ -576,8 +577,9 @@ class OPSC(object):
                     for s in d.shape:
                         indices = indices + '[%d]' % s
                     constant_declarations += ["%s %s%s;" % (d.datatype.opsc(), d.base.label, indices)]
-        const_file = open('constants.h', 'w')
-        const_file.write('\n'.join(flatten(constant_declarations)))
+        # Write the constant declarations to a separate file
+        const_file = open(self.const_fname, 'w')
+        const_file.write('\n'.join(['// Declaration of global constants'] + flatten(constant_declarations)))
         const_file.close()
         # Declare the simulation blocks
         out += ['#define OPS_%dD' % algorithm.block_descriptions[0].ndim]
@@ -598,28 +600,19 @@ class OPSC(object):
         """ Declares the datasets and stencils required by the program."""
         from opensbli.core.kernel import StencilObject, ConstantsToDeclare
         from opensbli.core.boundary_conditions.exchange import Exchange
-
-        defs = []
-        decls = []
-        # Add OPS_init to the declarations as it should be called before all ops
-        decls += self.ops_init()
+        output = []
         # Sort the constants to a consistent ordering
         ConstantsToDeclare.sort_constants()
         # First process all the constants in the definitions
-        defs += self.set_constant_values(ConstantsToDeclare.constants)
+        output += self.set_constant_values(ConstantsToDeclare.constants)
         # OPS declaration of the constants
-        for d in sorted(ConstantsToDeclare.constants, key=lambda x: str(x)):
-            if isinstance(d, Constant):
-                decls += self.declare_ops_constants(d)
+        output += self.declare_ops_constants(ConstantsToDeclare.constants)
         # Once the constants are done define and declare OPS dats
-        output = defs + decls
-        defs = []
-        decls = []
+        # Add OPS_init to the declarations as it should be called before all ops
+        output += self.ops_init()
         # Define and declare blocks
         for b in algorithm.block_descriptions:
             output += self.declare_block(b)
-        # Notify whether the simulation is being restarted or not
-        output += self.restart_notification()
         # Define and declare datasets on each block
         f = open('defdec_data_set.h', 'w')
         datasets_dec = []
@@ -636,7 +629,7 @@ class OPSC(object):
             else:
                 print(d)
                 print(type(d))
-                raise TypeError("Not a stencil, dataset, or reduction variable declaration.")
+                raise TypeError("Quantity: {} is not defined within the simulation and cannot be declared.".format(d))
         dsets_to_declare = dict([(str(x), x) for x in store_dsets])
 
         for name in sorted(dsets_to_declare, key=str.lower):
@@ -678,7 +671,8 @@ class OPSC(object):
         io_file = open('io.h', 'w')
         io_file.close()
         output += self.ops_partition()
-        # Restart simulation time and iteration number
+        # Notify whether the simulation is being restarted or not
+        output += self.restart_notification()
         # This MUST be done after the partition command to avoid MPI HDF5 errors
         output += self.restart_simulation()
         return output
@@ -716,20 +710,17 @@ class OPSC(object):
         :rtype: list"""
         output = [WriteString('// Init OPS partition')]
         # Add timers to MPI partition time
-        output += [WriteString('double partition_start0, elapsed_partition_start0;')]
+        output += [WriteString('double partition_start0, elapsed_partition_start0, partition_end0, elapsed_partition_end0;')]
         output += [WriteString('ops_timers(&partition_start0, &elapsed_partition_start0);')]
         output += [WriteString('ops_partition(\"\");')]
-        output += [WriteString('double partition_end0, elapsed_partition_end0;')]
         output += [WriteString('ops_timers(&partition_end0, &elapsed_partition_end0);')]
-        output += [WriteString('ops_printf("-----------------------------------------\\n");')]
-        output += [WriteString('ops_printf("MPI partition and reading input file time: %lf\\n", elapsed_partition_end0-elapsed_partition_start0);')]
-        output += [WriteString('ops_printf("-----------------------------------------\\n");')]
+        output += [WriteString('ops_printf("-----------------------------------------\\n MPI partition and reading input file time: %lf\\n -----------------------------------------\\n", elapsed_partition_end0-elapsed_partition_start0);')]
         output += [WriteString('fflush(stdout);\n')]
         return output
 
     def restart_notification(self):
         """ Notifies the user whether the simulation is being restarted from file or not."""
-        out = []
+        out = [WriteString('// Restart procedure')]
         out += [WriteString('ops_printf("\\033[1;32m\");')]
         out += [WriteString('if (restart == 1){')]
         ### Add the simulation time afterwards ###
@@ -855,15 +846,13 @@ class OPSC(object):
                                 out += [WriteString("%s[%d] = %s;" % (str(c.base.label), i, ccode(c.value[i], settings={'rational': True})))]
         return out
 
-
-
-    def declare_ops_constants(self, c):
+    def declare_ops_constants(self, input_constants):
         """ Calls the OPS declare constant function for all of the defined constants."""
-        if isinstance(c, ConstantObject):
-            return [WriteString("ops_decl_const(\"%s\" , 1, \"%s\", &%s);" % (str(c), c.datatype.opsc(), str(c)))]
-        elif isinstance(c, ConstantIndexed):
-            return []
-        return
+        OPS_constant_declarations = []
+        for c in sorted(input_constants, key=lambda x: str(x)):
+            if isinstance(c, ConstantObject):
+                OPS_constant_declarations += [WriteString("ops_decl_const(\"%s\" , 1, \"%s\", &%s);" % (str(c), c.datatype.opsc(), str(c)))]
+        return OPS_constant_declarations
 
     def declare_inline_array(self, dtype, name, values):
         return WriteString('%s %s[] = {%s};' % (dtype, name, ', '.join([str(s) for s in values])))
