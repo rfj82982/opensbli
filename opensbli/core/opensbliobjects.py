@@ -543,44 +543,6 @@ class GridIndex(Indexed):
         ret = Indexed.__new__(cls, base, *indices)
         return ret
 
-
-class GridIndexedBase(IndexedBase):
-    """ TODO is it used?
-    Base object to locate the global index of the grid point NOT USED ANY MORE WARNING
-    """
-    is_commutative = True
-    is_Symbol = True
-    is_symbol = True
-    is_Atom = True
-
-    def __new__(cls, label, ndim, **kw_args):
-        sym = label
-        pprint(sym)
-        print(type(sym))
-        ret = super(GridIndexedBase, cls).__new__(cls, sym, (1), **kw_args)  # Shape would be of size ndim
-        pprint(ret.shape)
-        return ret
-
-    def __hash__(self):
-        h = hash(self._hashable_content())
-        self._mhash = h
-        return h
-
-    def _hashable_content(self):
-        return str(self.label)
-
-    def __getitem__(cls, indices, **kw_args):
-        if isinstance(indices, int):
-            indices = [indices]
-        if len(indices) != cls.shape:
-            raise IndexException("Rank mismatch.")
-        return GridIndex(cls, *indices)
-
-    def _sympystr(self, p):
-        """ For clarity the block number is printed"""
-        return "%s" % (str(self.label))
-
-
 class Grididx(Indexed):
     """ A coordinate object which can have Einstein indices to be expanded, this is used to
     differentiate between different Einstein terms, while performing differentiation.
