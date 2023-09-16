@@ -322,7 +322,7 @@ class Kernel(object):
         for i in sorted(ins, key=lambda x: str(x)):
             if isinstance(i, ReductionVariable):
                 if i.reduction_type != 'OPS_INC': # summation reduction variables are not an input
-                    code += ['ops_arg_gbl(&%s, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
+                    code += ['ops_arg_gbl(&%s_out, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
             elif isinstance(i, DataSetBase):
                 code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
             elif isinstance(i, Globalvariable):
