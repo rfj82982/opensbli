@@ -89,4 +89,4 @@ with open(os.devnull, 'w') as devnull:
                 except:
                         print("Compile failed.")
         else:
-            print('\33[91m' + "Generation of %s has failed." % fname + '\033[0m')
+            print('\33[91m' + "Generation of %s%s has failed." % (fname, directory) + '\033[0m')

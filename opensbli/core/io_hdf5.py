@@ -358,6 +358,9 @@ class iohdf5_slices(opensbliIO):
     def set_read_from_hdf5_arrays(cls, block):
         return # hdf5 slicing has no read functionality, output option only
 
+    def set_write_to_hdf5_arrays(cls, block):
+        return # for consistency with regular hdf5 io class
+
     def hdf5write_opsc_code(cls, init=False):
         var_name = 'slice_name%s' % cls.blocknumber
         code = []

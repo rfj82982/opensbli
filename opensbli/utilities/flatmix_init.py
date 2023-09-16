@@ -1,5 +1,5 @@
 from opensbli.utilities.numerical_functions import spline, splint
-from sympy import Piecewise
+from sympy import Piecewise, exp
 from scipy.integrate import odeint
 import numpy as np
 import numpy.polynomial.polynomial as poly

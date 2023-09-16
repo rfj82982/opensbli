@@ -23,7 +23,7 @@ simulation_parameters = {
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 weno = False
 teno = False
-TVD = False
+TVD = True
 ndim = 2
 # Define all the constants in the equations
 constants = ["gama", "Minf"]
@@ -166,21 +166,23 @@ upper_eqns = [x, shock_loc, d, u0, u1, p, rho, rhou0, rhou1, rhoE]
 boundaries[direction][side] = DirichletBC(direction, side, upper_eqns)
 block.set_block_boundaries(boundaries)
 
-# WENO/TVD filter if not using direct application of WENO/TENO
-if not weno and not teno:
-    if TVD:
-        TVD_filter = TVDFilter(block, airfoil=False, store_filter=False)
-        block.set_equations(TVD_filter.equation_classes)
-    else:
-        WF = WENOFilter(block, order=5, formulation='Z', dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True, optimize=True)
-        block.set_equations(WF.equation_classes)  
 
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('WENO_filter'), DataObject('kappa')])
-block.setio(copy.deepcopy(h5))
+h5.add_arrays([DataObject('x0'), DataObject('x1')])
 
+# WENO/TVD filter if not using direct application of WENO/TENO
+if not weno and not teno:
+    if TVD:
+        TVD_filter = TVDFilter(block, airfoil=False)
+        block.set_equations(TVD_filter.equation_classes)
+    else:
+        WF = WENOFilter(block, order=5, formulation='Z', flux_type='LLF', airfoil=False, optimize=True)
+        block.set_equations(WF.equation_classes)
+        h5.add_arrays([DataObject('WENO_filter'), DataObject('kappa')])
+
+block.setio(copy.deepcopy(h5))
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 block.set_discretisation_schemes(schemes)
 

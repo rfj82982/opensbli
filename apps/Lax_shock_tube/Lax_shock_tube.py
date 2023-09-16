@@ -18,7 +18,7 @@ simulation_parameters = {
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 teno = False
-weno = True
+weno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]
@@ -151,14 +151,13 @@ h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0')])
 
-h5.add_arrays([ DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2')])
-block.setio(copy.deepcopy(h5))
-
 if not teno and not weno:
     # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=3, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+    WF = WENOFilter(block, order=3, flux_type='LLF', airfoil=False)
     block.set_equations(WF.equation_classes)
+    h5.add_arrays([ DataObject('kappa')])
 
+block.setio(copy.deepcopy(h5))
 
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 block.set_discretisation_schemes(schemes)

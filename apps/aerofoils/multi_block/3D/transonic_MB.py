@@ -288,7 +288,7 @@ filters = {0:[], 1:[], 2:[]}
 shock_filters = []
 for no, block in enumerate(multi_block.blocks):
     if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        WF = WENOFilter(block, order=5, metrics=metriceq, dissipation_sensor='Ducros', airfoil=True, flux_type='LLF')
+        WF = WENOFilter(block, order=5, metrics=metriceq, airfoil=True, flux_type='LLF')
         shock_filters.append(WF)
         filters[no] += [WF.equation_classes]
 

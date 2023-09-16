@@ -132,10 +132,10 @@ block.setio(copy.deepcopy(h5))
 TVD = True
 if not weno and not teno:
     if TVD:
-        TVD_filter = TVDFilter(block, airfoil=False, store_filter=False)
+        TVD_filter = TVDFilter(block, airfoil=False)
         block.set_equations(TVD_filter.equation_classes)
     else:
-        WF = WENOFilter(block, order=5, formulation='Z', dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+        WF = WENOFilter(block, order=5, formulation='Z', flux_type='LLF', airfoil=False)
         block.set_equations(WF.equation_classes)        
 
 

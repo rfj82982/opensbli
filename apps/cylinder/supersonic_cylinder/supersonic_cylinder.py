@@ -173,7 +173,7 @@ DRP = ExplicitFilter(block, [0,1], width=9, filter_type='DRP', optimized=False, 
 block.set_equations(DRP.equation_classes)
 
 # WENO filter for shock-capturing
-WF = WENOFilter(block, order=7, metrics=metriceq, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False)
+WF = WENOFilter(block, order=7, metrics=metriceq, flux_type='LLF', airfoil=False)
 block.set_equations(WF.equation_classes)
 
 # set the discretisation schemes
