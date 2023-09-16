@@ -14,19 +14,13 @@ from opensbli.equation_types.metric import MetricsEquation
 from opensbli.schemes.spatial.scheme import CentralHalos_defdec
 from opensbli.core.grid import GridVariable as gv
 
-class WENOFilter(NonSimulationEquations):
-    """ Class to apply a WENO-based non-linear filter after a full time-step of a non-dissipative high order base scheme. The dissipative
-    portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
-    uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
-    equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=True, flux_type='LLF', airfoil=False, formulation='Z', optimize=False):
-        print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
-        self.reconstruction_kernels = []
-        self.residual_kernels = []
-        self.flux_type = flux_type
-        self.formulation = formulation
+
+class NonLinearFilterBase(object):
+    """ Base class for shared functionality between non-linear filter-step methods."""
+    def __init__(self, airfoil, block, metrics):
+        self.reconstruction_kernels, self.residual_kernels = [], []
         self.airfoil = airfoil
-        self.optimize = optimize
+        self.hybrid = False
         if block.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -36,10 +30,7 @@ class WENOFilter(NonSimulationEquations):
             self.mom_lhs = 'u'
             self.energy_lhs = 'Et'
         block.shock_filter = True
-        # Choice of how to evaluate the amount of dissipation to be added (varies spatially in the domain)
-        self.dissipation_sensor = dissipation_sensor
         self.block = block
-        self.store_filter = store_filter
         self.ndim = block.ndim
         self.equation_classes = []
         # Check if the problem needs a metric transformation of the equations
@@ -48,14 +39,12 @@ class WENOFilter(NonSimulationEquations):
             try:
                 assert isinstance(block.get_metric_class, MetricsEquation)
             except:
-                raise ValueError("Please set the metric class on the block before calling the WENO filter in the problem script.")
+                raise ValueError("Please set the metric class on the block before calling the WENO/TVD filter in the problem script.")
         self.process_metrics(metrics)
         self.EE = EinsteinEquation()
         if metrics is not None:
             optional_subs_dict = metrics.metric_subs
             self.EE.optional_subs_dict = optional_subs_dict
-        # Main class to generate the filter
-        self.main(order, block)
         return
 
     def detect_wall_boundaries(self):
@@ -101,9 +90,9 @@ class WENOFilter(NonSimulationEquations):
                 self.curvilinear = False
         return
 
-    def create_weno_equations(self, block):
+    def create_base_equations(self, block, scheme_type):
         # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
-        scheme_type = "**{\'scheme\':\'Weno\'}"
+        scheme_type = "**{\'scheme\':\'%s\'}" % scheme_type
         constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Uniform mesh, no stretching or curvilinear terms
         if self.metric_class is None:
@@ -195,11 +184,12 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(reduction_kernel)
         return
 
-    def constituent_relations(self, block, kappa):
+    def constituent_relations(self, block, kappa=None):
         """ Evalutes the constiteunt relations on the state at the end of a full step
         of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
-        # Set the shock sensor to 1
-        CR_eqns = [OpenSBLIEq(kappa, 1)]
+        CR_eqns = []
+        if kappa is not None:
+            CR_eqns += [OpenSBLIEq(kappa, 1)]
         # Ensure gama has been added to the constants to define
         gamma = ConstantObject('gama')
         CTD.add_constant(gamma)
@@ -231,43 +221,32 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(CR_kernel)
         return
 
-    # def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
-    #     """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
-    #     (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
-    #     # Evaluate the local Mach number
-    #     M  = symbols('M', **{'cls' : GridVariable})
-    #     Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
-    #     # Evaluation of the kappa parameter to control the amount of dissipaton
-    #     Mach_equations += [OpenSBLIEq(block.location_dataset('Mach_sensor'), Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
-    #     return Mach_equations
-
-    def evaluate_shock_sensor(self, block):
-        # Add a shock sensor for the WENO filter
-        SS = ShockSensor()
-        if block.ndim > 1: # no shock sensor defined for ndim=1 currently
-            # Ducros dilatation part
-            sensor_evaluations, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
-        else:
-            raise ValueError("No hybrid method for ndim=1.")
-        # Update the CRs needed, and set the shock sensor to 1 on the outer boundaries
-        self.constituent_relations(block, kappa)
-        # Halo points for the sensor kernel
-        sensor_halos = []
+    def zero_work_arrays(self, block, dsets):
+        """ Ensure all the temporary arrays are zeroed before calculating the filter."""
+        resid_kernel = self.residual_kernels[0]
+        zero_halos = []
         for _ in range(self.ndim):
-            sensor_halos.append([self.halo_type, self.halo_type])
-        sensor_kernel = self.create_kernel('Shock sensor', flatten(sensor_evaluations), sensor_halos, block)
-        self.add_kernel(sensor_kernel)
+            zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
+        zeroed_equations = [OpenSBLIEq(dset, 0.0) for dset in dsets]
+        zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
         self.component_counter += 1
-        return kappa
+        self.add_kernel(zero_kernel)
+        return
 
-    def wall_control(self):
+    def convert_to_datasets(self, block, equations):
+        output_equations = []
+        for eqn in flatten(equations):
+            output_equations += [eqn.convert_to_datasets(block)]
+        return output_equations
+
+    def wall_control(self, depth):
         """ Turns off the filter close to any of the walls or block interfaces in the problem."""
         if self.airfoil:
-            wall_buffer = 5
-            buffer = 5
+            wall_buffer = depth
+            buffer = depth
         else:
-            wall_buffer = 5
-            buffer = 5
+            wall_buffer = depth
+            buffer = depth
         wall_var = gv('Wall')
         wall_conditions, wall_equations = [], []
         indexes = [OpenSBLIEq(gv('Grid_%d' % direction), self.block.grid_indexes[direction]) for direction in range(self.ndim)]
@@ -292,101 +271,9 @@ class WENOFilter(NonSimulationEquations):
         wall_equations += [OpenSBLIEq(wall_var, Piecewise(*wall_conditions))]
         return wall_var, wall_equations
 
-    def filter_application(self, block):
-        """ Applies the non-linear filter by subtracting from the q vector after a full RK time-step."""
-        resid_kernel = self.residual_kernels[0]
-        nvars = len(self.solution_vector)
-        # Previous in conservative form
-        rho = self.solution_vector[0]
-        modified_equations = []
-        # Turn off the sensor at the walls
-        wall_detection, wall_equations = self.wall_control()
-        modified_equations += wall_equations
-        # Find the maximum of nearby points
-        kappa_fact = self.kappa
-        check = self.kappa
-        for direction in range(self.ndim):
-            for loc in [-1, -1, 0, 1, 2]:
-                check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
-        kappa_fact = block.location_dataset('WENO_filter')
-        # Selection of which kappa points to apply the filter to
-        DS = ConstantObject('Ducros_select')
-        DS.value = 0.05
-        CTD.add_constant(DS)
-        check = check >= DS
-        cond1 = ExprCondPair(1, check)
-        cond2 = ExprCondPair(0.0, True)
-        modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
-        # detJ if needed, need to improve these scaling
-        if self.curvilinear and self.airfoil:
-            if self.ndim == 3:
-                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
-            else:
-                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
-            detJ_term = gv('inv_detJ')
-        else:
-            detJ_term = 1
-
-        # Apply the filter
-        for i, eqn in enumerate(resid_kernel.equations):
-            # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
-            weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
-            rhs = kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
-            modified_equations.append(OpenSBLIEq(self.solution_vector[i], self.solution_vector[i] + rhs))
-
-        # Finish creating the kernel
-        resid_kernel.equations = modified_equations
-        residual_kernel = self.create_kernel('Non-linear filter application', resid_kernel.equations, resid_kernel.halo_ranges, block)
-        self.component_counter += 1
-        self.add_kernel(residual_kernel)
-        return
-
-    def zero_work_arrays(self, block, dsets):
-        """ Ensure all the temporary arrays are zeroed before calculating the filter."""
-        resid_kernel = self.residual_kernels[0]
-        zero_halos = []
-        for _ in range(self.ndim):
-            zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
-        zeroed_equations = [OpenSBLIEq(dset, 0.0) for dset in dsets]
-        zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
-        self.component_counter += 1
-        self.add_kernel(zero_kernel)
-        return
-
-    def convert_to_datasets(self, block, equations):
-        output_equations = []
-        for eqn in flatten(equations):
-            output_equations += [eqn.convert_to_datasets(block)]
-        return output_equations
-
-    def hybrid_condition(self, kernel, block, direction):
-        """ Checks the Ducros sensor, if it is a shock we perform the WENO reconstruction, else do nothing."""
-        from sympy import And, Or
-        input_equations = flatten(kernel.equations)
-        kernel.equations = []
-
-        if self.optimize:
-            """ Only evaluate the WENO kernels at certain points, based on the shock sensor result. Improves performance."""
-            DC = ConstantObject('Ducros_check')
-            DC.value = 0.05
-            CTD.add_constant(DC)
-            locations = [-3, -2, -1, 1, 2]
-            term = self.kappa
-            # for dire in range(block.ndim):
-            dire = direction # Only check 1D kappa
-            for loc in locations:
-                term = Max(term, increment_dataset(self.kappa, dire, loc))
-            check = term > DC
-            cond1 = ExprCondPair(input_equations, check)
-            cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
-            kernel.add_equation([GroupedPiecewise(cond1, cond2)])
-        else:
-            kernel.add_equation(input_equations)
-        return kernel
-
     def update_periodic_boundary(self, block, halos):
         """ Apply periodic boundary conditions again if required before applying the WENO filter."""
-        print("Applying periodic boundary for WENO")
+        print("Applying periodic boundary for WENO/TVD")
         bc_kernels = []
         for direction in range(block.ndim):
             for side in [0, 1]:
@@ -396,12 +283,28 @@ class WENOFilter(NonSimulationEquations):
         self.equation_classes[0].Kernels = bc_kernels + self.equation_classes[0].Kernels
         return
 
+class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
+    """ Class to apply a WENO-based non-linear filter after a full time-step of a non-dissipative high order base scheme. The dissipative
+    portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
+    uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
+    equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
+    def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False):
+        print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
+        # Get the shared functionality between TVD/WENO non-linear filters
+        NonLinearFilterBase.__init__(self, airfoil, block, metrics)
+        self.flux_type = flux_type
+        self.formulation = formulation
+        self.optimize = optimize
+        # Main class to generate the filter
+        self.main(order, block)
+        return
+
     def main(self, scheme_order, block):
         """ Main calling function to generate the kernels for the WENO filter."""
         # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
-        eqn = self.create_weno_equations(block)
+        eqn = self.create_base_equations(block, "Weno")
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
@@ -445,3 +348,106 @@ class WENOFilter(NonSimulationEquations):
         # # Create the residual kernel
         self.filter_application(block)
         return
+
+    # def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
+    #     """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
+    #     (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
+    #     # Evaluate the local Mach number
+    #     M  = symbols('M', **{'cls' : GridVariable})
+    #     Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
+    #     # Evaluation of the kappa parameter to control the amount of dissipaton
+    #     Mach_equations += [OpenSBLIEq(block.location_dataset('Mach_sensor'), Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
+    #     return Mach_equations
+
+    def evaluate_shock_sensor(self, block):
+        # Add a shock sensor for the WENO filter
+        SS = ShockSensor()
+        if block.ndim > 1: # no shock sensor defined for ndim=1 currently
+            # Ducros dilatation part
+            sensor_evaluations, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
+        else:
+            raise ValueError("No hybrid method for ndim=1.")
+        # Update the CRs needed, and set the shock sensor to 1 on the outer boundaries
+        self.constituent_relations(block, kappa)
+        # Halo points for the sensor kernel
+        sensor_halos = []
+        for _ in range(self.ndim):
+            sensor_halos.append([self.halo_type, self.halo_type])
+        sensor_kernel = self.create_kernel('Shock sensor', flatten(sensor_evaluations), sensor_halos, block)
+        self.add_kernel(sensor_kernel)
+        self.component_counter += 1
+        return kappa
+
+    def filter_application(self, block):
+        """ Applies the non-linear filter by subtracting from the q vector after a full RK time-step."""
+        resid_kernel = self.residual_kernels[0]
+        nvars = len(self.solution_vector)
+        # Previous in conservative form
+        rho = self.solution_vector[0]
+        modified_equations = []
+        # Turn off the sensor at the walls
+        wall_detection, wall_equations = self.wall_control(depth=5)
+        modified_equations += wall_equations
+        # Find the maximum of nearby points
+        kappa_fact = self.kappa
+        check = self.kappa
+        for direction in range(self.ndim):
+            for loc in [-1, -1, 0, 1, 2]:
+                check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
+        kappa_fact = block.location_dataset('WENO_filter')
+        # Selection of which kappa points to apply the filter to
+        DS = ConstantObject('Ducros_select')
+        DS.value = 0.05
+        CTD.add_constant(DS)
+        check = check >= DS
+        cond1 = ExprCondPair(1, check)
+        cond2 = ExprCondPair(0.0, True)
+        modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        # detJ if needed, need to improve these scaling
+        if self.curvilinear and self.airfoil:
+            if self.ndim == 3:
+                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            else:
+                modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
+            detJ_term = gv('inv_detJ')
+        else:
+            detJ_term = 1
+
+        # Apply the filter
+        for i, eqn in enumerate(resid_kernel.equations):
+            # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
+            weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
+            rhs = kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
+            modified_equations.append(OpenSBLIEq(self.solution_vector[i], self.solution_vector[i] + rhs))
+
+        # Finish creating the kernel
+        resid_kernel.equations = modified_equations
+        residual_kernel = self.create_kernel('Non-linear filter application', resid_kernel.equations, resid_kernel.halo_ranges, block)
+        self.component_counter += 1
+        self.add_kernel(residual_kernel)
+        return
+
+    def hybrid_condition(self, kernel, block, direction):
+        """ Checks the Ducros sensor, if it is a shock we perform the WENO reconstruction, else do nothing."""
+        from sympy import And, Or
+        input_equations = flatten(kernel.equations)
+        kernel.equations = []
+
+        if self.optimize:
+            """ Only evaluate the WENO kernels at certain points, based on the shock sensor result. Improves performance."""
+            DC = ConstantObject('Ducros_check')
+            DC.value = 0.05
+            CTD.add_constant(DC)
+            locations = [-3, -2, -1, 1, 2]
+            term = self.kappa
+            # for dire in range(block.ndim):
+            dire = direction # Only check 1D kappa
+            for loc in locations:
+                term = Max(term, increment_dataset(self.kappa, dire, loc))
+            check = term > DC
+            cond1 = ExprCondPair(input_equations, check)
+            cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
+            kernel.add_equation([GroupedPiecewise(cond1, cond2)])
+        else:
+            kernel.add_equation(input_equations)
+        return kernel

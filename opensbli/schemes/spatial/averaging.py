@@ -35,13 +35,16 @@ class SimpleAverage(Averaging):
         print("Simple averaging is being used for the characteristic system.")
         return
 
-    def average(self, functions, direction, name_suffix, block):
+    def average(self, functions, direction, name_suffix, block, locations=None):
         """Performs a simple average.
 
         :arg functions: List of function (Symbols) to apply averaging on.
         :arg locations: Relative index used for averaging (e.g. [0,1] for i and i+1)
         :arg direction: Axis of the dataset on which the location should be applied.
         :arg name_suffix: Name to be appended to the functions. """
+        # TVD filter requires averages at different locations
+        if locations is not None:
+            self.locations = locations
         avg_equations = []
         for f in functions:
             if isinstance(f, EinsteinTerm):
@@ -67,9 +70,11 @@ class RoeAverage(Averaging):
         self.physics = physics
         return
 
-    def average(self, functions, direction, name_suffix, block):
+    def average(self, functions, direction, name_suffix, block, locations=None):
         self.direction = direction
         evaluations = []
+        if locations is not None:
+            self.locations = locations
         # Averaged density rho_hat = sqrt(rho_L*rho_R)
         if self.physics:
             physics = self.physics

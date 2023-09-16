@@ -484,17 +484,7 @@ class CentralDerivative(Function, BasicDiscretisation, DerPrint):
         return self.expand()
 
     def _discretise_derivative(cls, scheme, block, type_of_eq=None, boundary=True):
-        """
-        TODO V2 documentation
-        This would return the discritized derivative of the
-        local object depending on the order of accuracy specified
-        Returns the formula for the derivative function, only first derivatives or homogeneous
-        derivatives of higher order are supported. The mixed derivatives will be handled impl-
-        citly while creating the kernels
-        :arg derivative: the derivative on which discretisation should be performed
-        :returns: the discritized derivative, in case of wall boundaries this is a Piecewise-
-        function
-        """
+        """ Produces the discrete form of the symbolic derivative."""
         order = cls.order
         form = 0
         # Put the coefficients of first and second derivatives in a dictionary and use them
@@ -585,15 +575,7 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
         return
 
     def _discretise_derivative(cls, block, scheme=None):
-        """This would return the discritized derivative of the
-        local object depending on the order of accuracy specified
-        Returns the formula for the derivative function, only first derivatives or homogeneous
-        derivatives of higher order are supported. The mixed derivatives will be handled impl-
-        citly while creating the kernels
-        :arg derivative: the derivative on which discretisation should be performed
-        :returns: the discritized derivative, in case of wall boundaries this is a Piecewise-
-        function
-        """
+        """ Creates the df_i/dx = 1/dx * (f_{i+1/2} - f_{i-1/2}) approximation from the half-node reconstructions."""
         order = cls.order
         if (order > 1):
             raise ValueError("Weno Derivatives only defined for first order")
@@ -634,7 +616,7 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
     @property
     def evaluate_reconstruction(self):
         # Check if the reconstruction placeholders are combined, other options should be added here
-        if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
+        if "single_reconstruction_variable" in self.settings and self.settings["single_reconstruction_variable"]:
             variables = set([r.reconstructed_symbol for r in self.reconstructions])
             if len(variables) == 1:
                 return list(variables)[0]
@@ -646,6 +628,58 @@ class WenoDerivative(Function, BasicDiscretisation, DerPrint):
             for r in self.reconstructions:
                 total += [r.reconstructed_symbol]
             return total[::-1]
+
+
+class TVDDerivative(Function, BasicDiscretisation, DerPrint):
+
+    def __new__(cls, expr, *args, **settings):
+        args = flatten([expr] + list(args))
+        ret = super(TVDDerivative, cls).__new__(cls, *args, evaluate=False)
+        ret.store = True  # By default all the derivatives are stored
+        ret.reconstructions = []
+        ret.local_evaluation = True
+        ret.settings = settings
+        return ret
+
+    @property
+    def simple_name(cls):
+        return "%s" % ("TVD")
+
+    def update_settings(self, **settings):
+        # existing_keys = self.settings.keys()
+        for key in settings.keys():
+            if key in self.settings.keys():
+                raise ValueError("Key exists")
+        self.settings.update(settings)
+        return
+
+    def _discretise_derivative(cls, block, scheme=None):
+        """ Creates the df_i/dx = 1/dx * (f_{i+1/2} - f_{i-1/2}) approximation from the half-node reconstructions."""
+        order = cls.order
+        if (order > 1):
+            raise ValueError("TVD Derivatives only defined for first order")
+        dire = cls.get_direction[0]
+        delta = block.deltas[dire]
+        loc = list(cls.reconstruction_work.indices[:])
+        loc[dire] += -1
+        form = (cls.reconstruction_work - cls.reconstruction_work.base[loc]) / delta
+        return form
+
+    def create_reconstruction_work_array(self, block):
+        self.reconstruction_work = block.work_array()
+        block.increase_work_index
+        return
+
+    def classical_strong_differentiabilty_transformation(cls, metric):
+        direction = cls.get_direction
+        if cls.order == 1:
+            metric_der = metric.classical_strong_differentiabilty_transformation[direction[0]]
+        elif cls.order == 2:
+            raise NotImplementedError("")
+        for at in metric_der.atoms(Function):
+            local_at = type(cls)(at.args[0].subs(metric.general_function, cls.args[0]), at.args[1:])
+            metric_der = metric_der.subs(at, local_at)
+        return metric_der
 
 
 class TenoDerivative(Function, BasicDiscretisation, DerPrint):
@@ -672,15 +706,7 @@ class TenoDerivative(Function, BasicDiscretisation, DerPrint):
         return
 
     def _discretise_derivative(cls, block, scheme=None):
-        """This would return the discritized derivative of the
-        local object depending on the order of accuracy specified
-        Returns the formula for the derivative function, only first derivatives or homogeneous
-        derivatives of higher order are supported. The mixed derivatives will be handled impl-
-        citly while creating the kernels
-        :arg derivative: the derivative on which discretisation should be performed
-        :returns: the discritized derivative, in case of wall boundaries this is a Piecewise-
-        function
-        """
+        """ Creates the df_i/dx = 1/dx * (f_{i+1/2} - f_{i-1/2}) approximation from the half-node reconstructions."""
         order = cls.order
         if (order > 1):
             raise ValueError("Teno Derivatives only defined for first order")
@@ -706,7 +732,7 @@ class TenoDerivative(Function, BasicDiscretisation, DerPrint):
     @property
     def evaluate_reconstruction(self):
         # Check if the reconstruction placeholders are combined, other options should be added here
-        if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
+        if "single_reconstruction_variable" in self.settings and self.settings["single_reconstruction_variable"]:
             variables = set([r.reconstructed_symbol for r in self.reconstructions])
             if len(variables) == 1:
                 return list(variables)[0]
@@ -764,6 +790,6 @@ class MetricDerivative(Function, BasicDiscretisation):
         return ret
 
 
-localfuncs = (MetricDerivative, KD, CentralDerivative, WenoDerivative, TenoDerivative, TemporalDerivative, LC, Dot)
+localfuncs = (MetricDerivative, KD, CentralDerivative, WenoDerivative, TenoDerivative, TVDDerivative, TemporalDerivative, LC, Dot)
 simplifying_funcs = (KD, LC, Dot)
 local_objects = (DataObject, CoordinateObject, ConstantObject, EinsteinTerm)

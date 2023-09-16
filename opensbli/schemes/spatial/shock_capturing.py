@@ -1,10 +1,10 @@
 """@brief
    @author Satya Pramod Jammy, David J Lusher
-   @contributors
+   @contributors Max Walker
    @details
 """
 
-from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min, symbols, sqrt, And, Piecewise, pi, sin
+from sympy import Symbol, Rational, zeros, Abs, Matrix, flatten, Max, diag, Function, count_ops, simplify, factor, sign, Min, symbols, sqrt, And, Piecewise, pi, sin, Equality
 from sympy.core.numbers import Zero
 from opensbli.core.opensbliobjects import EinsteinTerm, DataSetBase, ConstantObject, DataSet, DataObject, ReductionMax
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
@@ -13,7 +13,7 @@ from opensbli.core.grid import GridVariable as gv
 from opensbli.utilities.helperfunctions import increment_dataset
 from opensbli.physical_models.euler_eigensystem import EulerEquations
 from sympy import factor, pprint
-from opensbli.schemes.spatial.averaging import SimpleAverage
+from opensbli.schemes.spatial.averaging import SimpleAverage, RoeAverage
 from opensbli.core.grid import GridVariable
 
 
@@ -40,7 +40,7 @@ class ShockCapturing(object):
             stencil = expression_matrix.stencil_points
             for i in range(expression_matrix.shape[0]):
                 settings = derivatives[i].settings
-                if "combine_reconstructions" in settings and settings["combine_reconstructions"]:
+                if "single_reconstruction_variable" in settings and settings["single_reconstruction_variable"]:
                     name = "Recon_%d" % i
                 else:
                     name = 'L_X%d_%d' % (self.direction, i)
@@ -58,7 +58,7 @@ class ShockCapturing(object):
             stencil = expression_matrix.stencil_points
             for i in range(expression_matrix.shape[0]):
                 settings = derivatives[i].settings
-                if "combine_reconstructions" in settings and settings["combine_reconstructions"]:
+                if "single_reconstruction_variable" in settings and settings["single_reconstruction_variable"]:
                     name = "Recon_%d" % i
                 else:
                     name = 'R_X%d_%d' % (self.direction, i)
@@ -78,7 +78,7 @@ class ShockCapturing(object):
         :arg object kernel: The current computational kernel."""
         output_eqns = []
         # Extract info from the RVs
-        self.process_rv(derivatives)
+        # self.process_rv(derivatives)
         for no, d in enumerate(derivatives):
             for rv in d.reconstructions:
                 if isinstance(rv, type(self.reconstruction_classes[1])):
@@ -100,8 +100,8 @@ class ShockCapturing(object):
                     output_eqns += [rv.final_equations[-1]]
                 else:
                     output_eqns += [rv.final_equations]
-                if MP_limiter:
-                    output_eqns += self.monotonicity_limiter(rv)
+                # if MP_limiter:
+                #     output_eqns += self.monotonicity_limiter(rv)
         return output_eqns
 
 
@@ -343,23 +343,33 @@ class Characteristic(EigenSystem):
 
         :arg object physics: Physics object, defaults to NSPhysics."""
 
-    def __init__(self, physics):
+    def __init__(self, physics, flux_split, shock_filter=None, TVD=False):
+        self.flux_split = flux_split
+        self.shock_filter = shock_filter
+        self.TVD = TVD
         EigenSystem.__init__(self, physics)
         return
 
-    def get_characteristic_equations(self, direction, derivatives, solution_vector, block, shock_filter=False, flux_split=False):
+    def get_characteristic_equations(self, direction, derivatives, solution_vector, block):
         """ Performs the three stages required for a characteristic based reconstruction."""
-        if not flux_split:
-            combined_reconstruction = False # Use separate variables to reconstruct left and right states
+        print("Flux split: {}".format(self.flux_split))
+        print("Shock filter: {}".format(self.shock_filter))
+        print("TVD: {}".format(self.TVD))
+        if 'HLLC' in self.flux_type:
+            recon_setting = False
         else:
-            temp = False
-            combined_reconstruction = temp
-        settings = {"combine_reconstructions": combined_reconstruction, "shock_filter": shock_filter}
+            recon_setting = True
+        settings = {"single_reconstruction_variable": recon_setting, "shock_filter": self.shock_filter}
         for i in range(len(derivatives)):
             derivatives[i].update_settings(**settings)
         pre_process_eqns, reduction_eqns = self.pre_process(direction, derivatives, solution_vector, block)
-        interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, block)
-        if flux_split:
+
+        if not self.TVD:
+            interpolated_eqns = self.interpolate_reconstruction_variables(derivatives, block)
+        else:
+            interpolated_eqns = []
+
+        if self.flux_split:
             post_process_eqns = self.post_process(direction, derivatives, block)
         else:
             post_process_eqns = self.post_process_Q(direction, derivatives, block)
@@ -424,7 +434,21 @@ class Characteristic(EigenSystem):
             self.global_eigenvalue_reductions[dire] = symbolic_matrix
         return
 
-    def characteristic_setup(self, direction, name, derivatives, block):
+    def solution_vector_to_characteristic(self, solution_vector, direction, name):
+        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
+        solution_vector_stencil = zeros(len(solution_vector), len(stencil_points))
+        CS_matrix = zeros(len(solution_vector), len(stencil_points))
+        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
+            for i, flux in enumerate(solution_vector):
+                solution_vector_stencil[i, j] = increment_dataset(flux, direction, val)
+                CS_matrix[i, j] = gv('CS_%d%d' % (i, j))
+        grid_LEV = self.generate_grid_variable_LEV(direction, name)
+        characteristic_solution_stencil = grid_LEV*solution_vector_stencil
+        characteristic_solution_stencil.stencil_points = stencil_points
+        CS_matrix.stencil_points = stencil_points
+        return characteristic_solution_stencil, CS_matrix
+
+    def characteristic_setup(self, direction, name, derivatives, block, index=0):
         """ Perform the initial characteristic steps used in both LLF and RF."""
         ev_dict, LEV_dict, REV_dict, required_metrics, inv_metric = self.euler.apply_direction(direction)
         self.eigen_value.update(ev_dict)
@@ -435,7 +459,9 @@ class Characteristic(EigenSystem):
         # Finding flow variables to average
         required_symbols = self.get_symbols_in_ev(direction).union(self.get_symbols_in_LEV(direction)).union(self.get_symbols_in_REV(direction))
         required_terms = required_symbols.union(required_metrics)
-        averaged_equations = self.average(required_terms, direction, averaged_suffix_name, block)
+        # Get the averaged eigenvalue variables
+        locations = [index, index+1]
+        averaged_equations = self.average(required_terms, direction, averaged_suffix_name, block, locations)
         # Add symbols from the derivatives: e.g. pressure is required
         for d in derivatives:
             required_symbols = required_symbols.union(d.atoms(DataSetBase))
@@ -456,6 +482,21 @@ class Characteristic(EigenSystem):
                 term = term.subs({old: new})
             avg_LEV_values[i] = term
         return inverse_evals, avg_LEV_values
+
+    def flux_vector_to_characteristic(self, derivatives, direction, name):
+        fv = self.direction_flux_vector(derivatives, direction)
+        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
+        flux_stencil = zeros(len(fv), len(stencil_points))
+        CF_matrix = zeros(len(fv), len(stencil_points))
+        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
+            for i, flux in enumerate(fv):
+                flux_stencil[i, j] = increment_dataset(flux, direction, val)
+                CF_matrix[i, j] = gv('CF_%d%d' % (i, j))
+        grid_LEV = self.generate_grid_variable_LEV(direction, name)
+        characteristic_flux_stencil = grid_LEV*flux_stencil
+        characteristic_flux_stencil.stencil_points = stencil_points
+        CF_matrix.stencil_points = stencil_points
+        return characteristic_flux_stencil, CF_matrix
 
     def replace_gamma_factor(self, eqns):
         ConstantsToDeclare.add_constant(ConstantObject('gama'))
@@ -550,6 +591,162 @@ class Characteristic(EigenSystem):
         SD_R = dict(right)
         return SD_L, SD_R
 
+class TVDCharacteristic(Characteristic):
+    """ Implements the TVD equations
+
+    :arg object physics: Physics object, defaults to NSPhysics.
+    :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
+
+    def __init__(self, physics, averaging=None, flux_split=False):
+        Characteristic.__init__(self, physics, flux_split)
+        if averaging is None:
+            self.average = SimpleAverage([0, 1]).average
+        else:
+            self.average = averaging.average
+        self.flux_split = flux_split
+        return
+
+    def pre_process(self, direction, derivatives, solution_vector, block):
+        """ TVD implementation over j-1/2, j+1/2, j+3/2, Max Walker & David J. Lusher (09/2023)."""
+        self.direction = direction
+        self.input_solution_vector = solution_vector
+        # Number of variables to solve
+        nvars = len(solution_vector)
+        # Output equations
+        pre_process_equations, reduction_equations = [], []
+        # Update the ev, LEV and REV dicts and perform averaging
+        avg_name = 'AVG_%d' % direction
+        # Loop over 3 indices to get the eigensystem at j-1/2, j+1/2, j+3/2
+        offsets = [-1, 0, 1]
+        # Create the alpha variables
+        alphas = Matrix([[GridVariable('alpha_%d%d' % (i, j)) for i in range(nvars)] for j in range(3)])
+        for recon_index, jbase in enumerate(offsets):
+            # Step 1: obtain the averaged eigenstate
+            inv_metric, averaged_equations, required_symbols = self.characteristic_setup(direction, avg_name, derivatives, block, index=jbase)
+            pre_process_equations += averaged_equations
+            # Update required CRs
+            if recon_index == 0:
+                self.update_constituent_relation_symbols(required_symbols, direction)
+            # Step 2: Store the R^-1 matrix components (LEV) based on this averaged state
+            # # Inverse metric term: WARNING: Metrics need to be looked at for curvilinear cases
+            self.inv_metric = self.convert_matrix_to_grid_variable(inv_metric, avg_name)
+            # # Eigensystem based on averaged quantities
+            avg_LEV_values = self.convert_matrix_to_grid_variable(self.left_eigen_vector[direction], avg_name)
+            # # Manually replace re-used divides by inverses
+            inverse_evals, avg_LEV_values = self.create_LEV_inverses(direction, avg_LEV_values)
+            pre_process_equations += inverse_evals
+            # # Grid variables to store averaged eigensystems
+            grid_LEV_matrix = self.generate_grid_variable_LEV(direction, avg_name)
+            pre_process_equations += flatten(self.generate_equations_from_matrices(grid_LEV_matrix, avg_LEV_values))
+            # Step 3: Transform the du terms, alpha = R^-1 *(u_{i+1} - u_i)
+            du = Matrix([increment_dataset(v, direction, jbase+1) - increment_dataset(v, direction, jbase) for v in solution_vector])
+            alpha_vector = grid_LEV_matrix*du
+            # Store the alphas for later use
+            pre_process_equations += [OpenSBLIEq(alphas[recon_index, a], alpha_vector[a]) for a in range(len(alpha_vector))]
+            # Step 5: If j+1/2 location, store the wavespeeds ws_0, ws_1, ws_2, and REV for later use
+            if jbase == 0:
+                # Step 5a: Wavespeed calculation
+                ev = self.eigen_value[direction]
+                out = zeros(*ev.shape)
+                # Replace the eigenvalues with their averaged state instead
+                subs_dict = {}
+                for eqn in averaged_equations:
+                    dset_base = list(eqn.rhs.atoms(DataSetBase))[0]
+                    subs_dict[EinsteinTerm(str(dset_base.noblockname))] = eqn.lhs
+                for i in range(ev.shape[0]):
+                    for j in range(ev.shape[1]):
+                        ev[i,j] = ev[i,j].subs(subs_dict)
+                wavespeeds = self.generate_grid_variable_ev(direction, 'ws')
+                ev_equations = self.generate_equations_from_matrices(wavespeeds, ev)
+                ev_equations = [x for x in ev_equations if x != 0]
+                pre_process_equations += ev_equations
+                # Step 5b: REV calculation
+                avg_REV_values = self.create_REV_inverses(direction)
+                self.grid_REV = self.generate_grid_variable_REV(direction, 'AVG')
+                REV_equations = [OpenSBLIEq(x, y, evaluate=False) for (x,y) in zip(self.grid_REV, avg_REV_values)]
+                # Remove any 0=0 evaluations
+                REV_equations = [x for x in REV_equations if x.lhs != 0 and x.rhs != 0]
+                pre_process_equations += REV_equations
+
+        # Step 6: Calculate sigma values from Yee et al (1999)
+        sigmas = [GridVariable('sigma_%d' % i) for i in range(nvars)]
+        delta = ConstantObject('delta_TVD')
+        delta.value = 0.5
+        ConstantsToDeclare.add_constant(delta)
+        for i, sigma in enumerate(sigmas):
+            if_expr, else_expr = Abs(alphas[1, i]), (alphas[1, i]**2 + delta**2) / (2*delta)
+            pre_process_equations += [OpenSBLIEq(sigmas[i], Piecewise((if_expr, Abs(alphas[1, i]) >= delta), (else_expr, True)))]
+        # Step 7: Calculate the 'g' functions, which are the upwind limiter functions
+        S = GridVariable('S')
+        g_equations = []
+        # g terms at j and j+1
+        g_terms = [[GridVariable('g_%d%d' % (i,j)) for i in range(nvars)] for j in range(2)]
+        # Temporary terms
+        t1, t2 = GridVariable('t1'), GridVariable('t2')
+        for j in [1, 2]:
+            for i in range(nvars):
+                g_equations += [OpenSBLIEq(S, sign(alphas[j,i]))]
+                a1, a2 = alphas[j,i], alphas[j-1,i]
+                g_equations += [OpenSBLIEq(t1, Max(0, Min(2*Abs(a1), S*a2))), OpenSBLIEq(t2, Min(Abs(a1), 2*S*a2))]
+                g_eval = S*Max(t1, t2)
+                g_equations += [OpenSBLIEq(g_terms[j-1][i], g_eval)]
+        pre_process_equations += g_equations
+        # Step 8: Calculate the phi_{j+1/2} terms
+        gamma_terms = [GridVariable('gamma_%d' % i) for i in range(nvars)]
+        eps = ConstantObject('eps_TVD')
+        eps.value = 0.00000001
+        ConstantsToDeclare.add_constant(eps)
+        for i, gamma in enumerate(gamma_terms):
+            if_expr, else_expr = 0, sigmas[i]*alphas[1,i]*(g_terms[1][i] - g_terms[0][i]) / (alphas[1,i]**2 + eps)
+            pre_process_equations += [OpenSBLIEq(gamma_terms[i], Piecewise((if_expr, Equality(alphas[1,i], 0)), (else_expr, True)))]
+        # Step 9: Calculate the phi terms
+        phi_terms = [GridVariable('phi_%d' % i) for i in range(nvars)]
+        # Lambda needs to be one per direction
+        TVD_lambda = ConstantObject('lambda%d_TVD' % direction)
+        for i, phi in enumerate(phi_terms):
+            rhs = -sigmas[i]*(g_terms[1][i] + g_terms[0][i]) + (Abs(wavespeeds[i,i]+gamma_terms[i]) - TVD_lambda*wavespeeds[i,i]**2)*alphas[1,i]
+            pre_process_equations += [OpenSBLIEq(phi, rhs)]
+        # Step 10: Calculate switch to control the dissipation of the limiter (Harten switch, (eqns 2.22 and 2.23 in Yee et al. 1999))
+        theta_hat_terms = [[GridVariable('theta_hat_%d%d' % (i,j)) for i in range(nvars)] for j in range(2)]
+        for j in [1, 2]:
+            for i in range(nvars):
+                a1, a2 = alphas[j,i], alphas[j-1,i]
+                pre_process_equations += [OpenSBLIEq(t1, Abs(a1) - Abs(a2))]
+                pre_process_equations += [OpenSBLIEq(t2, Abs(a1) + Abs(a2) + eps)]
+                rhs = Abs(t1/t2)**2
+                pre_process_equations += [OpenSBLIEq(theta_hat_terms[j-1][i], rhs)]
+        # Step 11: Calculate theta terms at j+1/2 interface
+        theta_terms = [GridVariable('theta_%d' % i) for i in range(nvars)]
+        pre_process_equations += [OpenSBLIEq(theta_terms[i], Max(theta_hat_terms[0][i], theta_hat_terms[1][i])) for i in range(nvars)]
+        # Step 12: Calculate phi star terms
+        self.phi_star_terms = [GridVariable('phi_star_%d' % i) for i in range(nvars)]
+        kappa = ConstantObject('kappa_TVD')
+        kappa.value = 1.5
+        ConstantsToDeclare.add_constant(kappa)
+        pre_process_equations += [OpenSBLIEq(self.phi_star_terms[i], kappa*theta_terms[i]*phi_terms[i]) for i in range(nvars)]
+        # NOTE: Setting the work arrays is performed in the post_process function to be consistent with WENO
+        # Remove '0' entries and gamma - 1 factors from pre_process_equations
+        pre_process_equations = self.remove_zero_equations(pre_process_equations)
+        pre_process_equations = self.replace_gamma_factor(pre_process_equations)
+        return pre_process_equations, reduction_equations
+
+    def post_process_Q(self, dire, derivatives, block):
+        """ Transforms the characteristic WENO interpolated fluxes back into real space by multiplying by the right
+        eigenvector matrix.
+
+        :arg list derivatives: The derivatives to perform the characteristic decomposition and WENO on.
+        :arg object kernel: The current computational kernel."""
+        pp_equations = []
+        ndim = block.ndim
+        # Create output arrays to store the final flux reconstructions
+        reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
+        # Transformation matrix back to physical (non-characteristic) space
+        # Step 13: Create the numerical filter flux: (eq. 2.2 in Yee et al. 1999)
+        phi_star_terms = Matrix(self.phi_star_terms)
+        reconstructions = factor(0.5*self.grid_REV*phi_star_terms)
+        # Assign to work arrays
+        pp_equations += [OpenSBLIEq(wk, reconstructions[i]) for i, wk in enumerate(reconstructed_work)]
+        return pp_equations
 
 class LFCharacteristic(Characteristic):
     """ This class contains the base Local Lax-Fedrich scheme performed in characteristic space.
@@ -557,12 +754,14 @@ class LFCharacteristic(Characteristic):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, physics, flux_type='LLF', averaging=None, flux_split=True):
-        Characteristic.__init__(self, physics)
+    def __init__(self, physics, flux_split, flux_type=None, averaging=None, shock_filter=None):
+        Characteristic.__init__(self, physics, flux_split, shock_filter)
         if averaging is None:
             self.average = SimpleAverage([0, 1]).average
         else:
             self.average = averaging.average
+        if flux_type is None:
+            flux_type = 'LLF' # default to local Lax Friedrichs
         self.flux_type = flux_type
         self.flux_split = flux_split
         return
@@ -650,15 +849,11 @@ class LFCharacteristic(Characteristic):
         ndim = block.ndim
         # Create output arrays to store the final flux reconstructions
         reconstructed_work = self.create_output_wk_arrays(dire, derivatives, block)
-
-
-
         # Transformation matrix back to physical (non-characteristic) space
         avg_REV_values = self.create_REV_inverses(dire)
         reconstructed_characteristics = Matrix([d.evaluate_reconstruction for d in derivatives])
-
         # Single reconstruction variable?
-        if derivatives[0].settings["combine_reconstructions"]:
+        if derivatives[0].settings["single_reconstruction_variable"]:
             # Apply a shock sensor if the WENO is being applied as a filter step
             if block.shock_filter:
                 for i, recon in enumerate(reconstructed_characteristics):
@@ -666,6 +861,7 @@ class LFCharacteristic(Characteristic):
             reconstructed_flux = avg_REV_values*reconstructed_characteristics
             pp_equations += [OpenSBLIEq(x, y) for x, y in zip(reconstructed_work, reconstructed_flux)]
         else:
+            print("Using multiple reconstruction variables in WENO/TENO post-process.")
             left_F, right_F = symbols("fL:%d" % (ndim+2), **{'cls':GridVariable}), symbols("fR:%d" % (ndim+2), **{'cls':GridVariable})
             wL, wR = Matrix(reconstructed_characteristics[:,1]), Matrix(reconstructed_characteristics[:,0])
             pp_equations += [OpenSBLIEq(x, y) for x, y in zip(right_F, avg_REV_values*wR)]
@@ -741,21 +937,6 @@ class LFCharacteristic(Characteristic):
         pp_equations = self.replace_gamma_factor(pp_equations)
         return pp_equations
 
-
-    def solution_vector_to_characteristic(self, solution_vector, direction, name):
-        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
-        solution_vector_stencil = zeros(len(solution_vector), len(stencil_points))
-        CS_matrix = zeros(len(solution_vector), len(stencil_points))
-        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
-            for i, flux in enumerate(solution_vector):
-                solution_vector_stencil[i, j] = increment_dataset(flux, direction, val)
-                CS_matrix[i, j] = gv('CS_%d%d' % (i, j))
-        grid_LEV = self.generate_grid_variable_LEV(direction, name)
-        characteristic_solution_stencil = grid_LEV*solution_vector_stencil
-        characteristic_solution_stencil.stencil_points = stencil_points
-        CS_matrix.stencil_points = stencil_points
-        return characteristic_solution_stencil, CS_matrix
-
     def create_characteristic_matrices(self, direction, derivatives, solution_vector, name):
         # Reconstruct the combined flux or only the Q vector
         if self.flux_split:
@@ -799,21 +980,6 @@ class LFCharacteristic(Characteristic):
         self.generate_left_reconstruction_variables(negative_flux, derivatives)
         return
 
-    def flux_vector_to_characteristic(self, derivatives, direction, name):
-        fv = self.direction_flux_vector(derivatives, direction)
-        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
-        flux_stencil = zeros(len(fv), len(stencil_points))
-        CF_matrix = zeros(len(fv), len(stencil_points))
-        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
-            for i, flux in enumerate(fv):
-                flux_stencil[i, j] = increment_dataset(flux, direction, val)
-                CF_matrix[i, j] = gv('CF_%d%d' % (i, j))
-        grid_LEV = self.generate_grid_variable_LEV(direction, name)
-        characteristic_flux_stencil = grid_LEV*flux_stencil
-        characteristic_flux_stencil.stencil_points = stencil_points
-        CF_matrix.stencil_points = stencil_points
-        return characteristic_flux_stencil, CF_matrix
-
     def create_max_characteristic_wave_speed(self, pre_process_equations, direction, block):
         """ Creates the equations for local Lax-Friedrich wave speeds, maximum eigenvalues over the local
         WENO/TENO stencils are found."""
@@ -851,15 +1017,16 @@ class HLLCCharacteristic(Characteristic):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, physics, flux_type='HLLC-LM', averaging=None):
-        Characteristic.__init__(self, physics)
+    def __init__(self, physics, flux_type='HLLC-LM', shock_filter=False, averaging=None):
+        flux_split = False # HLLC has flux splitting disabled
+        Characteristic.__init__(self, physics, flux_split, shock_filter)
         if averaging is None:
             self.average = RoeAverage([0, 1]).average
         else:
             self.average = averaging.average
         # if-else version of the HLLC flux construction
         self.conditional = True
-        self.flux_split = True
+        # self.flux_split = True
         self.flux_type = flux_type
         return
 
@@ -919,37 +1086,7 @@ class HLLCCharacteristic(Characteristic):
             reordered_CS = []
             for i in range(n_rows):
                 reordered.append(CS_evaluations[j+i*n_cols])
-
         return reordered, CS_matrix
-
-    def flux_vector_to_characteristic(self, derivatives, direction, name):
-        fv = self.direction_flux_vector(derivatives, direction)
-        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
-        flux_stencil = zeros(len(fv), len(stencil_points))
-        CF_matrix = zeros(len(fv), len(stencil_points))
-        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
-            for i, flux in enumerate(fv):
-                flux_stencil[i, j] = increment_dataset(flux, direction, val)
-                CF_matrix[i, j] = gv('CF_%d%d' % (i, j))
-        grid_LEV = self.generate_grid_variable_LEV(direction, name)
-        characteristic_flux_stencil = grid_LEV*flux_stencil
-        characteristic_flux_stencil.stencil_points = stencil_points
-        CF_matrix.stencil_points = stencil_points
-        return characteristic_flux_stencil, CF_matrix
-
-    def solution_vector_to_characteristic(self, solution_vector, direction, name):
-        stencil_points = sorted(list(set(self.reconstruction_classes[0].func_points + self.reconstruction_classes[1].func_points)))
-        solution_vector_stencil = zeros(len(solution_vector), len(stencil_points))
-        CS_matrix = zeros(len(solution_vector), len(stencil_points))
-        for j, val in enumerate(stencil_points):  # j in fv stencil matrix
-            for i, flux in enumerate(solution_vector):
-                solution_vector_stencil[i, j] = increment_dataset(flux, direction, val)
-                CS_matrix[i, j] = gv('CS_%d%d' % (i, j))
-        grid_LEV = self.generate_grid_variable_LEV(direction, name)
-        characteristic_solution_stencil = grid_LEV*solution_vector_stencil
-        characteristic_solution_stencil.stencil_points = stencil_points
-        CS_matrix.stencil_points = stencil_points
-        return characteristic_solution_stencil, CS_matrix
 
     def generate_reconstruction_variables(self, CS_matrix, derivatives):
         positive = CS_matrix
@@ -1089,9 +1226,8 @@ class HLLCCharacteristic(Characteristic):
             for i, component in enumerate(flux_vars):
                 pp_equations += [OpenSBLIEq(flux_vars[i], Piecewise(*[(condition1[0][i], condition1[1]), (condition2[0][i], condition2[1]), (condition3[0][i], condition3[1]), (condition4[0][i], condition4[1]), (condition5[0][i], condition5[1])]))]
 
-        
         # Check for positive density/pressures
-        pp_equations += self.positivity_limiter(dire, block, derivatives, pL, pR, rhoL, rhoR, flux_vars)
+        # pp_equations += self.positivity_limiter(dire, block, derivatives, pL, pR, rhoL, rhoR, flux_vars)
         # Assign to global storage work arrays
         pp_equations += [OpenSBLIEq(reconstructed_work[i], flux_vars[i]) for i in range(ndim+2)]
         # Apply a shock sensor if the WENO is being applied as a filter step
