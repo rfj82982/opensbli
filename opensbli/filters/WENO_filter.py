@@ -19,14 +19,14 @@ class WENOFilter(NonSimulationEquations):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=False, flux_type='LLF', airfoil=False, formulation='Z'):
+    def __init__(self, block, order, metrics=None, dissipation_sensor='Ducros', store_filter=True, flux_type='LLF', airfoil=False, formulation='Z', optimize=False):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         self.reconstruction_kernels = []
         self.residual_kernels = []
         self.flux_type = flux_type
         self.formulation = formulation
         self.airfoil = airfoil
-        self.hybrid = False
+        self.optimize = optimize
         if block.conservative:
             self.rhou = 'rhou'
             self.mom_lhs = 'rhou'
@@ -195,10 +195,11 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(reduction_kernel)
         return
 
-    def constituent_relations(self, block):
+    def constituent_relations(self, block, kappa):
         """ Evalutes the constiteunt relations on the state at the end of a full step
         of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
-        CR_eqns = []
+        # Set the shock sensor to 1
+        CR_eqns = [OpenSBLIEq(kappa, 1)]
         # Ensure gama has been added to the constants to define
         gamma = ConstantObject('gama')
         CTD.add_constant(gamma)
@@ -221,7 +222,7 @@ class WENOFilter(NonSimulationEquations):
             CR_eqns += [OpenSBLIEq(p, rho*(gamma-1)*(energy - 0.5*sum([dset**2 for dset in velocity_components])))]
         # Ideal gas, speed of sound
         CR_eqns += [OpenSBLIEq(a, sqrt(gamma*p*inv_rho))]
-
+        # Wide halos
         CR_halos = []
         for _ in range(self.ndim):
             CR_halos.append([self.halo_type, self.halo_type])
@@ -230,38 +231,26 @@ class WENOFilter(NonSimulationEquations):
         self.add_kernel(CR_kernel)
         return
 
-    def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
-        """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
-        (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
-        # Evaluate the local Mach number
-        M  = symbols('M', **{'cls' : GridVariable})
-        Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
-        # Evaluation of the kappa parameter to control the amount of dissipaton
-        Mach_equations += [OpenSBLIEq(block.location_dataset('Mach_sensor'), Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
-        return Mach_equations
+    # def evaluate_Yee_Mach_sensor(self, velocity_components, pressure, speed_of_sound, block):
+    #     """ Sensor controlling the amount of dissipation to apply. Turns the filter off in low-Mach regions.
+    #     (High Order Filter Methods for Wide Range of Compressible Flow Speeds, Yee, 2010)."""
+    #     # Evaluate the local Mach number
+    #     M  = symbols('M', **{'cls' : GridVariable})
+    #     Mach_equations = [OpenSBLIEq(M, sqrt(sum(dset**2 for dset in velocity_components))/speed_of_sound)]
+    #     # Evaluation of the kappa parameter to control the amount of dissipaton
+    #     Mach_equations += [OpenSBLIEq(block.location_dataset('Mach_sensor'), Min(0.5*M**2 * sqrt(4+(1-M**2)**2) / (1+M**2), 1.0))]
+    #     return Mach_equations
 
     def evaluate_shock_sensor(self, block):
         # Add a shock sensor for the WENO filter
         SS = ShockSensor()
-        sensor_evaluations = []
-        if block.ndim > 1:
-        # Ducros dilatation part
-            output_eqns, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
-            # sensor_pre_evaluations = flatten([output_eqns[0:-1]])
-            # sensor_evaluations += sensor_pre_evaluations
-            # Make the Ducros sensor a binary array of either 0 or 1s
+        if block.ndim > 1: # no shock sensor defined for ndim=1 currently
+            # Ducros dilatation part
+            sensor_evaluations, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
         else:
-            output_eqns, kappa = SS.Ren_sensor(block, name='kappa')
-            # output_eqns, kappa = SS.WENO_1D_sensor(block, name='kappa')
-        kappa_evaluation = output_eqns[-1].rhs
-        # del output_eqns[-1]
-        DT = ConstantObject('Shock_sensor_threshold')
-        DT.value = 0.5
-        CTD.add_constant(DT)
-        evaluation_condition = [ExprCondPair(1, kappa_evaluation > DT)]
-        # # No wall or interface, default condition is the sensor is not turned off
-        evaluation_condition += [ExprCondPair(0, True)]
-        sensor_evaluations += [OpenSBLIEq(kappa, Piecewise(*evaluation_condition))]
+            raise ValueError("No hybrid method for ndim=1.")
+        # Update the CRs needed, and set the shock sensor to 1 on the outer boundaries
+        self.constituent_relations(block, kappa)
         # Halo points for the sensor kernel
         sensor_halos = []
         for _ in range(self.ndim):
@@ -308,27 +297,27 @@ class WENOFilter(NonSimulationEquations):
         resid_kernel = self.residual_kernels[0]
         nvars = len(self.solution_vector)
         # Previous in conservative form
-        q_grid = [gv('q%d' % i) for i in range(nvars)]
         rho = self.solution_vector[0]
         modified_equations = []
         # Turn off the sensor at the walls
         wall_detection, wall_equations = self.wall_control()
         modified_equations += wall_equations
-
+        # Find the maximum of nearby points
         kappa_fact = self.kappa
         check = self.kappa
-        check = 1
-        # for direction in range(self.ndim):
-        #     for loc in [-2, -1, 0, 1, 2]:
-        #         check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
-        kappa_fact = gv('kappa_fact')
-        # check = check > self.DT
-        # cond1 = ExprCondPair(self.kappa, check)
-        # cond2 = ExprCondPair(0.0, True)
-        modified_equations += [OpenSBLIEq(kappa_fact, check)]
-        # modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
-
-        # detJ if needed
+        for direction in range(self.ndim):
+            for loc in [-1, -1, 0, 1, 2]:
+                check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
+        kappa_fact = block.location_dataset('WENO_filter')
+        # Selection of which kappa points to apply the filter to
+        DS = ConstantObject('Ducros_select')
+        DS.value = 0.05
+        CTD.add_constant(DS)
+        check = check >= DS
+        cond1 = ExprCondPair(1, check)
+        cond2 = ExprCondPair(0.0, True)
+        modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        # detJ if needed, need to improve these scaling
         if self.curvilinear and self.airfoil:
             if self.ndim == 3:
                 modified_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
@@ -339,35 +328,12 @@ class WENOFilter(NonSimulationEquations):
             detJ_term = 1
 
         # Apply the filter
-        if not block.conservative:
-            q_vars = [OpenSBLIEq(q_grid[0], rho)] + [OpenSBLIEq(q_grid[i+1], rho*self.solution_vector[i+1]) for i in range(nvars-1)]
-        else:
-            q_vars = [OpenSBLIEq(q_grid[i], self.solution_vector[i]) for i in range(nvars)]
-        
-        if self.store_filter:
-            modified_equations += q_vars[:]
-
-        update_equations = []
         for i, eqn in enumerate(resid_kernel.equations):
             # Turn shock-capturing off only for the reconstruction normal to the wall, currently assume direction = 1 for the wall. Fix later
             weno_eqn = eqn.rhs.xreplace({ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber)) : ConstantObject('inv_rfact%d_block%d' % (1, block.blocknumber))*wall_detection})
             rhs = kappa_fact*ConstantObject('dt')*weno_eqn * detJ_term
-            update_equations.append(OpenSBLIEq(q_vars[i].lhs, rhs))
-            if self.store_filter:
-                update_equations.append(OpenSBLIEq(block.location_dataset('q%d' % i), q_vars[i].lhs))
-                                
-        # Update the global q arrays
-        update_equations.append(OpenSBLIEq(self.solution_vector[0], self.solution_vector[0] + q_vars[0].lhs))
-        if not block.conservative:
-            inv_rho = gv('inv_rho')
-            update_equations += [OpenSBLIEq(inv_rho, 1.0/q_vars[0].lhs)]
-        for i, var in enumerate(self.solution_vector[1:]):
-            if not block.conservative:
-                update_equations.append(OpenSBLIEq(var, var + inv_rho*q_vars[i+1].lhs))
-            else:
-                update_equations.append(OpenSBLIEq(var, var + q_vars[i+1].lhs))
+            modified_equations.append(OpenSBLIEq(self.solution_vector[i], self.solution_vector[i] + rhs))
 
-        modified_equations += update_equations
         # Finish creating the kernel
         resid_kernel.equations = modified_equations
         residual_kernel = self.create_kernel('Non-linear filter application', resid_kernel.equations, resid_kernel.halo_ranges, block)
@@ -398,17 +364,19 @@ class WENOFilter(NonSimulationEquations):
         from sympy import And, Or
         input_equations = flatten(kernel.equations)
         kernel.equations = []
-        if self.hybrid:
-            self.DT = ConstantObject('Ducros_threshold')
-            self.DT.value = 0.5
-            CTD.add_constant(self.DT)
+
+        if self.optimize:
+            """ Only evaluate the WENO kernels at certain points, based on the shock sensor result. Improves performance."""
+            DC = ConstantObject('Ducros_check')
+            DC.value = 0.05
+            CTD.add_constant(DC)
             locations = [-3, -2, -1, 1, 2]
             term = self.kappa
             # for dire in range(block.ndim):
             dire = direction # Only check 1D kappa
             for loc in locations:
                 term = Max(term, increment_dataset(self.kappa, dire, loc))
-            check = term > self.DT
+            check = term > DC
             cond1 = ExprCondPair(input_equations, check)
             cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
             kernel.add_equation([GroupedPiecewise(cond1, cond2)])
@@ -453,8 +421,6 @@ class WENOFilter(NonSimulationEquations):
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the WENO stencil if periodic boundaries
         # bc_kernels = self.update_periodic_boundary(block, WS.halotype)
-        # Constituent relations evaluations on the Q vector at the end of the full RK time-step
-        self.constituent_relations(block)
         # Shock sensor evaluation to find which points to evaluate the WENO scheme on
         self.kappa = self.evaluate_shock_sensor(block)
         # Reductions if needed
@@ -466,7 +432,8 @@ class WENOFilter(NonSimulationEquations):
         reconstruction_kernels = []
         for direction, ker in enumerate(self.reconstruction_kernels):
             # Hybrid mode
-            ker = self.hybrid_condition(ker, block, direction)
+            if self.optimize:
+                ker = self.hybrid_condition(ker, block, direction)
             halo_ranges = ker.halo_ranges
             reconstruction_kernels.append(self.create_kernel('WENO reconstruction direction %d' % direction, ker.equations, halo_ranges, block))
             self.component_counter += 1
