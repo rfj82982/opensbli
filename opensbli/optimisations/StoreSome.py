@@ -172,6 +172,11 @@ class StoreSome(Central):
                 type_of_eq.Kernels += [ker]
 
         if convective_equations:
+            for i, eqn in enumerate(convective_equations):
+                if isinstance(eqn, OpenSBLIEq):
+                    # pprint(count_ops(convective_equations[i].rhs))
+                    convective_equations[i] = OpenSBLIEq(eqn.lhs, eqn.rhs.func(*(factor(term) for term in eqn.rhs.args)))
+                    # pprint(count_ops(convective_equations[i].rhs))
             convective_kernel = Kernel(block, computation_name="Convective terms")
             convective_kernel.set_grid_range(block)
             for eq in convective_equations:
@@ -179,6 +184,11 @@ class StoreSome(Central):
             convective_kernel.update_block_datasets(block)
             type_of_eq.Kernels += [convective_kernel]
         if viscous_equations:
+            for i, eqn in enumerate(viscous_equations):
+                if isinstance(eqn, OpenSBLIEq):
+                    # pprint(count_ops(viscous_equations[i].rhs))
+                    viscous_equations[i] = OpenSBLIEq(eqn.lhs, eqn.rhs.func(*(factor(term) for term in eqn.rhs.args)))
+                    # pprint(count_ops(viscous_equations[i].rhs))
             viscous_kernel = Kernel(block, computation_name="Viscous terms")
             viscous_kernel.set_grid_range(block)
             for eq in viscous_equations:
