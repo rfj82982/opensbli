@@ -84,13 +84,15 @@ def get_inverse_deltas(delta):
         return rc.existing[delta]
     else:
         # Create a new inverse variable
-        name = rc.name
         b, exp = delta.as_base_exp()
-        rc.name = "inv_%d"
+        if (exp < -1):
+            name = 'inv' + str(abs(exp)) + str(b)
+            rc.name = name
+        else:
+            name = 'inv' + str(b)
+            rc.name = name
         inv_delta_name = rc.get_next_rational_constant(delta)
-        rc.name = name
         return inv_delta_name
-
 
 def set_hdf5_metadata(dset, halos, npoints, block):
     """ Function to set hdf5 metadata required by OPS to a dataset."""
