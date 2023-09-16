@@ -199,10 +199,10 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
     def copy_block_attributes(self, otherclass):
         """Set the attributes blocknumber, name and number of dimensions of the
         block on the other block."""
-        # TODO V2, why the name for blocknumber is different, we should be consistent
         otherclass.block_number = self.blocknumber
         otherclass.ndim = self.ndim
         otherclass.block_name = self.blockname
+        otherclass.coordinate_arrays_to_restart = self.coordinate_arrays_to_restart
         return
 
     @property
@@ -237,9 +237,16 @@ class SimulationBlock(Grid, KernelCounter, ReductionCounter, BoundaryConditionTy
             for eq in self.list_of_equation_classes:
                 self.discretisation_schemes[t.name].discretise(eq, self)
 
-        # Update the data sets that are to be read from HDF5
+        # Warn if no I/O options were set for the simulation
+        IO_write = [x for x in self.InputOutput if x.kwargs['iotype'] == 'write']
+        if len(IO_write) == 0:
+            print('\33[91m' + "WARNING: No HDF5 output option was specified on block {}. Please set an io_hdf5 class instance on this block.".format(self.blocknumber) + '\033[0m')
+        # Update the data sets that are to be read/write from HDF5
+        for dset in self.block_datasets.values():
+            dset.write_to_hdf5 = False
         for io in self.InputOutput:
             io.set_read_from_hdf5_arrays(self)
+            io.set_write_to_hdf5_arrays(self)
         return
 
     def create_datasetbase(self, name):

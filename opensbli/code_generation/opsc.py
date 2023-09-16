@@ -641,7 +641,7 @@ class OPSC(object):
 
         for name in sorted(dsets_to_declare, key=str.lower):
             d = dsets_to_declare[name]
-            datasets_dec += self.declare_dataset(d, algorithm.time_advance_arrays)
+            datasets_dec += self.declare_dataset(d, algorithm)
         f.write('\n'.join(flatten([dset.opsc_code for dset in datasets_dec])))
         f.write('\n')
         f.close()
@@ -924,8 +924,15 @@ class OPSC(object):
                                                                            dset.block_name, dtype.opsc(), dset, fname)
         return [WriteString(temp)]
 
-    def declare_dataset(self, dset, time_advance_arrays):
+    def declare_dataset(self, dset, algorithm):
         """ Allocates memory for the storage arrays used by the simulation."""
+        # Left hand side of the equations, quantities advanced in time
+        time_advance_arrays = algorithm.time_advance_arrays
+        # Coordinates evaluated in the code (not read from a grid file), which should also be restarted
+        coordinates_to_restart = []
+        for b in algorithm.block_descriptions:
+            coordinates_to_restart += [str(x) for x in b.coordinate_arrays_to_restart]
+        # Set the datatype of the array to declare
         if dset.dtype:
             dtype = dset.dtype
         else:
@@ -935,7 +942,10 @@ class OPSC(object):
         out = [declaration, WriteString("{")]
         # Add a restart flag to make it easier to restart the time advance arrays
         time_advance_arrays = [str(x) for x in time_advance_arrays]
+        # Restart flag to the time advance arrays
         if str(dset) in time_advance_arrays:
+            if not dset.write_to_hdf5:
+                print('\33[91m' + "WARNING: Time-advance array: {} has not been set to be written to the restart file.".format(str(dset)) + '\033[0m')
             out += [WriteString('if (restart == 1){')]
             out += self.restart_dataset(dset, dtype, 'restart.h5')
             out += [WriteString("}")]
@@ -943,8 +953,20 @@ class OPSC(object):
             out += [WriteString('else {')]
             out += self.initialize_dataset(dset, dtype)
             out += [WriteString("}")]
+        # Coordinates evaluated inside the code, not via an external grid file
+        elif str(dset) in coordinates_to_restart:
+            if not dset.write_to_hdf5:
+                print('\33[91m' + "WARNING: Coordinate array: {} is computed during the initialisation kernel but has not been set to be written to the restart file.".format(str(dset)) + '\033[0m')
+            out += [WriteString('if (restart == 1){')]
+            out += self.restart_dataset(dset, dtype, 'restart.h5')
+            out += [WriteString("}")]
+            # Else clause
+            out += [WriteString('else {')]
+            out += self.initialize_dataset(dset, dtype)
+            out += [WriteString("}")]   
         # All other arrays
         else:
+            # Externally provided grid file or restart file
             if dset.read_from_hdf5:
                 out += self.restart_dataset(dset, dtype, dset.input_file_name)
             else:

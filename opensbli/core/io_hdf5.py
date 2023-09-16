@@ -95,6 +95,7 @@ class iohdf5(opensbliIO):
         return
 
     def set_read_from_hdf5_arrays(cls, block):
+        """ Tracks which arrays are being read in from HDF5 at the start of the simulation (External grid files, restart files)."""
         if cls.kwargs['iotype'] == "read":
             if 'filename' in cls.kwargs:
                 fname = cls.kwargs['filename']
@@ -116,6 +117,19 @@ class iohdf5(opensbliIO):
                     for const in CTD.constants:
                         if str(const) == 'restart':
                             const._value = 1
+        return
+
+    def set_write_to_hdf5_arrays(cls, block):
+        """ Adds an attribute to DataSets which the user has chosen to write out to disk."""
+        if cls.kwargs['iotype'] == "write":
+           for ar in cls.arrays:
+                if str(ar) in block.block_datasets.keys():
+                    dset = block.block_datasets[str(ar)]
+                    dset.write_to_hdf5 = True
+                    block.block_datasets[str(ar)] = dset
+                else:
+                    block.block_datasets[str(ar)] = ar
+                    block.block_datasets[str(ar)].write_to_hdf5 = True
         return
 
     def write_latex(cls, latex):
