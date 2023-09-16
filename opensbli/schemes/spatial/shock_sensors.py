@@ -10,8 +10,7 @@ from opensbli.core.grid import GridVariable as gv
 
 class ShockSensor(object):
     def __init__(self):
-        self.epsilon = ConstantObject('epsilon')
-        self.epsilon.value = 1.0e-12
+        self.epsilon = 1.0e-40
         return
 
     def ducros_equations(self, block, coordinate_symbol, metrics=None, name='kappa', Mach=None):
@@ -51,18 +50,12 @@ class ShockSensor(object):
             vorticity_sq = metrics.apply_transformation(vorticity_sq)
             divergence = metrics.apply_transformation(divergence)
 
-        c = ConstantObject('Ducros_sensitivity')
-        c.value = 0.2
-        CTD.add_constant(c)
         # Tanh function doesn't vectorise, use exponentials instead
-        # output_eqns += [OpenSBLIEq(gv('divV'), divergence.rhs)]
-        # output_eqns += [OpenSBLIEq(gv('vort_sq'), vorticity_sq)]
-
-        # tanh_filter = Rational(1, 2)*(1 - tanh(2.5*(1 + c*gv('divV'))))
-        tanh_inner = 2.5*(1 + c*divergence.rhs)
-        tanh_filter = Rational(1, 2)*(1 - (exp(2*tanh_inner, evaluate=False) - 1) / (exp(2*tanh_inner, evaluate=False) + 1))
-
-        output_eqns += [OpenSBLIEq(sensor_array, Min(1, Mach*tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + self.epsilon)))]
+        a = 200 / sqrt(sum([block.deltas[i]**2 for i in range(ndim)]))
+        tanh_filter = 0.5*(1 - tanh(2.5*(1+a*divergence.rhs)))
+        # tanh_inner = 2.5*(1 + c*divergence.rhs)
+        # tanh_filter = Rational(1, 2)*(1 - (exp(2*tanh_inner, evaluate=False) - 1) / (exp(2*tanh_inner, evaluate=False) + 1))
+        output_eqns += [OpenSBLIEq(sensor_array, tanh_filter*divergence.rhs**2 / (divergence.rhs**2 + vorticity_sq + self.epsilon))]
         return output_eqns, sensor_array
 
     def Ren_sensor(self, block, name='kappa'):
