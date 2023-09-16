@@ -27,7 +27,6 @@ constants = ["Re", "Pr", "gama", "Minf", "mu"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-# NS = NS_Split('Kennedy_Gruber', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='constant')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy

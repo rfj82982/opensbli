@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 # Import all the functions from opensbli
 from opensbli import *
@@ -5,7 +6,8 @@ import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = True
+weno = False
+teno = False
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama", "Minf"]
@@ -16,8 +18,12 @@ conservative = True
 substitutions = []
 eq = EinsteinEquation()
 
-if teno:
-    sc1 = "**{\'scheme\':\'Teno\'}"
+if weno or teno:
+    if weno:
+        sc1 = "**{\'scheme\':\'Weno\'}"
+    else:
+        sc1 = "**{\'scheme\':\'Teno\'}"
+
     # Define the compresible Navier-Stokes equations in Einstein notation.
     a = "Conservative(rhou_j,x_j,%s)" % sc1
     mass = "Eq(Der(rho,t), - %s)" % (a)
@@ -30,7 +36,7 @@ if teno:
     momentum = eq.expand(momentum, ndim, coordinate_symbol, substitutions, constants)
     energy = eq.expand(energy, ndim, coordinate_symbol, substitutions, constants)
 else:
-    NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='inviscid', energy_formulation='enthalpy', debug=False)
+    NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='inviscid', energy_formulation='enthalpy', debug=False)
     mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 
 # Expand the simulation equations, for this create a simulation equations class
@@ -78,7 +84,6 @@ initial_equations = [parse_expr(eq, local_dict=local_dict) for eq in eqns]
 initial = GridBasedInitialisation()
 initial.add_equations(initial_equations)
 
-
 # Left boundary condition
 d, u, p = symbols('d u0 p', **{'cls':GridVariable})
 left_eqns = [OpenSBLIEq(d, 1.0), OpenSBLIEq(u, 0.0), OpenSBLIEq(p, 1.0)] + [parse_expr(eq, local_dict=local_dict) for eq in [rho, rhou0, rhoE]]
@@ -93,16 +98,23 @@ for direction in range(ndim):
 
 schemes = {}
 # Spatial scheme
-if teno:
-    Avg = RoeAverage([0, 1])
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC')
+if weno:
+    Avg = SimpleAverage([0, 1])
+    # LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF')
+    LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
+elif teno:
+    Avg = SimpleAverage([0, 1])
+    # LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
+    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    # Add to schemes
+    schemes[LF.name] = LF    
 else:
     fns = 'u0'
-    # cent = StoreSome(4, fns)
-    cent = Central(4)
+    cent = StoreSome(4, fns)
     schemes[cent.name] = cent
+
 # Time-stepping
 rk = RungeKuttaLS(3, formulation='SSP')
 schemes[rk.name] = rk
@@ -112,25 +124,29 @@ kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
 h5.add_arrays([DataObject('x0')])
-if not teno:
-    h5.add_arrays([DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2')])
+
+# if not weno:
+    # h5.add_arrays([DataObject('kappa'), DataObject('q0'), DataObject('q1'), DataObject('q2')])
 block.setio(copy.deepcopy(h5))
 
-if not teno:
-    # WENO filter for shock-capturing
-    WF = WENOFilter(block, order=7, dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
-    block.set_equations(WF.equation_classes)
+TVD = True
+if not weno and not teno:
+    if TVD:
+        TVD_filter = TVDFilter(block, airfoil=False, store_filter=False)
+        block.set_equations(TVD_filter.equation_classes)
+    else:
+        WF = WENOFilter(block, order=5, formulation='Z', dissipation_sensor='Ducros', flux_type='LLF', airfoil=False, store_filter=True)
+        block.set_equations(WF.equation_classes)        
 
 
 block.set_equations([copy.deepcopy(constituent), copy.deepcopy(simulation_eq), initial])
 block.set_discretisation_schemes(schemes)
-
 block.discretise()
 
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
 OPSC(alg)
-constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'TENO_CT', 'inv_rfact0_block0']
-values = ['1.4', '0.0002', 'ceil(0.2/0.0002)', '200', '1.0/(block0np0-1)', '1.0e-16', '1.0e-5', '1.0/Delta0block0']
+constants = ['gama', 'dt', 'niter', 'block0np0', 'Delta0block0', 'eps', 'inv_rfact0_block0', 'lambda0_TVD', 'TENO_CT']
+values = ['1.4', '0.0002', 'ceil(0.2/0.0002)', '200', '1.0/(block0np0-1)', '1.0e-16', '1.0/Delta0block0', 'dt/Delta0block0', '1.0e-5']
 substitute_simulation_parameters(constants, values)
 print_iteration_ops(NaN_check='rho')
