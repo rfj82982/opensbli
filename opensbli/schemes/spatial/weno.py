@@ -42,9 +42,9 @@ class ConfigureWeno(object):
     def __init__(self, k, side):
         self.side = side
         if self.side == -1:
-            self.name, self.short_name, self.shift = 'left', 'L', 1 # downwind
+            self.name, self.short_name, self.shift = 'left', 'L', 1
         elif self.side == 1:
-            self.name, self.short_name, self.shift = 'right', 'R', 0 # upwind
+            self.name, self.short_name, self.shift = 'right', 'R', 0
         self.k, self.side = k, side
         self.func_points = self.generate_left_right_points()
         # k passed explicitly as 2 sets of ENO coefficients are needed for the smoothness indicators
@@ -211,9 +211,9 @@ class WenoReconstructionVariable(object):
 
     :arg str name: Name of the reconstruction, either left or right."""
 
-    def __init__(self, name, side):
+    def __init__(self, name):
         self.name = name
-        self.side = side
+        # self.side = side
         self.smoothness_indicators = []
         self.smoothness_symbols = []
         self.alpha_evaluated = []
@@ -260,7 +260,7 @@ class WenoReconstructionVariable(object):
             # self.final_equations += [OpenSBLIEq(rv, rv + gv('rj%d' % number)*self.reconstructed_expression)]
             self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
         else: # Regular WENO application
-            if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
+            if "single_reconstruction_variable" in self.settings and self.settings["single_reconstruction_variable"]:
                 self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
             else:
                 self.final_equations += [OpenSBLIEq(rv, self.reconstructed_expression)]
@@ -273,7 +273,7 @@ class LeftWenoReconstructionVariable(WenoReconstructionVariable):
     :arg str name: 'left' """
 
     def __init__(self, name):
-        WenoReconstructionVariable.__init__(self, name, side='left')
+        WenoReconstructionVariable.__init__(self, name)
         return
 
 
@@ -283,14 +283,14 @@ class RightWenoReconstructionVariable(WenoReconstructionVariable):
     :arg str name: 'right' """
 
     def __init__(self, name):
-        WenoReconstructionVariable.__init__(self, name, side='right')
+        WenoReconstructionVariable.__init__(self, name)
         return
 
 
 class WenoZ(object):
     def __init__(self, k):
         self.k = k
-        self.eps = 1.0e-14
+        self.eps = 1.0e-40
         return
 
     def global_smoothness_indicator(self, RV):
@@ -490,9 +490,8 @@ class LFWeno(LFCharacteristic, Weno):
         if (order % 2 == 0):
             raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
         self.flux_type = flux_type
-        self.flux_split = flux_split
         self.temp_wk_arrays = []
-        LFCharacteristic.__init__(self, physics, flux_type, averaging, flux_split)
+        LFCharacteristic.__init__(self, physics, flux_split=flux_split, flux_type=flux_type, averaging=averaging, shock_filter=shock_filter)
         self.conservative = conservative
         if shock_filter is not None:
             self.shock_filter = shock_filter
@@ -534,7 +533,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, flux_split=self.flux_split)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)            
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -566,7 +565,7 @@ class LFWeno(LFCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True, flux_split=self.flux_split)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -603,7 +602,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
         self.flux_type = flux_type
         self.flux_split = False # No flux split into WENO for HLLC solver
         self.temp_wk_arrays = []
-        HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
+        HLLCCharacteristic.__init__(self, physics, shock_filter=shock_filter, flux_type=flux_type, averaging=averaging)
         self.conservative = conservative
         if shock_filter is not None:
             self.shock_filter = shock_filter
@@ -645,7 +644,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)             
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -677,7 +676,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, shock_filter=True)
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
                 if direction == 0:
                     reduction_output = reductions
                 # Add the equations to the kernel and add the kernel to SimulationEquations

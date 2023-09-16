@@ -323,7 +323,7 @@ class TenoReconstructionVariable(object):
             final_equations += [OpenSBLIEq(value, all_evaluations[no], evaluate=False)]
         self.final_equations = final_equations
         rv = self.reconstructed_symbol
-        if "combine_reconstructions" in self.settings and self.settings["combine_reconstructions"]:
+        if "single_reconstruction_variable" in self.settings and self.settings["single_reconstruction_variable"]:
             self.final_equations += [OpenSBLIEq(rv, rv + self.reconstructed_expression)]
         else:
             self.final_equations += [OpenSBLIEq(rv, self.reconstructed_expression)]
@@ -484,7 +484,7 @@ class LFTeno(LFCharacteristic, Teno):
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
     def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF', flux_split=True):
-        LFCharacteristic.__init__(self, physics, flux_type, averaging)
+        LFCharacteristic.__init__(self, physics, flux_split=flux_split, flux_type=flux_type, averaging=averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
             raise ValueError("Storage array for the shock sensor is required.")
@@ -534,7 +534,7 @@ class LFTeno(LFCharacteristic, Teno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, flux_split=self.flux_split)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations
@@ -556,8 +556,6 @@ class LFTeno(LFCharacteristic, Teno):
                 type_of_eq.Kernels += [self.evaluate_residuals(block, eqs, all_derivatives_evaluated_locally)]
                 constituent_relations = self.check_constituent_relations(block, eqs, constituent_relations)
             return constituent_relations
-
-
 
 class HLLCTeno(HLLCCharacteristic, Teno):
     """ Local Lax-Friedrichs flux splitting applied to characteristic variables using a TENO scheme.
@@ -616,7 +614,7 @@ class HLLCTeno(HLLCCharacteristic, Teno):
                 # Kernel for the reconstruction in this direction
                 kernel = self.create_reconstruction_kernel(direction, reconstruction_halos, block)
                 # Get the pre, interpolations and post equations for characteristic reconstruction
-                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block, flux_split=False)                
+                pre_process, reductions, interpolated, post_process = self.get_characteristic_equations(direction, derivatives, solution_vector, block)
                 if direction == 0 and len(reductions) > 0:
                     EV_kernel.add_equation(reductions)
                 # Add the equations to the kernel and add the kernel to SimulationEquations

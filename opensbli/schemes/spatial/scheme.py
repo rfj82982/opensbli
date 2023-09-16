@@ -86,21 +86,6 @@ class Central(Scheme):
         weights = finite_diff_weights(order, self.diffpoints, 0)
         return weights[order][-1]
 
-    # def add_required_database(self, dbases):
-    #     # TODO V2: is it used??
-    #     self.required_database += flatten(list(dbases))
-    #     return
-
-    # @property
-    # def scheme_required_databases(self):
-    #     # TODO V2: is it used??
-    #     return set(self.required_database)
-
-    # def update_works(self, to_descritse, block):
-    #     # V2: Delete this?
-
-    #     return
-
     def set_halos(self, block):
         """Sets the halos of the scheme to the block, Max of the halos of the block are used for setting the range of
         initialisation"""
@@ -306,13 +291,12 @@ class Central(Scheme):
         cds = self.get_local_function(flatten(equations))
         if cds:
             local_kernels = {}
-            if block.store_derivatives:
-                for der in cds:
-                    der.update_work(block)
-                    ker = Kernel(block)
-                    if name:
-                        ker.set_computation_name("%s %s " % (name, der))
-                    local_kernels[der] = ker  # Reverted back
+            for der in cds:
+                der.update_work(block)
+                ker = Kernel(block)
+                if name:
+                    ker.set_computation_name("%s %s " % (name, der))
+                local_kernels[der] = ker  # Reverted back
             # create a dictionary of works and kernels
             work_arry_subs = {}
             for der in cds:
