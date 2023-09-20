@@ -221,13 +221,13 @@ class NonLinearFilterBase(object):
         self.add_kernel(CR_kernel)
         return
 
-    def zero_work_arrays(self, block, dsets):
+    def zero_work_arrays(self, block):
         """ Ensure all the temporary arrays are zeroed before calculating the filter."""
         resid_kernel = self.residual_kernels[0]
         zero_halos = []
         for _ in range(self.ndim):
             zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
-        zeroed_equations = [OpenSBLIEq(dset, 0.0) for dset in dsets]
+        zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.WS.temp_wk_arrays[direction]] for direction in range(block.ndim))
         zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
         self.component_counter += 1
         self.add_kernel(zero_kernel)
@@ -309,28 +309,28 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
         if self.flux_type == 'LLF' or self.flux_type == 'GLF':
-            WS = LFWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            self.WS = LFWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         elif self.flux_type == 'HLLC' or self.flux_type == 'HLLC-LM':
-            WS = HLLCWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            self.WS = HLLCWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         else:
             raise ValueError("Please input a valid flux splitting type: LLF, GLF, HLLC, HLLC-LM.")
         self.halo_type = set()
-        self.halo_type.add(WS.halotype)
+        self.halo_type.add(self.WS.halotype)
         # Start the discretisation and create residual arrays for the equations
         self.Kernels = []
         self.create_residual_arrays(block)
-        CR, solution_vector, reductions = WS.discretise(self, block)
+        CR, solution_vector, reductions = self.WS.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the WENO stencil if periodic boundaries
-        # bc_kernels = self.update_periodic_boundary(block, WS.halotype)
+        # bc_kernels = self.update_periodic_boundary(block, self.WS.halotype)
         # Shock sensor evaluation to find which points to evaluate the WENO scheme on
         self.kappa = self.evaluate_shock_sensor(block)
         # Reductions if needed
         if len(reductions) > 0:
             self.reduction_operations(reductions)
         # Zero the work arrays
-        self.zero_work_arrays(block, WS.temp_wk_arrays)
+        self.zero_work_arrays(block)
         # Create the WENO reconstruction kernels
         reconstruction_kernels = []
         for direction, ker in enumerate(self.reconstruction_kernels):
@@ -446,7 +446,8 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
                 term = Max(term, increment_dataset(self.kappa, dire, loc))
             check = term > DC
             cond1 = ExprCondPair(input_equations, check)
-            cond2 = ExprCondPair(OpenSBLIEq(gv('temp'), 0.0), True)
+            zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.WS.temp_wk_arrays[direction]])
+            cond2 = ExprCondPair(zeroed_equations, True)
             kernel.add_equation([GroupedPiecewise(cond1, cond2)])
         else:
             kernel.add_equation(input_equations)

@@ -536,7 +536,10 @@ class Characteristic(EigenSystem):
             # Update the work arrays
             for i, d in enumerate(derivatives):
                 d.reconstruction_work = reconstructed_work[i]
-                self.temp_wk_arrays.append(reconstructed_work[i])
+                if direction in self.temp_wk_arrays.keys():
+                    self.temp_wk_arrays[direction].append(reconstructed_work[i])
+                else:
+                    self.temp_wk_arrays[direction] = [reconstructed_work[i]]
         else:
             reconstructed_work = [d.reconstruction_work for d in derivatives]
         return reconstructed_work

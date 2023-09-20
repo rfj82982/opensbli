@@ -490,7 +490,7 @@ class LFWeno(LFCharacteristic, Weno):
         if (order % 2 == 0):
             raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
         self.flux_type = flux_type
-        self.temp_wk_arrays = []
+        self.temp_wk_arrays = {}
         LFCharacteristic.__init__(self, physics, flux_split=flux_split, flux_type=flux_type, averaging=averaging, shock_filter=shock_filter)
         self.conservative = conservative
         if shock_filter is not None:
@@ -601,7 +601,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
             raise ValueError("Please select either HLLC or HLLC-LM for the flux-splitting.")
         self.flux_type = flux_type
         self.flux_split = False # No flux split into WENO for HLLC solver
-        self.temp_wk_arrays = []
+        self.temp_wk_arrays = {}
         HLLCCharacteristic.__init__(self, physics, shock_filter=shock_filter, flux_type=flux_type, averaging=averaging)
         self.conservative = conservative
         if shock_filter is not None:
