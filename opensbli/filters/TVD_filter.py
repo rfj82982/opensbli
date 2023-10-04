@@ -11,12 +11,12 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
     def __init__(self, block, metrics=None, airfoil=False):
         print("Using non-linear TVD filtering on block {:}.".format(block.blocknumber))
         # Get the shared functionality between TVD/WENO non-linear filters
-        NonLinearFilterBase.__init__(self, airfoil, block, metrics)
+        NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=False)
         # Main class to generate the filter
         self.main(block)
         return
 
-    def filter_application(self, block):
+    def TVD_filter_application(self, block):
         """ Applies the non-linear TVD filter by subtracting from the q vector after a full RK time-step."""
         resid_kernel = self.residual_kernels[0]
         filter_equations = []
@@ -39,22 +39,22 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a TVD scheme
-        TVD_scheme = TVDFlux(averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+        self.SF = TVDFlux(averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative)
 
         self.halo_type = set()
-        self.halo_type.add(TVD_scheme.halotype)
+        self.halo_type.add(self.SF.halotype)
         # Start the discretisation and create residual arrays for the equations
         self.Kernels = []
         self.create_residual_arrays(block)
-        CR, solution_vector, reductions = TVD_scheme.discretise(self, block)
+        CR, solution_vector, reductions = self.SF.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the TVD stencil if periodic boundaries
-        # bc_kernels = self.update_periodic_boundary(block, TVD_scheme.halotype)
+        # bc_kernels = self.update_periodic_boundary(block, self.SF.halotype)
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
         # Zero the work arrays
-        self.zero_work_arrays(block, TVD_scheme.temp_wk_arrays)
+        self.zero_work_arrays(block)
         # Create the TVD reconstruction kernels
         reconstruction_kernels = []
         for direction, ker in enumerate(self.reconstruction_kernels):
@@ -67,5 +67,5 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         self.detect_wall_boundaries()
         self.detect_interface_boundaries()
         # # Create the residual kernel
-        self.filter_application(block)
+        self.TVD_filter_application(block)
         return

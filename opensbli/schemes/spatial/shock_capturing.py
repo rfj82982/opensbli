@@ -347,6 +347,7 @@ class Characteristic(EigenSystem):
         self.flux_split = flux_split
         self.shock_filter = shock_filter
         self.TVD = TVD
+        self.temp_wk_arrays = {}
         EigenSystem.__init__(self, physics)
         return
 
@@ -536,6 +537,7 @@ class Characteristic(EigenSystem):
             # Update the work arrays
             for i, d in enumerate(derivatives):
                 d.reconstruction_work = reconstructed_work[i]
+
                 if direction in self.temp_wk_arrays.keys():
                     self.temp_wk_arrays[direction].append(reconstructed_work[i])
                 else:

@@ -1,7 +1,7 @@
 """ David J. Lusher 08/2020: WENO non-linear filter for shock-capturing."""
 from opensbli import *
 from sympy import symbols, exp, pprint, Piecewise, binomial, Min, sqrt, Equality, tanh
-from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise
+from opensbli.core.opensbliobjects import DataObject, ConstantObject, GroupedPiecewise, DataSet
 from opensbli.equation_types.opensbliequations import OpenSBLIEquation, NonSimulationEquations, ConstituentRelations
 from opensbli.postprocess.post_process_eq import *
 from opensbli.core.kernel import ConstantsToDeclare as CTD
@@ -17,7 +17,7 @@ from opensbli.core.grid import GridVariable as gv
 
 class NonLinearFilterBase(object):
     """ Base class for shared functionality between non-linear filter-step methods."""
-    def __init__(self, airfoil, block, metrics):
+    def __init__(self, airfoil, block, metrics, optimize):
         self.reconstruction_kernels, self.residual_kernels = [], []
         self.airfoil = airfoil
         self.hybrid = False
@@ -227,7 +227,7 @@ class NonLinearFilterBase(object):
         zero_halos = []
         for _ in range(self.ndim):
             zero_halos.append([CentralHalos_defdec(), CentralHalos_defdec()])
-        zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.WS.temp_wk_arrays[direction]] for direction in range(block.ndim))
+        zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.SF.temp_wk_arrays[direction]] for direction in range(block.ndim))
         zero_kernel = self.create_kernel('Zero the work arrays', zeroed_equations, zero_halos, block)
         self.component_counter += 1
         self.add_kernel(zero_kernel)
@@ -291,7 +291,7 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
     def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
         # Get the shared functionality between TVD/WENO non-linear filters
-        NonLinearFilterBase.__init__(self, airfoil, block, metrics)
+        NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=optimize)
         self.flux_type = flux_type
         self.formulation = formulation
         self.optimize = optimize
@@ -309,23 +309,26 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme
         if self.flux_type == 'LLF' or self.flux_type == 'GLF':
-            self.WS = LFWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            self.SF = LFWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         elif self.flux_type == 'HLLC' or self.flux_type == 'HLLC-LM':
-            self.WS = HLLCWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
+            self.SF = HLLCWeno(scheme_order, formulation=self.formulation, flux_type=self.flux_type, averaging=RoeAverage([0, 1]), shock_filter=True, conservative=block.conservative)
         else:
             raise ValueError("Please input a valid flux splitting type: LLF, GLF, HLLC, HLLC-LM.")
         self.halo_type = set()
-        self.halo_type.add(self.WS.halotype)
+        self.halo_type.add(self.SF.halotype)
         # Start the discretisation and create residual arrays for the equations
         self.Kernels = []
         self.create_residual_arrays(block)
-        CR, solution_vector, reductions = self.WS.discretise(self, block)
+        CR, solution_vector, reductions = self.SF.discretise(self, block)
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the WENO stencil if periodic boundaries
-        # bc_kernels = self.update_periodic_boundary(block, self.WS.halotype)
+        # bc_kernels = self.update_periodic_boundary(block, self.SF.halotype)
         # Shock sensor evaluation to find which points to evaluate the WENO scheme on
-        self.kappa = self.evaluate_shock_sensor(block)
+        if self.optimize:
+            self.kappa = self.evaluate_shock_sensor(block)
+        else:
+            self.kappa = 1
         # Reductions if needed
         if len(reductions) > 0:
             self.reduction_operations(reductions)
@@ -390,19 +393,22 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
         modified_equations += wall_equations
         # Find the maximum of nearby points
         kappa_fact = self.kappa
-        check = self.kappa
-        for direction in range(self.ndim):
-            for loc in [-1, -1, 0, 1, 2]:
-                check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
-        kappa_fact = block.location_dataset('WENO_filter')
-        # Selection of which kappa points to apply the filter to
-        DS = ConstantObject('Ducros_select')
-        DS.value = 0.05
-        CTD.add_constant(DS)
-        check = check >= DS
-        cond1 = ExprCondPair(1, check)
-        cond2 = ExprCondPair(0.0, True)
-        modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        if isinstance(kappa_fact, DataSet):
+            check = self.kappa
+            for direction in range(self.ndim):
+                for loc in [-1, -1, 0, 1, 2]:
+                    check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
+            kappa_fact = block.location_dataset('WENO_filter')
+            # Selection of which kappa points to apply the filter to
+            DS = ConstantObject('Ducros_select')
+            DS.value = 0.05
+            CTD.add_constant(DS)
+            check = check >= DS
+            cond1 = ExprCondPair(1, check)
+            cond2 = ExprCondPair(0.0, True)
+            modified_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        else:
+            kappa_fact = 1
         # detJ if needed, need to improve these scaling
         if self.curvilinear and self.airfoil:
             if self.ndim == 3:
@@ -446,7 +452,7 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
                 term = Max(term, increment_dataset(self.kappa, dire, loc))
             check = term > DC
             cond1 = ExprCondPair(input_equations, check)
-            zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.WS.temp_wk_arrays[direction]])
+            zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.SF.temp_wk_arrays[direction]])
             cond2 = ExprCondPair(zeroed_equations, True)
             kernel.add_equation([GroupedPiecewise(cond1, cond2)])
         else:

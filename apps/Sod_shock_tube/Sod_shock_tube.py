@@ -106,8 +106,8 @@ if weno:
     schemes[LF.name] = LF
 elif teno:
     Avg = SimpleAverage([0, 1])
-    # LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    LF = LFTeno(order=5, averaging=Avg, flux_type='GLF')
+    # LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF    
 else:
@@ -135,7 +135,7 @@ if not weno and not teno:
         TVD_filter = TVDFilter(block, airfoil=False)
         block.set_equations(TVD_filter.equation_classes)
     else:
-        WF = WENOFilter(block, order=5, formulation='Z', flux_type='LLF', airfoil=False)
+        WF = WENOFilter(block, order=5, formulation='Z', flux_type='LLF', airfoil=False, optimize=False)
         block.set_equations(WF.equation_classes)        
 
 
