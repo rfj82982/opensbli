@@ -327,7 +327,7 @@ class EigenSystem(object):
         """ Forms a matrix containing Sympy equations at each element, given two input matrices.
 
         :arg Matrix lhs_matrix: The elements of lhs_matrix form the LHS of the output equations.
-        :arg Matrix rhs_matrix: The elements of rhs_matrix form the RHS of the output equations.
+        :arg Matrix rhs_matrix: The elements alpha rhs_matrix form the RHS of the output equations.
         returns: Matrix: equations: A matrix containing an Eq(lhs, rhs) pair in each element."""
         if lhs_matrix.shape != rhs_matrix.shape:
             raise ValueError("Matrices should have the same dimension.")
@@ -674,13 +674,14 @@ class TVDCharacteristic(Characteristic):
                 pre_process_equations += REV_equations
 
         # Step 6: Calculate sigma values from Yee et al (1999)
-        sigmas = [GridVariable('sigma_%d' % i) for i in range(nvars)]
+        sigmas_0 = [GridVariable('sigma_0_%d' % i) for i in range(nvars)]
+        sigmas_1 = [GridVariable('sigma_1_%d' % i) for i in range(nvars)]
         delta = ConstantObject('delta_TVD')
         delta.value = 0.5
         ConstantsToDeclare.add_constant(delta)
-        for i, sigma in enumerate(sigmas):
-            if_expr, else_expr = Abs(alphas[1, i]), (alphas[1, i]**2 + delta**2) / (2*delta)
-            pre_process_equations += [OpenSBLIEq(sigmas[i], Piecewise((if_expr, Abs(alphas[1, i]) >= delta), (else_expr, True)))]
+        for i, sigma in enumerate(sigmas_0):
+            if_expr, else_expr = Abs(wavespeeds[i,i]), (wavespeeds[i,i]**2 + delta**2) / (2*delta)
+            pre_process_equations += [OpenSBLIEq(sigmas_0[i], Piecewise((if_expr, Abs(wavespeeds[i,i]) >= delta), (else_expr, True)))]
         # Step 7: Calculate the 'g' functions, which are the upwind limiter functions
         S = GridVariable('S')
         g_equations = []
@@ -702,14 +703,18 @@ class TVDCharacteristic(Characteristic):
         eps.value = 0.00000001
         ConstantsToDeclare.add_constant(eps)
         for i, gamma in enumerate(gamma_terms):
-            if_expr, else_expr = 0, sigmas[i]*alphas[1,i]*(g_terms[1][i] - g_terms[0][i]) / (alphas[1,i]**2 + eps)
+            if_expr, else_expr = 0, sigmas_0[i]*alphas[1,i]*(g_terms[1][i] - g_terms[0][i]) / (alphas[1,i]**2 + eps)
             pre_process_equations += [OpenSBLIEq(gamma_terms[i], Piecewise((if_expr, Equality(alphas[1,i], 0)), (else_expr, True)))]
+        # new step: sigma of gamma terms
+        for i, sigma in enumerate(sigmas_1):
+            if_expr, else_expr = Abs(gamma_terms[i]), (gamma_terms[i]**2 + delta**2) / (2*delta)
+            pre_process_equations += [OpenSBLIEq(sigmas_1[i], Piecewise((if_expr, Abs(gamma_terms[i]) >= delta), (else_expr, True)))]
         # Step 9: Calculate the phi terms
         phi_terms = [GridVariable('phi_%d' % i) for i in range(nvars)]
         # Lambda needs to be one per direction
         TVD_lambda = ConstantObject('lambda%d_TVD' % direction)
         for i, phi in enumerate(phi_terms):
-            rhs = -sigmas[i]*(g_terms[1][i] + g_terms[0][i]) + (Abs(wavespeeds[i,i]+gamma_terms[i]) - TVD_lambda*wavespeeds[i,i]**2)*alphas[1,i]
+            rhs = 0.5*sigmas_0[i]*(g_terms[1][i] + g_terms[0][i]) - Abs(sigmas_1[i]+sigmas_0[i])*alphas[1,i]
             pre_process_equations += [OpenSBLIEq(phi, rhs)]
         # Step 10: Calculate switch to control the dissipation of the limiter (Harten switch, (eqns 2.22 and 2.23 in Yee et al. 1999))
         theta_hat_terms = [[GridVariable('theta_hat_%d%d' % (i,j)) for i in range(nvars)] for j in range(2)]

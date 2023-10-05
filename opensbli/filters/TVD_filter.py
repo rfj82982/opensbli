@@ -23,7 +23,7 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         nvars = len(self.solution_vector)
         dt = ConstantObject('dt')
         for i, var in enumerate(self.solution_vector):
-            filter_equations += [OpenSBLIEq(var, var - dt*resid_kernel.equations[i].rhs)]
+            filter_equations += [OpenSBLIEq(var, var + dt*resid_kernel.equations[i].rhs)]
         # Finish creating the kernel
         residual_kernel = self.create_kernel('Non-linear TVD Filter application', filter_equations, resid_kernel.halo_ranges, block)
         self.component_counter += 1
