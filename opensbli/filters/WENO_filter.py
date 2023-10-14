@@ -225,7 +225,7 @@ class NonLinearFilterBase(object):
         gamma = ConstantObject('gama')
         CTD.add_constant(gamma)
         # Conservative Q array entries from the current state
-        rho, energy = self.solution_vector[0], self.solution_vector[-1]
+        rho, energy = block.location_dataset('rho'), block.location_dataset('rhoE')
         # Pressure and speed of sound
         p, a = block.location_dataset('p'), block.location_dataset('a')
         inv_rho = gv('inv_rho')
