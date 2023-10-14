@@ -483,7 +483,7 @@ class LFTeno(LFCharacteristic, Teno):
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF', flux_split=True):
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='LLF', flux_split=True, passive_scalar=False):
         LFCharacteristic.__init__(self, physics, flux_split=flux_split, flux_type=flux_type, averaging=averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
@@ -496,6 +496,7 @@ class LFTeno(LFCharacteristic, Teno):
             print("Global Lax-Friedrich flux splitting.")
         else:
             raise ValueError("Please select either LLF or GLF for the flux-splitting.")
+        self.passive_scalar = passive_scalar
         self.flux_split = flux_split
         self.conservative = conservative
         self.store_sensor = store_sensor
@@ -525,7 +526,7 @@ class LFTeno(LFCharacteristic, Teno):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block)
+            self.instantiate_eigensystem(block, self.passive_scalar)
             for direction, derivatives in sorted(grouped.items()):
                 # Create a work array for each component of the system
                 all_derivatives_evaluated_locally += derivatives
@@ -563,7 +564,7 @@ class HLLCTeno(HLLCCharacteristic, Teno):
     :arg int order: Order of the WENO/TENO scheme.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging."""
 
-    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC', positivity_preservation=False):
+    def __init__(self, order, formulation=None, physics=None, averaging=None, sensor=None, store_sensor=False, conservative=True, flux_type='HLLC', positivity_preservation=False, passive_scalar=False):
         HLLCCharacteristic.__init__(self, physics, flux_type, averaging)
         print("A TENO scheme of order %s is being used for shock capturing." % str(order))
         if sensor is None and formulation is not None:
@@ -576,6 +577,7 @@ class HLLCTeno(HLLCCharacteristic, Teno):
             print("HLLC-LM flux splitting.")
         else:
             raise ValueError("Please select either HLLC or HLLC-LM for the flux-splitting.")
+        self.passive_scalar = passive_scalar
         self.flux_type = flux_type
         self.conservative = conservative
         self.store_sensor = store_sensor
@@ -605,7 +607,7 @@ class HLLCTeno(HLLCCharacteristic, Teno):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block)
+            self.instantiate_eigensystem(block, self.passive_scalar)
             for direction, derivatives in sorted(grouped.items()):
                 # Create a work array for each component of the system
                 all_derivatives_evaluated_locally += derivatives

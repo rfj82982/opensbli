@@ -102,8 +102,9 @@ class Carpenter(object):
         if self.optimize:
             al4_inv = al4.inv(iszerofunc=lambda x: abs(x) < 1e-14)
         else:
-            alv4_inv = alv4.inv()
+            al4_inv = al4.inv()
         bc4 = al4_inv*ar4
+        
         if self.optimize:
             for j in range(bc4.shape[1]):
                 bc4[0,j] = float(nsimplify(bc4[0,j], tolerance=1e-12, rational=False))

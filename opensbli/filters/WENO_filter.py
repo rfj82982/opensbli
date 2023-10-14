@@ -21,14 +21,6 @@ class NonLinearFilterBase(object):
         self.reconstruction_kernels, self.residual_kernels = [], []
         self.airfoil = airfoil
         self.hybrid = False
-        if block.conservative:
-            self.rhou = 'rhou'
-            self.mom_lhs = 'rhou'
-            self.energy_lhs = 'rhoE'
-        else:
-            self.rhou = 'rho*u'
-            self.mom_lhs = 'u'
-            self.energy_lhs = 'Et'
         block.shock_filter = True
         self.block = block
         self.ndim = block.ndim
@@ -90,42 +82,33 @@ class NonLinearFilterBase(object):
                 self.curvilinear = False
         return
 
-    def create_base_equations(self, block, scheme_type):
+    def Euler_equations_passive_scalar(self, block, scheme_type):
         # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
         scheme_type = "**{\'scheme\':\'%s\'}" % scheme_type
         constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
         # Uniform mesh, no stretching or curvilinear terms
         if self.metric_class is None:
             coordinate_symbol = "x"
-            if block.conservative:
-                mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % scheme_type
-                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
-            else:
-                mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
-                momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-                energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type      
-            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+            mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % scheme_type
+            momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+            energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+            # Added passive scalar equation here for filter methods
+            ps = "Eq(Der(rhof,t), -Conservative(u_j*rhof, x_j, %s))" % scheme_type
+            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy, ps])])
         else:
+            if self.passive_scalar:
+                raise ValueError("WARNING: Passive scalar has not been added to curvilinear equations yet.")
             # Full curvilinear
             if self.curvilinear:
                 coordinate_symbol = "xi"
                 optional_subs_dict = self.metric_class.metric_subs
                 self.EE.optional_subs_dict = optional_subs_dict
-                if block.conservative:
-                    a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
-                    mass = "Eq(Der(rho,t), - %s)" % (a)
-                    a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
-                    momentum = "Eq(Der(rhou_i,t) , - %s)" % (a)
-                    a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
-                    energy = "Eq(Der(rhoE,t), - %s)" % (a)
-                else:
-                    a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
-                    mass = "Eq(Der(rho,t), - %s)" % (a)
-                    a = "Conservative(detJ * (rho*u_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
-                    momentum = "Eq(Der(u_i,t) , - %s)" % (a)
-                    a = "Conservative(detJ * (p+rho*Et)*U_j,xi_j, %s)" % scheme_type
-                    energy = "Eq(Der(Et,t), - %s)" % (a)                    
+                a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
+                mass = "Eq(Der(rho,t), - %s)" % (a)
+                a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , - %s)" % (a)
+                a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
+                energy = "Eq(Der(rhoE,t), - %s)" % (a)                  
 
                 base_eqns = [mass, momentum, energy]
                 for i, base in enumerate(base_eqns):
@@ -142,12 +125,57 @@ class NonLinearFilterBase(object):
             else: ### Only added non-conservative for this stretched case
                 coordinate_symbol = "x"
                 mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
-                if block.conservative:
-                    momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-                    energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
-                else:
-                    momentum = "Eq(Der(u_i,t) , -Conservative(rho*u_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
-                    energy = "Eq(Der(Et,t), - Conservative((p+rho*Et)*u_j,x_j, %s))" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+                governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
+        print("Using the following equations for the TVD/WENO filter.")
+        for eqn in output_equations:
+            pprint(eqn)
+        # exit()                     
+        return output_equations
+
+    def Euler_equations(self, block, scheme_type):
+        # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
+        scheme_type = "**{\'scheme\':\'%s\'}" % scheme_type
+        constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
+        # Uniform mesh, no stretching or curvilinear terms
+        if self.metric_class is None:
+            coordinate_symbol = "x"
+            mass = "Eq(Der(rho,t), - Conservative(rhou_j,x_j,%s))" % scheme_type
+            momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+            energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type    
+            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+        else:
+            # Full curvilinear
+            if self.curvilinear:
+                coordinate_symbol = "xi"
+                optional_subs_dict = self.metric_class.metric_subs
+                self.EE.optional_subs_dict = optional_subs_dict
+                a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
+                mass = "Eq(Der(rho,t), - %s)" % (a)
+                a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , - %s)" % (a)
+                a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
+                energy = "Eq(Der(rhoE,t), - %s)" % (a)                  
+
+                base_eqns = [mass, momentum, energy]
+                for i, base in enumerate(base_eqns):
+                    base_eqns[i] = self.EE.expand(base, self.ndim, coordinate_symbol, [], constants)
+                    if base==momentum:
+                        for no, b in enumerate(base_eqns[i]):
+                            base_eqns[i][no] = OpenSBLIEq(base_eqns[i][no].lhs, base_eqns[i][no].rhs)
+                    else:
+                        if base==energy:
+                            base_eqns[i] = OpenSBLIEq(base_eqns[i].lhs, base_eqns[i].rhs)
+                # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten(base_eqns)
+        #     # Only stretching is applied
+            else: ### Only added non-conservative for this stretched case
+                coordinate_symbol = "x"
+                mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
                 governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
         # for eqn in output_equations:
@@ -162,6 +190,9 @@ class NonLinearFilterBase(object):
         filter_class.order = self.component_counter
         # Add the halo type to extend the range of evaluation
         filter_class.halos = halo_type
+        for eqn in equations:
+            pprint(eqn)
+        # exit()
         filter_class.add_equations(equations)
         return filter_class
 
@@ -288,8 +319,9 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False):
+    def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False, passive_scalar=False):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
+        self.passive_scalar = passive_scalar
         # Get the shared functionality between TVD/WENO non-linear filters
         NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=optimize)
         self.flux_type = flux_type
@@ -304,7 +336,10 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
         # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
-        eqn = self.create_base_equations(block, "Weno")
+        if self.passive_scalar:
+            eqn = self.Euler_equations_passive_scalar(block, "Weno")
+        else:
+            eqn = self.Euler_equations(block, "Weno")
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a WENO scheme

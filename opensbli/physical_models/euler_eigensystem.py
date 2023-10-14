@@ -11,8 +11,9 @@ from sympy.parsing.sympy_parser import parse_expr
 class EulerEquations(object):
     """ Class to generate the Eigensystems used to diagonalize the Euler equations."""
 
-    def __init__(self, ndim, **kwargs):
+    def __init__(self, ndim, passive_scalar=False, **kwargs):
         self.ndim = ndim
+        self.passive_scalar = passive_scalar
         return
 
     def apply_direction(self, direction):
@@ -29,6 +30,7 @@ class EulerEquations(object):
         subs_dict = dict([(x, y) for (x, y) in zip(terms, metric_values)])
         # Scaling factor based on metrics
         factor = self.detJ*sum([met_symbols[direction, i]**2 for i in range(self.ndim)])**(Rational(1, 2))
+        # pprint(factor)
         required_metrics = factor.atoms(DataSet)
         subs_dict[EinsteinTerm('k')] = factor
 
@@ -67,9 +69,14 @@ class EulerEquations(object):
             matrix_formulae = ['a**2/(gama-1) + u0**2/2']
             matrix_symbols = [parse_expr(l, local_dict=local_dict, evaluate=False) for l in matrix_symbols]
             matrix_formulae = [parse_expr(l, local_dict=local_dict, evaluate=False) for l in matrix_formulae]
-            ev = 'diag([u0-a, u0, u0+a])'
-            REV = 'Matrix([[1,1,1], [u0-a,u0,u0+a], [H-u0*a,u0**2 /2,H+u0*a]])'
-            LEV = 'Matrix([[ u0*(2*H + a*u0 - u0**2)/(2*a*(2*H - u0**2)), (-H - a*u0 + u0**2/2)/(a*(2*H - u0**2)),  1/(2*H - u0**2)],[2*(H - u0**2)/(2*H - u0**2),2*u0/(2*H - u0**2), 2/(-2*H + u0**2)],[u0*(-2*H + a*u0 + u0**2)/(2*a*(2*H - u0**2)),  (H - a*u0 - u0**2/2)/(a*(2*H - u0**2)),  1/(2*H - u0**2)]])'
+            if self.passive_scalar:
+                REV = 'Matrix([[2.0/u0**2, 0, 1/f, 1/f], [2.0/u0, 0, (-a + u0)/f, (a + u0)/f], [1.0, 0, (a**2 - a*gama*u0 + a*u0 + 0.5*gama*u0**2 - 0.5*u0**2)/(f*(gama - 1.0)), (a**2 + a*gama*u0 - a*u0 + 0.5*gama*u0**2 - 0.5*u0**2)/(f*(gama - 1.0))], [0, 1.0, 1.0, 1.0]])'
+                LEV = 'Matrix([[u0**2*(0.5*a**2 - 0.25*gama*u0**2 + 0.25*u0**2)/a**2, 0.5*u0**3*(gama - 1)/a**2, 0.5*u0**2*(1 - gama)/a**2, 0], [0.5*f*u0**2*(1 - gama)/a**2, 1.0*f*u0*(gama - 1)/a**2, 1.0*f*(1 - gama)/a**2, 1.0], [0.25*f*u0*(2.0*a + 1.0*gama*u0 - 1.0*u0)/a**2, 0.5*f*(-a - gama*u0 + u0)/a**2, 0.5*f*(gama - 1)/a**2, 0], [0.25*f*u0*(-2.0*a + 1.0*gama*u0 - 1.0*u0)/a**2, 0.5*f*(a - gama*u0 + u0)/a**2, 0.5*f*(gama - 1)/a**2, 0]])'
+                ev = ' diag([u0, u0, -a + u0, a + u0])'
+            else:
+                ev = 'diag([u0-a, u0, u0+a])'
+                REV = 'Matrix([[1,1,1], [u0-a,u0,u0+a], [H-u0*a,u0**2 /2,H+u0*a]])'
+                LEV = 'Matrix([[ u0*(2*H + a*u0 - u0**2)/(2*a*(2*H - u0**2)), (-H - a*u0 + u0**2/2)/(a*(2*H - u0**2)),  1/(2*H - u0**2)],[2*(H - u0**2)/(2*H - u0**2),2*u0/(2*H - u0**2), 2/(-2*H + u0**2)],[u0*(-2*H + a*u0 + u0**2)/(2*a*(2*H - u0**2)),  (H - a*u0 - u0**2/2)/(a*(2*H - u0**2)),  1/(2*H - u0**2)]])'
             ev = parse_expr(ev, local_dict=local_dict, evaluate=False)
             REV = parse_expr(REV, local_dict=local_dict, evaluate=False)
             LEV = parse_expr(LEV, local_dict=local_dict, evaluate=False)

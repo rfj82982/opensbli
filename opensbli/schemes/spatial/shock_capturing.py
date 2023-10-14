@@ -258,9 +258,9 @@ class EigenSystem(object):
         self.physics = physics
         return
 
-    def instantiate_eigensystem(self, block):
+    def instantiate_eigensystem(self, block, passive_scalar):
         if self.physics is None:
-            Euler_eq = EulerEquations(block.ndim)
+            Euler_eq = EulerEquations(block.ndim, passive_scalar)
             Euler_eq.generate_eig_system(block)
         else:
             self.physics.generate_eig_system(block)
@@ -738,6 +738,9 @@ class TVDCharacteristic(Characteristic):
         # Remove '0' entries and gamma - 1 factors from pre_process_equations
         pre_process_equations = self.remove_zero_equations(pre_process_equations)
         pre_process_equations = self.replace_gamma_factor(pre_process_equations)
+        # for eqn in pre_process_equations:
+        #     pprint(eqn)
+        # # exit()
         return pre_process_equations, reduction_equations
 
     def post_process_Q(self, dire, derivatives, block):
