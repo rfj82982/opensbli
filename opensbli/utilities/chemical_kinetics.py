@@ -32,7 +32,7 @@ from opensbli.core.grid import GridVariable
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.kernel import Kernel
 from opensbli.core.datatypes import Int
-from opensbli.core.kernel import MultiConstantsToDeclare as MCTD
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 from opensbli.core.parsing import EinsteinEquation
 # from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
@@ -202,15 +202,15 @@ class gnoffo89(object):
         Cf9.value, nf9.value, theta9.value, B91.value, B92.value, B93.value, B94.value, B95.value = 6.440e17, -1.00, 3.837e4,  1.066, -0.833, -3.095, -0.084,  0.004
 
         # add constants to the .cpp file
-        MCTD.add_constants([Cf1, nf1, theta1, B11, B12, B13, B14, B15])
-        MCTD.add_constants([Cf2, nf2, theta2, B21, B22, B23, B24, B25])
-        MCTD.add_constants([Cf3, nf3, theta3, B31, B32, B33, B34, B35])
-        MCTD.add_constants([Cf4, nf4, theta4, B41, B42, B43, B44, B45])
-        MCTD.add_constants([Cf5, nf5, theta5, B51, B52, B53, B54, B55])
-        MCTD.add_constants([Cf6, nf6, theta6, B61, B62, B63, B64, B65])
-        MCTD.add_constants([Cf7, nf7, theta7, B71, B72, B73, B74, B75])
-        MCTD.add_constants([Cf8, nf8, theta8, B81, B82, B83, B84, B85])
-        MCTD.add_constants([Cf9, nf9, theta9, B91, B92, B93, B94, B95])
+        CTD.add_constant([Cf1, nf1, theta1, B11, B12, B13, B14, B15])
+        CTD.add_constant([Cf2, nf2, theta2, B21, B22, B23, B24, B25])
+        CTD.add_constant([Cf3, nf3, theta3, B31, B32, B33, B34, B35])
+        CTD.add_constant([Cf4, nf4, theta4, B41, B42, B43, B44, B45])
+        CTD.add_constant([Cf5, nf5, theta5, B51, B52, B53, B54, B55])
+        CTD.add_constant([Cf6, nf6, theta6, B61, B62, B63, B64, B65])
+        CTD.add_constant([Cf7, nf7, theta7, B71, B72, B73, B74, B75])
+        CTD.add_constant([Cf8, nf8, theta8, B81, B82, B83, B84, B85])
+        CTD.add_constant([Cf9, nf9, theta9, B91, B92, B93, B94, B95])
 
         return input_constants
  
@@ -364,12 +364,12 @@ class park01(object):
         Cf5.value, nf5.value, thetaf5.value, a51.value, a52.value, a53.value, a54.value, a55.value = 5.7e12, 0.42, 4.2938e4, -3.032189, 0.0784648,  -7.693047,  1.411299, -0.517448
 
         # add constants to the .cpp file
-        MCTD.add_constants([Cf0, nf0, thetaf0, a01, a02, a03, a04, a05])
-        MCTD.add_constants([Cf1, nf1, thetaf1, a11, a12, a13, a14, a15])
-        MCTD.add_constants([Cf2, nf2, thetaf2, a21, a22, a23, a24, a25])
-        MCTD.add_constants([Cf3, nf3, thetaf3, a31, a32, a33, a34, a35])
-        MCTD.add_constants([Cf4, nf4, thetaf4, a41, a42, a43, a44, a45])
-        MCTD.add_constants([Cf5, nf5, thetaf5, a51, a52, a53, a54, a55])
+        CTD.add_constant([Cf0, nf0, thetaf0, a01, a02, a03, a04, a05])
+        CTD.add_constant([Cf1, nf1, thetaf1, a11, a12, a13, a14, a15])
+        CTD.add_constant([Cf2, nf2, thetaf2, a21, a22, a23, a24, a25])
+        CTD.add_constant([Cf3, nf3, thetaf3, a31, a32, a33, a34, a35])
+        CTD.add_constant([Cf4, nf4, thetaf4, a41, a42, a43, a44, a45])
+        CTD.add_constant([Cf5, nf5, thetaf5, a51, a52, a53, a54, a55])
 
         return input_constants
  
@@ -558,14 +558,14 @@ class park01am(object):
         Cf7.value, nf7.value, thetaf7.value, a70.value, a71.value, a72.value, a73.value, a74.value, a75.value = 8.4e12, 0.00,  19400.0, -1.245460e+03,	-1.576855e+04, -2.325883e+00, 8.852601e-02, -6.685894e-06, 4.489270e-09
 
         # add constants to the .cpp file
-        MCTD.add_constants([Cf0, nf0, thetaf0, a00, a01, a02, a03, a04, a05])
-        MCTD.add_constants([Cf1, nf1, thetaf1, a10, a11, a12, a13, a14, a15])
-        MCTD.add_constants([Cf2, nf2, thetaf2, a20, a21, a22, a23, a24, a25])
-        MCTD.add_constants([Cf3, nf3, thetaf3, a30, a31, a32, a33, a34, a35])
-        MCTD.add_constants([Cf4, nf4, thetaf4, a40, a41, a42, a43, a44, a45])
-        MCTD.add_constants([Cf5, nf5, thetaf5, a50, a51, a52, a53, a54, a55])
-        MCTD.add_constants([Cf6, nf6, thetaf6, a60, a61, a62, a63, a64, a65])
-        MCTD.add_constants([Cf7, nf7, thetaf7, a70, a71, a72, a73, a74, a75])
+        CTD.add_constant([Cf0, nf0, thetaf0, a00, a01, a02, a03, a04, a05])
+        CTD.add_constant([Cf1, nf1, thetaf1, a10, a11, a12, a13, a14, a15])
+        CTD.add_constant([Cf2, nf2, thetaf2, a20, a21, a22, a23, a24, a25])
+        CTD.add_constant([Cf3, nf3, thetaf3, a30, a31, a32, a33, a34, a35])
+        CTD.add_constant([Cf4, nf4, thetaf4, a40, a41, a42, a43, a44, a45])
+        CTD.add_constant([Cf5, nf5, thetaf5, a50, a51, a52, a53, a54, a55])
+        CTD.add_constant([Cf6, nf6, thetaf6, a60, a61, a62, a63, a64, a65])
+        CTD.add_constant([Cf7, nf7, thetaf7, a70, a71, a72, a73, a74, a75])
 
         return input_constants
     
