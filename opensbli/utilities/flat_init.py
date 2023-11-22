@@ -165,6 +165,8 @@ class Boundary_layer_profile(object):
 
         fn_newton.solve_newton()
         initial_conditions_newton = fn_newton.new_ini()
+        print('--------------------------------------------------------------- newton initial conditions')
+        print(initial_conditions_newton)
 
         etamax, jmax = 10.0, 1001
         nstep = jmax - 1
