@@ -161,13 +161,11 @@ class Boundary_layer_profile(object):
         if self.adiabatic == True:
             fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, gw], [2, 3], [1, 1], [1, 3])
         else:
-            fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, 4.0], [2, 4], [1, 1], [1, 3])
+            fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, 10.0], [2, 4], [1, 1], [1, 3])
 
         fn_newton.solve_newton()
         initial_conditions_newton = fn_newton.new_ini()
-        print('--------------------------------------------------------------- newton initial conditions')
-        print(initial_conditions_newton)
-
+        
         etamax, jmax = 10.0, 1001
         nstep = jmax - 1
         self.suth = 110.4/Tinf # sutherland's constant
@@ -234,9 +232,16 @@ class Initialise_Flatplate(GridBasedInitialisation):
     :arg int n_coeffs: Desired number of coefficients for the polynomial fit.
     :arg float Re: Reynolds number.
     :arg float xMach: Free-stream Mach number"""
-    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall=1.0, adiabaticwall_condition=True, coordinate_evaluations=None):
+    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall=True, coordinate_evaluations=None):
         ret = super(Initialise_Flatplate, cls).__new__(cls)
-        print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f. T_wall = %f. " % (Re, xMach, Tinf, Twall))
+
+        if ret.find_constant_values([Twall])[0] == True:
+            ret.find_constant_values([Twall])[0] == 'adiabtic'
+            twallprint = 'adiabtic'
+            print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f. T_wall = %s. " % (Re, xMach, Tinf, twallprint))
+        else:
+            print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f. T_wall = %f. " % (Re, xMach, Tinf, Twall))
+        
         ret.coordinates = [x[1] for x in bl_directions]
         ret.bl_directions = bl_directions
         ret.n_coeffs = n_coeffs
@@ -246,7 +251,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
         ret.equations = []
         ret.xMach = ret.find_constant_values([xMach])[0]
         ret.Twall = ret.find_constant_values([Twall])[0]
-        ret.Adiabatic_condition = ret.find_constant_values([adiabaticwall_condition])[0]
+        ret.Adiabatic_condition = ret.find_constant_values([Twall])[0]
         return ret
 
     def find_constant_values(self, input):
