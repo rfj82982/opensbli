@@ -221,7 +221,6 @@ class Boundary_layer_profile(object):
         self.dTdy = (-1.83333333333334*T[0]+3.00000000000002*T[1]-1.50000000000003*T[2]+0.333333333333356*T[3]-8.34657956545823e-15*T[4]+1.06910315192207e-15*T[5])/dy
         return y, u, T, scale
 
-
 class Initialise_Flatplate(GridBasedInitialisation):
     """ Generates the initialiastion equations for the boundary-layer profile.
 
@@ -329,6 +328,9 @@ class Initialise_Flatplate(GridBasedInitialisation):
             # Solve continuity equation to obtain rhov
             rhov_new = self.solve_continuity(poly_coordinates, u_new, rho_new)
             edge = self.find_edge_of_bl(u_new, tolerance)
+            print('-----------------------------------------------------------------------------------------')
+            print(edge)
+            print('-----------------------------------------------------------------------------------------')
             # Obtain polynomial fit coefficients
             rhou_coeffs = self.fit_polynomial(poly_coordinates, rhou_new, edge, n_coeffs)
             rhov_coeffs = self.fit_polynomial(poly_coordinates, rhov_new, edge, n_coeffs)
@@ -389,8 +391,17 @@ class Initialise_Flatplate(GridBasedInitialisation):
         :arg int edge: Grid index for the edge of the boundary-layer.
         returns: Eq: eqn: OpenSBLI equation to add to the initialisation kernel."""
         bl_edge_coordinate = poly_coordinates[edge]
+        print('-----------------------------------------------------------------------------------------')
+        print(poly_coordinates)
+        print(bl_edge_coordinate)
+        print('-----------------------------------------------------------------------------------------')
+
         powers = [i for i in range(np.size(coefficients))][::-1]
         eqn = sum([coeff*self.coordinates[direction]**power for (coeff, power) in zip(coefficients, powers)])  # TODO set to exactl 1.0 if required
+
+        # -----------------------------------------------------------------------------------------
+        # here: potentiall addition of y+y0
+        
         eqn = OpenSBLIEq(GridVariable('%s' % name), Piecewise((eqn, self.coordinates[direction] < bl_edge_coordinate), (variable[edge], True)))
         return eqn
 
@@ -458,6 +469,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
         rhou0_eqn = self.form_equation(data[0], 'rhou0', coeffs[0], direction, edge, poly_coordinates)
         rhou1_eqn = self.form_equation(data[1], 'rhou1', coeffs[1], direction, edge, poly_coordinates)
         T_eqn = self.form_equation(data[2], 'T', coeffs[2], direction, edge, poly_coordinates)
+
         # Set conservative values
         rho, rhou0, rhou1, T = GridVariable('rho'), GridVariable('rhou0'), GridVariable('rhou1'), GridVariable('T')
         rho_eqn = OpenSBLIEq(rho, 1.0/T)
