@@ -693,7 +693,7 @@ class TVDCharacteristic(Characteristic):
             for i in range(nvars):
                 g_equations += [OpenSBLIEq(S, sign(alphas[j,i]))]
                 a1, a2 = alphas[j,i], alphas[j-1,i]
-                g_equations += [OpenSBLIEq(t1, Max(0, Min(2*Abs(a1), S*a2))), OpenSBLIEq(t2, Min(Abs(a1), 2*S*a2))]
+                g_equations += [OpenSBLIEq(t1, Max(0.0, Min(2*Abs(a1), S*a2))), OpenSBLIEq(t2, Min(Abs(a1), 2*S*a2))]
                 g_eval = S*Max(t1, t2)
                 g_equations += [OpenSBLIEq(g_terms[j-1][i], g_eval)]
         pre_process_equations += g_equations

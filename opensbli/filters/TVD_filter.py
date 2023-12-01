@@ -8,12 +8,13 @@ from opensbli.filters.WENO_filter import NonLinearFilterBase
 class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
     """ Class to apply a TVD-based non-linear filter after a full time-step of a non-dissipative high order base scheme. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, metrics=None, airfoil=False, passive_scalar=False):
+    def __init__(self, block, metrics=None, airfoil=False, passive_scalar=False, optimize=False):
         print("Using non-linear TVD filtering on block {:}.".format(block.blocknumber))
         self.passive_scalar = passive_scalar
         # Get the shared functionality between TVD/WENO non-linear filters
-        NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=False)
+        NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=optimize)
         # Main class to generate the filter
+        self.optimize = optimize
         self.main(block)
         return
 
@@ -21,10 +22,46 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         """ Applies the non-linear TVD filter by subtracting from the q vector after a full RK time-step."""
         resid_kernel = self.residual_kernels[0]
         filter_equations = []
+
+        filter_equations = []
+
         nvars = len(self.solution_vector)
+        # Turn off the sensor at the walls
+        wall_detection, wall_equations = self.wall_control(depth=5)
+        filter_equations += wall_equations
+        kappa_fact = self.kappa
+        if isinstance(kappa_fact, DataSet):
+            check = self.kappa
+            for direction in range(self.ndim):
+                for loc in [-1, -1, 0, 1, 2]:
+                    check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
+            kappa_fact = block.location_dataset('TVD_filter')
+            # Selection of which kappa points to apply the filter to
+            DS = ConstantObject('Ducros_select')
+            DS.value = 0.05
+            CTD.add_constant(DS)
+            check = check >= DS
+            cond1 = ExprCondPair(1, check)
+            cond2 = ExprCondPair(0.0, True)
+            filter_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        else:
+            kappa_fact = 1
+        # detJ if needed, need to improve these scaling
+        if self.curvilinear and self.airfoil:
+            if self.ndim == 3:
+                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            else:
+                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
+            detJ_term = gv('inv_detJ')
+        else:
+            detJ_term = 1
+
+
+
+
         dt = ConstantObject('dt')
         for i, var in enumerate(self.solution_vector):
-            filter_equations += [OpenSBLIEq(var, var + dt*resid_kernel.equations[i].rhs)]
+            filter_equations += [OpenSBLIEq(var, var + dt*resid_kernel.equations[i].rhs*detJ_term * kappa_fact)]
         # Finish creating the kernel
         residual_kernel = self.create_kernel('Non-linear TVD Filter application', filter_equations, resid_kernel.halo_ranges, block)
         self.component_counter += 1
@@ -54,6 +91,11 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the TVD stencil if periodic boundaries
         # bc_kernels = self.update_periodic_boundary(block, self.SF.halotype)
+        # Shock sensor evaluation to find which points to evaluate the WENO scheme on
+        if self.optimize:
+            self.kappa = self.evaluate_shock_sensor(block)
+        else:
+            self.kappa = 1
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
         self.constituent_relations(block)
         # Zero the work arrays
@@ -72,3 +114,22 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         # # Create the residual kernel
         self.TVD_filter_application(block)
         return
+
+    def evaluate_shock_sensor(self, block):
+        # Add a shock sensor for the WENO filter
+        SS = ShockSensor()
+        if block.ndim > 1: # no shock sensor defined for ndim=1 currently
+            # Ducros dilatation part
+            sensor_evaluations, kappa = SS.ducros_equations(block, "x", metrics=self.metric_class, name='kappa')
+        else:
+            raise ValueError("No hybrid method for ndim=1.")
+        # Update the CRs needed, and set the shock sensor to 1 on the outer boundaries
+        self.constituent_relations(block, kappa)
+        # Halo points for the sensor kernel
+        sensor_halos = []
+        for _ in range(self.ndim):
+            sensor_halos.append([self.halo_type, self.halo_type])
+        sensor_kernel = self.create_kernel('Shock sensor', flatten(sensor_evaluations), sensor_halos, block)
+        self.add_kernel(sensor_kernel)
+        self.component_counter += 1
+        return kappa
