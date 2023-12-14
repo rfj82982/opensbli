@@ -23,7 +23,7 @@ simulation_parameters = {
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 weno = False
 teno = False
-TVD = True
+TVD = False
 ndim = 2
 # Define all the constants in the equations
 constants = ["gama", "Minf"]
@@ -94,12 +94,12 @@ if weno:
     schemes[LF.name] = LF
 elif teno:
     Avg = SimpleAverage([0, 1])
-    # LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    LF = LFTeno(order=5, averaging=Avg, flux_type='GLF')
+    # LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF    
 else:
-    fns = 'u0'
+    fns = 'u0 u1'
     cent = StoreSome(4, fns)
     schemes[cent.name] = cent
 # Time-stepping

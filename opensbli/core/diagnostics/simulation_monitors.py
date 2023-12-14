@@ -74,19 +74,23 @@ class SimulationMonitor(object):
         # Check whether monitoring an array or a single value from a reduction already performed
         if isinstance(blocks, SimulationBlock):
             self.blocks = [blocks]
-            arrays, probe_locations = [arrays], [probe_locations]
+            # arrays, probe_locations = [arrays], [probe_locations]
         elif isinstance(blocks, MultiBlock):
             self.blocks = [b for b in blocks.blocks]
         else:
             raise ValueError("SimulationMonitor input: pass either a SimulationBlock or MultiBlock class.")
+        print(arrays)
+        print(probe_locations)
+        # exit()
         self.ndim = self.blocks[0].ndim
+        self.nblocks = len(self.blocks)
         self.output_files = ['block%d_' % b.blocknumber + output_file for b in self.blocks]
         self.array_monitors = []
         self.scalar_monitors = []
         # Loop over all the blocks in the problem
-        for b in self.blocks:
-            self.array_monitors += [Monitor(b, var, loc, index) for index, (var, loc) in enumerate(zip(arrays[b.blocknumber], probe_locations[b.blocknumber])) if isinstance(loc, tuple)]
-            self.scalar_monitors += [ScalarMonitor(b, var, output=loc) for index, (var, loc) in enumerate(zip(arrays[b.blocknumber], probe_locations[b.blocknumber])) if not isinstance(loc, tuple)]
+        for block_id, b in enumerate(self.blocks):
+            self.array_monitors += [Monitor(b, var, loc, index) for index, (var, loc) in enumerate(zip(arrays[block_id], probe_locations[block_id])) if isinstance(loc, tuple)]
+            self.scalar_monitors += [ScalarMonitor(b, var, output=loc) for index, (var, loc) in enumerate(zip(arrays[block_id], probe_locations[block_id])) if not isinstance(loc, tuple)]
             # Check if the scalar monitors have to be scaled before printing
             for SM in self.scalar_monitors:
                 if SM.output == 'residual':

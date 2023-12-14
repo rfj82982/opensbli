@@ -342,7 +342,7 @@ class OPSC(object):
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
-        end = self.ops_exit()
+        end = self.ops_exit(algorithm)
         algorithm.prg.components = def_decs + algorithm.prg.components + end
         code = algorithm.prg.opsc_code
         code = self.before_main(algorithm) + code
@@ -546,14 +546,15 @@ class OPSC(object):
         files = [f.close() for f in files]
         return
 
-    def ops_exit(self):
+    def ops_exit(self, algorithm):
         """ Exits the OPS program with optional kernel-based timing output."""
         output = []
         if self.OPS_diagnostics > 1:
             output += [WriteString("ops_timing_output(std::cout);")]
         if self.monitoring_output_file:
-            for i in range(self.nblocks):
-                output += [WriteString("fclose(f%d);" % i)]
+            for i in range(len(algorithm.simulation_monitor.output_files)):
+                index = algorithm.simulation_monitor.blocks[i].blocknumber
+                output += [WriteString("fclose(f%d);" % index)]
         output += [WriteString("ops_exit();")]
         return output
 
@@ -590,10 +591,12 @@ class OPSC(object):
         out += ['#include "io.h"']
         # Include optional simulation monitoring reductions file
         if algorithm.simulation_monitor:
+            self.opened = []
             out += ['#include \"%s\"' % algorithm.simulation_monitor.filename]
             if len(algorithm.simulation_monitor.output_files) > 0:
-                for i in range(self.nblocks):
-                    out += ['FILE *f%d = fopen(\"%s\", \"a\");' % (i, str(algorithm.simulation_monitor.output_files[i]))]
+                for i in range(len(algorithm.simulation_monitor.output_files)):
+                    index = algorithm.simulation_monitor.blocks[i].blocknumber
+                    out += ['FILE *f%d = fopen(\"%s\", \"a\");' % (index, str(algorithm.simulation_monitor.output_files[i]))]
         return out
 
     def opsc_def_decs(self, algorithm):
