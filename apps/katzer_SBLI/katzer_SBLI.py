@@ -33,7 +33,7 @@ simulation_parameters = {
 
 ndim = 2
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-weno = False
+weno = True
 teno = False
 TVD = False
 # Instatiate equation classes
@@ -102,14 +102,14 @@ store_sensor = True
 schemes = {}
 if weno:
     Avg = SimpleAverage([0, 1])
-    # LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF')
-    LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
+    LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF')
+    #LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 elif teno:
     Avg = SimpleAverage([0, 1])
-    # LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
+    #LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF   
 # Central scheme 
@@ -178,7 +178,7 @@ initial = Initialise_Katzer(polynomial_directions, n_poly_coefficients,  Re, xMa
 kwargs = {'iotype': "Write"}
 h5 = iohdf5(**kwargs)
 h5.add_arrays(simulation_eq.time_advance_arrays)
-h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('D11'), DataObject('kappa'), DataObject('WENO_filter')])
+h5.add_arrays([DataObject('x0'), DataObject('x1'), DataObject('D11')])#, DataObject('kappa'), DataObject('WENO_filter')])
 block.setio(h5)
 
 # Set equations on the block and discretise

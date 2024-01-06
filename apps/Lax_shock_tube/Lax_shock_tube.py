@@ -13,7 +13,7 @@ simulation_parameters = {
     "Delta0block0"         : "1.0/(block0np0-1)",
     "eps"                  : "1e-15",
     "TENO_CT"              : "1e-5",
-    "inv_rfact0_block0"    : "'1.0/Delta0block0"
+    "inv_rfact0_block0"    : "1.0/Delta0block0"
 }
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example

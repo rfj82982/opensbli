@@ -635,7 +635,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block)
+            self.instantiate_eigensystem(block, self.passive_scalar)
 
             for direction, derivatives in sorted(grouped.items()):
                 # Create a work array for each component of the system

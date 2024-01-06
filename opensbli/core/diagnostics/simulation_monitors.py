@@ -74,7 +74,7 @@ class SimulationMonitor(object):
         # Check whether monitoring an array or a single value from a reduction already performed
         if isinstance(blocks, SimulationBlock):
             self.blocks = [blocks]
-            # arrays, probe_locations = [arrays], [probe_locations]
+            arrays, probe_locations = [arrays], [probe_locations]
         elif isinstance(blocks, MultiBlock):
             self.blocks = [b for b in blocks.blocks]
         else:
@@ -89,6 +89,7 @@ class SimulationMonitor(object):
         self.scalar_monitors = []
         # Loop over all the blocks in the problem
         for block_id, b in enumerate(self.blocks):
+            # if not any(x is None for x in probe_locations):
             self.array_monitors += [Monitor(b, var, loc, index) for index, (var, loc) in enumerate(zip(arrays[block_id], probe_locations[block_id])) if isinstance(loc, tuple)]
             self.scalar_monitors += [ScalarMonitor(b, var, output=loc) for index, (var, loc) in enumerate(zip(arrays[block_id], probe_locations[block_id])) if not isinstance(loc, tuple)]
             # Check if the scalar monitors have to be scaled before printing

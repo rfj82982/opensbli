@@ -130,8 +130,8 @@ class NonLinearFilterBase(object):
                 governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
                 output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
         print("Using the following equations for the TVD/WENO filter.")
-        for eqn in output_equations:
-            pprint(eqn)
+        # for eqn in output_equations:
+        #     pprint(eqn)
         # exit()                     
         return output_equations
 
@@ -190,8 +190,8 @@ class NonLinearFilterBase(object):
         filter_class.order = self.component_counter
         # Add the halo type to extend the range of evaluation
         filter_class.halos = halo_type
-        for eqn in equations:
-            pprint(eqn)
+        # for eqn in equations:
+        #     pprint(eqn)
         # exit()
         filter_class.add_equations(equations)
         return filter_class

@@ -232,6 +232,7 @@ if not weno and not teno:
 # Simulation monitor
 arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rhom']
 probe_locations = [(None), (None), (None), (None)]
+# probe_locations = [None, None, None, None]
 SM = SimulationMonitor(arrays, probe_locations, block, output_file='TGV.log', print_frequency=100)
 # Add the simulation monitor to the algorithm
 alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)

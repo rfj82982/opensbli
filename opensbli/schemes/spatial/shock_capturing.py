@@ -184,8 +184,8 @@ class ShockCapturing(object):
         else:
             raise ValueError("Input to MP should be left or right biased reconstruction variable.")
         # Final corrected flux
-        for eqn in output_eqns:
-            pprint(eqn)
+        # for eqn in output_eqns:
+        #     pprint(eqn)
         return output_eqns
 
     def update_constituent_relation_symbols(self, sym, direction):
