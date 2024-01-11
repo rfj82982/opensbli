@@ -10,7 +10,7 @@ simulation_parameters = {
     "dt"                   : "0.001",
     "niter"                : "1.0/0.001",
     "block0np0"            : "200",
-    "Delta0block0"         : "1.0/(block0np0-1)",
+    "Delta0block0"         : "1.0/block0np0",
 }
 
 # Problem dimension
@@ -67,7 +67,7 @@ block.setio([h5])
 schemes = {}
 cent = Central(4)
 schemes[cent.name] = cent
-rk = RungeKuttaLS(3)
+rk = RungeKutta(3)
 schemes[rk.name] = rk
 
 block.set_discretisation_schemes(schemes)
@@ -77,7 +77,7 @@ block.discretise()
 # Algorithm for the block
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
-OPSC(alg)
+OPSC(alg, OPS_V2=False)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='phi', every=100)

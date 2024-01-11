@@ -604,6 +604,8 @@ class OPSC(object):
         from opensbli.core.kernel import StencilObject, ConstantsToDeclare
         from opensbli.core.boundary_conditions.exchange import Exchange
         output = []
+        # Add OPS_init to the declarations
+        output += self.ops_init()
         # Sort the constants to a consistent ordering
         ConstantsToDeclare.sort_constants()
         # First process all the constants in the definitions
@@ -611,8 +613,6 @@ class OPSC(object):
         # OPS declaration of the constants
         output += self.declare_ops_constants(ConstantsToDeclare.constants)
         # Once the constants are done define and declare OPS dats
-        # Add OPS_init to the declarations as it should be called before all ops
-        output += self.ops_init()
         # Define and declare blocks
         for b in algorithm.block_descriptions:
             output += self.declare_block(b)

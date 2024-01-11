@@ -11,9 +11,9 @@ simulation_parameters = {
 'Pr'        :   '0.71',
 'dt'        :   '0.0005',
 'niter'     :   '40000',
-'block0np0'     :   '64',
-'block0np1'     :   '64',
-'block0np2'     :   '64',
+'block0np0'     :   '256',
+'block0np1'     :   '256',
+'block0np2'     :   '256',
 'Delta0block0'      :   '2*M_PI/block0np0',
 'Delta1block0'      :   '2*M_PI/block0np1',
 'Delta2block0'      :   '2*M_PI/block0np2',
@@ -35,7 +35,7 @@ ndim = 3
 # # Constants that are used
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
 weno = False
-teno = False
+teno = True
 TVD = False
 coordinate_symbol = "x"
 constants = ["Re", "Pr", "gama", "Minf", "SuthT", "RefT"]
@@ -105,18 +105,11 @@ u2 = "Eq(GridVariable(u2), 0.0)"
 p = "Eq(GridVariable(p), 1.0/(gama*Minf*Minf)+ (1.0/16.0) * (cos(2.0*x0)+cos(2.0*x1))*(2.0 + cos(2.0*x2)))"
 r = "Eq(GridVariable(r), gama*Minf*Minf*p)"
 
-if conservative:
-    rho = "Eq(DataObject(rho), r)"
-    rhou0 = "Eq(DataObject(rhou0), r*u0)"
-    rhou1 = "Eq(DataObject(rhou1), r*u1)"
-    rhou2 = "Eq(DataObject(rhou2), r*u2)"
-    rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"
-else:
-    rho = "Eq(DataObject(rho), r)"
-    rhou0 = "Eq(DataObject(u0), u0)"
-    rhou1 = "Eq(DataObject(u1), u1)"
-    rhou2 = "Eq(DataObject(u2), u2)"
-    rhoE = "Eq(DataObject(Et), p/(r*(gama-1)) + 0.5*(u0**2+ u1**2 + u2**2))"    
+rho = "Eq(DataObject(rho), r)"
+rhou0 = "Eq(DataObject(rhou0), r*u0)"
+rhou1 = "Eq(DataObject(rhou1), r*u1)"
+rhou2 = "Eq(DataObject(rhou2), r*u2)"
+rhoE = "Eq(DataObject(rhoE), p/(gama-1) + 0.5* r *(u0**2+ u1**2 + u2**2))"  
 
 eqns = [x0, x1, x2, u0, u1, u2, p, r, rho, rhou0, rhou1, rhou2, rhoE]
 
@@ -140,14 +133,14 @@ else:
 # Scheme selection
 if weno:
     Avg = SimpleAverage([0, 1])
-    # LF = LFWeno(order=5, formulation='Z', averaging=Avg, flux_type='LLF')
-    LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
+    LF = LFWeno(order=5, formulation='Z', averaging=Avg, flux_type='LLF')
+    # LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 elif teno:
-    Avg = SimpleAverage([0, 1])
-    # LF = LFTeno(order=5, averaging=Avg, flux_type='LLF')
-    LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
+    Avg = RoeAverage([0, 1])
+    LF = LFTeno(order=6, averaging=Avg, flux_type='LLF')
+    # LF = HLLCTeno(order=6, averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
 
