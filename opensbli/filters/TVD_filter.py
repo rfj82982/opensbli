@@ -18,56 +18,6 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         self.main(block)
         return
 
-    def TVD_filter_application(self, block):
-        """ Applies the non-linear TVD filter by subtracting from the q vector after a full RK time-step."""
-        resid_kernel = self.residual_kernels[0]
-        filter_equations = []
-
-        filter_equations = []
-
-        nvars = len(self.solution_vector)
-        # Turn off the sensor at the walls
-        wall_detection, wall_equations = self.wall_control(depth=5)
-        filter_equations += wall_equations
-        kappa_fact = self.kappa
-        if isinstance(kappa_fact, DataSet):
-            check = self.kappa
-            for direction in range(self.ndim):
-                for loc in [-1, -1, 0, 1, 2]:
-                    check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
-            kappa_fact = block.location_dataset('TVD_filter')
-            # Selection of which kappa points to apply the filter to
-            DS = ConstantObject('Ducros_select')
-            DS.value = 0.05
-            CTD.add_constant(DS)
-            check = check >= DS
-            cond1 = ExprCondPair(1, check)
-            cond2 = ExprCondPair(0.0, True)
-            filter_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
-        else:
-            kappa_fact = 1
-        # detJ if needed, need to improve these scaling
-        if self.curvilinear and self.airfoil:
-            if self.ndim == 3:
-                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
-            else:
-                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
-            detJ_term = gv('inv_detJ')
-        else:
-            detJ_term = 1
-
-
-
-
-        dt = ConstantObject('dt')
-        for i, var in enumerate(self.solution_vector):
-            filter_equations += [OpenSBLIEq(var, var + dt*resid_kernel.equations[i].rhs*detJ_term * kappa_fact)]
-        # Finish creating the kernel
-        residual_kernel = self.create_kernel('Non-linear TVD Filter application', filter_equations, resid_kernel.halo_ranges, block)
-        self.component_counter += 1
-        self.add_kernel(residual_kernel)
-        return
-
     def main(self, block):
         """ Main calling function to generate the kernels for the TVD filter."""
         # Counter to order the kernels. Put the TVD filtering kernels at the very end of the time loop
@@ -90,7 +40,7 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         # Q vector
         self.solution_vector = flatten(self.time_advance_arrays)
         # Swap over the TVD stencil if periodic boundaries
-        # bc_kernels = self.update_periodic_boundary(block, self.SF.halotype)
+        # bc_kernels = self.update_periodic_boundary(block, [-1, 1])
         # Shock sensor evaluation to find which points to evaluate the WENO scheme on
         if self.optimize:
             self.kappa = self.evaluate_shock_sensor(block)
@@ -103,6 +53,9 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         # Create the TVD reconstruction kernels
         reconstruction_kernels = []
         for direction, ker in enumerate(self.reconstruction_kernels):
+            # Hybrid mode
+            if self.optimize:
+                ker = self.hybrid_condition(ker, block, direction)
             halo_ranges = ker.halo_ranges
             reconstruction_kernels.append(self.create_kernel('TVD reconstruction direction %d' % direction, ker.equations, halo_ranges, block))
             self.component_counter += 1
@@ -116,7 +69,7 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         return
 
     def evaluate_shock_sensor(self, block):
-        # Add a shock sensor for the WENO filter
+        # Add a shock sensor for the TVD filter
         SS = ShockSensor()
         if block.ndim > 1: # no shock sensor defined for ndim=1 currently
             # Ducros dilatation part
@@ -133,3 +86,80 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         self.add_kernel(sensor_kernel)
         self.component_counter += 1
         return kappa
+
+    def TVD_filter_application(self, block):
+        """ Applies the non-linear TVD filter by subtracting from the q vector after a full RK time-step."""
+        resid_kernel = self.residual_kernels[0]
+        filter_equations = []
+
+        nvars = len(self.solution_vector)
+        # Turn off the sensor at the walls
+        wall_detection, wall_equations = self.wall_control(depth=5)
+        filter_equations += wall_equations
+        kappa_fact = self.kappa
+        if isinstance(kappa_fact, DataSet):
+            check = self.kappa
+            for direction in range(self.ndim):
+                for loc in [-1, 0, 1]:
+                    check = Max(check, increment_dataset(self.kappa, direction, loc))        # for direction in range(self.ndim):
+            kappa_fact = block.location_dataset('TVD_filter')
+            # Selection of which kappa points to apply the filter to
+            DS = ConstantObject('Ducros_select')
+            DS.value = 0.05
+            CTD.add_constant(DS)
+            check = check >= DS
+            cond1 = ExprCondPair(1, check)
+            cond2 = ExprCondPair(0.0, True)
+            filter_equations += [OpenSBLIEq(kappa_fact, Piecewise(*[cond1, cond2]))]
+        else:
+            kappa_fact = 1
+        # detJ if needed, need to improve these scaling
+        if self.curvilinear and self.airfoil:
+            if self.ndim == 3:
+                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / (Abs(block.location_dataset('detJ')) /  self.block.deltas[2])) ] ## Assumes span-periodic for now, for scaling
+            else:
+                filter_equations += [OpenSBLIEq(gv('inv_detJ'), 1 / Abs(block.location_dataset('detJ')))]
+            detJ_term = gv('inv_detJ')
+        else:
+            detJ_term = 1
+
+        dt = ConstantObject('dt')
+        for i, eqn in enumerate(resid_kernel.equations):
+            print(eqn)
+            tvd_eqn = eqn.rhs.xreplace({ConstantObject('Delta%dblock%d' % (1, block.blocknumber)) : ConstantObject('Delta%dblock%d' % (1, block.blocknumber))*1/wall_detection})
+            rhs = kappa_fact*ConstantObject('dt')*tvd_eqn*detJ_term
+            filter_equations.append(OpenSBLIEq(self.solution_vector[i], self.solution_vector[i] + rhs))
+
+   
+        # Finish creating the kernel
+        resid_kernel.equations = filter_equations
+        residual_kernel = self.create_kernel('Non-linear TVD Filter application', filter_equations, resid_kernel.halo_ranges, block)
+        self.component_counter += 1
+        self.add_kernel(residual_kernel)
+        return
+
+    def hybrid_condition(self, kernel, block, direction):
+        """ Checks the Ducros sensor, if it is a shock we perform the TVD reconstruction, else do nothing."""
+        from sympy import And, Or
+        input_equations = flatten(kernel.equations)
+        kernel.equations = []
+
+        if self.optimize:
+            """ Only evaluate the TVD kernels at certain points, based on the shock sensor result. Improves performance."""
+            DC = ConstantObject('Ducros_check')
+            DC.value = 0.05
+            CTD.add_constant(DC)
+            locations = [-3,-2,-1,1,2]
+            term = self.kappa
+            # for dire in range(block.ndim):
+            dire = direction # Only check 1D kappa
+            for loc in locations:
+                term = Max(term, increment_dataset(self.kappa, dire, loc))
+            check = term > DC
+            cond1 = ExprCondPair(input_equations, check)
+            zeroed_equations = flatten([OpenSBLIEq(dset, 0.0) for dset in self.SF.temp_wk_arrays[direction]])
+            cond2 = ExprCondPair(zeroed_equations, True)
+            kernel.add_equation([GroupedPiecewise(cond1, cond2)])
+        else:
+            kernel.add_equation(input_equations)
+        return kernel
