@@ -219,8 +219,6 @@ class NonLinearFilterBase(object):
         """ Evalutes the constiteunt relations on the state at the end of a full step
         of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
         CR_eqns = []
-        if kappa is not None:
-            CR_eqns += [OpenSBLIEq(kappa, 1)]
         # Ensure gama has been added to the constants to define
         gamma = ConstantObject('gama')
         CTD.add_constant(gamma)
