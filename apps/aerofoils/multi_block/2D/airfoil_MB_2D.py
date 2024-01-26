@@ -309,8 +309,8 @@ for block in multi_block.blocks:
                 eq.Kernels += filter_swaps
 
 arrays = ['u1', 'u1', 'u1', 'u1', 'u1', 'u1', 'u1']
-arrays = [[multi_block.get_block(i).location_dataset('%s' % dset) for dset in arrays] for i in [2]]
-indices = [[(25, 1), (50, 1), (150, 1), (250, 1), (350, 1), (450, 1), (550, 1)] for _ in [2]]
+arrays = [multi_block.get_block(2).location_dataset('%s' % dset) for dset in arrays]
+indices = [(25, 1), (50, 1), (150, 1), (250, 1), (350, 1), (450, 1), (550, 1)]
 SM = SimulationMonitor(arrays, indices, multi_block.get_block(2), print_frequency=250, fp_precision=12, output_file='airfoil_output.log')
 # SM = SimulationMonitor(arrays, indices, multi_block, print_frequency=250, fp_precision=12, output_file='airfoil_output.log')
 
