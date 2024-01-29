@@ -129,7 +129,6 @@ class Boundary_layer_profile(object):
         :arg float Re: Reynolds number."""
 
         # self.nvisc = 1  # 1 Sutherlands law, 2 Power law, 3 Chapman-Rubesin approximation.
-        
         self.pr, self.gama, self.xmach, self.Re, Tw = pr, gama, xmach, Re, Tw
         
         if Tw == -1:
@@ -159,7 +158,7 @@ class Boundary_layer_profile(object):
         fn_newton.constants(etamax, jmax, sigma, gw, fwall)
 
         if self.adiabatic == True:
-            fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, gw], [2, 3], [1, 1], [1, 3])
+            fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, 10.0], [2, 3], [1, 1], [1, 3])
         else:
             fn_newton.define_inputs(self.compbl, [0, 0, 0, gw, 0], [0.2, 10.0], [2, 4], [1, 1], [1, 3])
 
@@ -212,7 +211,7 @@ class Boundary_layer_profile(object):
         # print("conversion factor is: ", scale)
         # print("scaled delta is: ", dlta/scale)
         # Rescale with displacement thickness and convert to FLOWER variable normalisation
-        # y, u, T = z/scale, self.soln[1, :], self.soln[3, :]
+
         y, u, T = z/scale, self.df[:], self.g[:]
         # Calculate du/dy at the wall
         dy = y[1]
@@ -284,6 +283,11 @@ class Initialise_Flatplate(GridBasedInitialisation):
         # Check if user has passed equations to evaluate coordinates, and add them to the kernel
         if self.coordinate_evaluations:
             self.equations += self.coordinate_evaluations
+
+        # addition for initialisation around bumps
+        x1b0 = [OpenSBLIEq(GridVariable('x1b0'), self.coordinate_evaluations[1].rhs.xreplace({self.block.grid_indexes[1] : ConstantObject('0.0')}))]
+        self.equations += x1b0
+
         self.initial = self.generate_initial_condition()
         # Add polynomial equations to initialise the solution
         self.equations += self.eqns
@@ -294,17 +298,17 @@ class Initialise_Flatplate(GridBasedInitialisation):
         self.check_coordinate_evaluation(block)
         # Create the Katzer kernel
         from opensbli.core.kernel import Kernel
-        katzer_kernel = Kernel(block, computation_name="Similiarity solution laminar boundary-layer initialisation%d" % self.order)
-        katzer_kernel.set_grid_range(block)
+        flat_kernel = Kernel(block, computation_name="Similiarity solution laminar boundary-layer initialisation%d" % self.order)
+        flat_kernel.set_grid_range(block)
         # Set halo range
         from opensbli.schemes.spatial.scheme import CentralHalos_defdec
         for d in range(block.ndim):
             # Initialize all five halos
-            katzer_kernel.set_halo_range(d, 0, CentralHalos_defdec())
-            katzer_kernel.set_halo_range(d, 1, CentralHalos_defdec())
-        katzer_kernel.add_equation(self.equations)
-        katzer_kernel.update_block_datasets(block)
-        self.Kernels = [katzer_kernel]
+            flat_kernel.set_halo_range(d, 0, CentralHalos_defdec())
+            flat_kernel.set_halo_range(d, 1, CentralHalos_defdec())
+        flat_kernel.add_equation(self.equations)
+        flat_kernel.update_block_datasets(block)
+        self.Kernels = [flat_kernel]
         return
 
     def generate_initial_condition(self):
@@ -328,9 +332,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
             # Solve continuity equation to obtain rhov
             rhov_new = self.solve_continuity(poly_coordinates, u_new, rho_new)
             edge = self.find_edge_of_bl(u_new, tolerance)
-            print('-----------------------------------------------------------------------------------------')
-            print(edge)
-            print('-----------------------------------------------------------------------------------------')
+
             # Obtain polynomial fit coefficients
             rhou_coeffs = self.fit_polynomial(poly_coordinates, rhou_new, edge, n_coeffs)
             rhov_coeffs = self.fit_polynomial(poly_coordinates, rhov_new, edge, n_coeffs)
@@ -391,18 +393,13 @@ class Initialise_Flatplate(GridBasedInitialisation):
         :arg int edge: Grid index for the edge of the boundary-layer.
         returns: Eq: eqn: OpenSBLI equation to add to the initialisation kernel."""
         bl_edge_coordinate = poly_coordinates[edge]
-        print('-----------------------------------------------------------------------------------------')
-        print(poly_coordinates)
-        print(bl_edge_coordinate)
-        print('-----------------------------------------------------------------------------------------')
-
+        
         powers = [i for i in range(np.size(coefficients))][::-1]
-        eqn = sum([coeff*self.coordinates[direction]**power for (coeff, power) in zip(coefficients, powers)])  # TODO set to exactl 1.0 if required
+        eqn = sum([coeff*(self.coordinates[direction] - GridVariable('x1b0'))**power for (coeff, power) in zip(coefficients, powers)])  # TODO set to exactl 1.0 if required
 
         # -----------------------------------------------------------------------------------------
         # here: potentiall addition of y+y0
-        
-        eqn = OpenSBLIEq(GridVariable('%s' % name), Piecewise((eqn, self.coordinates[direction] < bl_edge_coordinate), (variable[edge], True)))
+        eqn = OpenSBLIEq(GridVariable('%s' % name), Piecewise((eqn, self.coordinates[direction] - GridVariable('x1b0') < bl_edge_coordinate), (variable[edge], True)))
         return eqn
 
     def form_mixed_equation(self, profiles, names, coefficients, directions, edges, normal_profiles, normal_coeffs, poly_coordinates):
