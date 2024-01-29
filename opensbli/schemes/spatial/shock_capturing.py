@@ -731,7 +731,6 @@ class TVDCharacteristic(Characteristic):
         # Step 12: Calculate phi star terms
         self.phi_star_terms = [GridVariable('phi_star_%d' % i) for i in range(nvars)]
         kappa = ConstantObject('kappa_TVD')
-        kappa.value = 1.5
         ConstantsToDeclare.add_constant(kappa)
         pre_process_equations += [OpenSBLIEq(self.phi_star_terms[i], kappa*theta_terms[i]*phi_terms[i]) for i in range(nvars)]
         # NOTE: Setting the work arrays is performed in the post_process function to be consistent with WENO

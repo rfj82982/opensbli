@@ -90,6 +90,7 @@ class TVDFlux(TVDCharacteristic, TVD):
             all_derivatives_evaluated_locally = []
             reconstruction_halos = self.reconstruction_halotype(self.order, reconstruction=True)
             solution_vector = flatten(type_of_eq.time_advance_arrays)
+
             # Instantiate eigensystems with block, but don't add metrics yet
             self.instantiate_eigensystem(block, self.passive_scalar)
             for direction, derivatives in sorted(grouped.items()):
