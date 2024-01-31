@@ -285,7 +285,7 @@ class Initialise_Flatplate(GridBasedInitialisation):
             self.equations += self.coordinate_evaluations
 
         # addition for initialisation around bumps
-        x1b0 = [OpenSBLIEq(GridVariable('x1b0'), self.coordinate_evaluations[1].rhs.xreplace({self.block.grid_indexes[1] : ConstantObject('0.0')}))]
+        x1b0 = [OpenSBLIEq(GridVariable('x1b0'), self.coordinate_evaluations[1].rhs.xreplace({self.block.grid_indexes[1] : 0.0}))]
         self.equations += x1b0
 
         self.initial = self.generate_initial_condition()
