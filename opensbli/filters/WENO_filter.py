@@ -134,6 +134,59 @@ class NonLinearFilterBase(object):
         #     pprint(eqn)
         # exit()                     
         return output_equations
+    
+    def Euler_equations_N_N2(self, block, scheme_type):
+        # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input
+        scheme_type = "**{\'scheme\':\'%s\'}" % scheme_type
+        constants = ["Re", "Pr","gama", "Minf", "SuthT", "RefT"]
+        # Uniform mesh, no stretching or curvilinear terms
+        if self.metric_class is None:
+            coordinate_symbol = "x"
+            massN = "Eq(Der(rhoN,t), - Conservative(rhoNu_j,x_j,%s))" % scheme_type
+            massN2= "Eq(Der(rhoN2,t), - Conservative(rhoN2u_j,x_j,%s))" % scheme_type
+            momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+            energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+            # Added passive scalar equation here for filter methods
+            output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([massN, massN2, momentum, energy])])
+        else:
+            if self.passive_scalar:
+                raise ValueError("WARNING: Passive scalar has not been added to curvilinear equations yet.")
+            # Full curvilinear
+            if self.curvilinear:
+                coordinate_symbol = "xi"
+                optional_subs_dict = self.metric_class.metric_subs
+                self.EE.optional_subs_dict = optional_subs_dict
+                a = "Conservative(detJ * rho*U_j,xi_j,%s)" % scheme_type
+                mass = "Eq(Der(rho,t), - %s)" % (a)
+                a = "Conservative(detJ * (rhou_i*U_j + p*D_j_i), xi_j , %s)" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , - %s)" % (a)
+                a = "Conservative(detJ * (p+rhoE)*U_j,xi_j, %s)" % scheme_type
+                energy = "Eq(Der(rhoE,t), - %s)" % (a)                  
+
+                base_eqns = [mass, momentum, energy]
+                for i, base in enumerate(base_eqns):
+                    base_eqns[i] = self.EE.expand(base, self.ndim, coordinate_symbol, [], constants)
+                    if base==momentum:
+                        for no, b in enumerate(base_eqns[i]):
+                            base_eqns[i][no] = OpenSBLIEq(base_eqns[i][no].lhs, base_eqns[i][no].rhs)
+                    else:
+                        if base==energy:
+                            base_eqns[i] = OpenSBLIEq(base_eqns[i].lhs, base_eqns[i].rhs)
+                # output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten(base_eqns)
+        #     # Only stretching is applied
+            else: ### Only added non-conservative for this stretched case
+                coordinate_symbol = "x"
+                mass = "Eq(Der(rho,t), - Conservative(rho*u_j,x_j,%s))" % scheme_type
+                momentum = "Eq(Der(rhou_i,t) , -Conservative(rhou_i*u_j + KD(_i,_j)*p,x_j , %s))" % scheme_type
+                energy = "Eq(Der(rhoE,t), - Conservative((p+rhoE)*u_j,x_j, %s))" % scheme_type
+                governing_eq = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy])])
+                output_equations = flatten([self.metric_class.apply_transformation(eqn) for eqn in (governing_eq)])
+        print("Using the following equations for the TVD/WENO filter.")
+        # for eqn in output_equations:
+        #     pprint(eqn)
+        # exit()                     
+        return output_equations
 
     def Euler_equations(self, block, scheme_type):
         # Define the compresible Navier-Stokes equations in Einstein notation, depending on the metric input

@@ -8,9 +8,9 @@ from opensbli.filters.WENO_filter import NonLinearFilterBase
 class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
     """ Class to apply a TVD-based non-linear filter after a full time-step of a non-dissipative high order base scheme. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, metrics=None, airfoil=False, passive_scalar=False, optimize=False):
+    def __init__(self, block, metrics=None, airfoil=False, species=None, optimize=False):
         print("Using non-linear TVD filtering on block {:}.".format(block.blocknumber))
-        self.passive_scalar = passive_scalar
+        self.species = species
         # Get the shared functionality between TVD/WENO non-linear filters
         NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=optimize)
         # Main class to generate the filter
@@ -23,14 +23,16 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         # Counter to order the kernels. Put the TVD filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for TVD
-        if self.passive_scalar:
+        if self.species == 'passive_scalar':
             eqn = self.Euler_equations_passive_scalar(block, 'TVD')
+        elif self.species == 'N N2':
+            eqn = self.Euler_equations_N_N2(block, 'TVD')
         else:
             eqn = self.Euler_equations(block, 'TVD')
         # Convert the equations to datasets on this block
         self.equations = self.convert_to_datasets(block, eqn)
         # Create a TVD scheme
-        self.SF = TVDFlux(averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative, passive_scalar=self.passive_scalar)
+        self.SF = TVDFlux(averaging=SimpleAverage([0, 1]), shock_filter=True, conservative=block.conservative, species=self.species)
         self.halo_type = set()
         self.halo_type.add(self.SF.halotype)
         # Start the discretisation and create residual arrays for the equations

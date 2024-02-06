@@ -67,9 +67,9 @@ class TVDFlux(TVDCharacteristic, TVD):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics. """
 
-    def __init__(self, physics=None, averaging=None, shock_filter=None, conservative=True, flux_split=False, passive_scalar=False):
+    def __init__(self, physics=None, averaging=None, shock_filter=None, conservative=True, flux_split=False, species=None):
         self.flux_split = flux_split
-        self.passive_scalar = passive_scalar
+        self.species = species
         self.flux_type = 'TVD'
         self.temp_wk_arrays = []
         TVDCharacteristic.__init__(self, physics, averaging, flux_split)
@@ -92,7 +92,7 @@ class TVDFlux(TVDCharacteristic, TVD):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block, self.passive_scalar)
+            self.instantiate_eigensystem(block, self.species)
             for direction, derivatives in sorted(grouped.items()):
                 all_derivatives_evaluated_locally += derivatives
                 for no, deriv in enumerate(derivatives):

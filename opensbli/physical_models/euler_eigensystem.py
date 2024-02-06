@@ -11,9 +11,9 @@ from sympy.parsing.sympy_parser import parse_expr
 class EulerEquations(object):
     """ Class to generate the Eigensystems used to diagonalize the Euler equations."""
 
-    def __init__(self, ndim, passive_scalar=False, **kwargs):
+    def __init__(self, ndim, species=None, **kwargs):
         self.ndim = ndim
-        self.passive_scalar = passive_scalar
+        self.species = species
         return
 
     def apply_direction(self, direction):
@@ -69,10 +69,14 @@ class EulerEquations(object):
             matrix_formulae = ['a**2/(gama-1) + u0**2/2']
             matrix_symbols = [parse_expr(l, local_dict=local_dict, evaluate=False) for l in matrix_symbols]
             matrix_formulae = [parse_expr(l, local_dict=local_dict, evaluate=False) for l in matrix_formulae]
-            if self.passive_scalar:
-                REV = 'Matrix([[2.0/u0**2, 0, 1/f, 1/f], [2.0/u0, 0, (-a + u0)/f, (a + u0)/f], [1.0, 0, (a**2 - a*gama*u0 + a*u0 + 0.5*gama*u0**2 - 0.5*u0**2)/(f*(gama - 1.0)), (a**2 + a*gama*u0 - a*u0 + 0.5*gama*u0**2 - 0.5*u0**2)/(f*(gama - 1.0))], [0, 1.0, 1.0, 1.0]])'
-                LEV = 'Matrix([[u0**2*(0.5*a**2 - 0.25*gama*u0**2 + 0.25*u0**2)/a**2, 0.5*u0**3*(gama - 1)/a**2, 0.5*u0**2*(1 - gama)/a**2, 0], [0.5*f*u0**2*(1 - gama)/a**2, 1.0*f*u0*(gama - 1)/a**2, 1.0*f*(1 - gama)/a**2, 1.0], [0.25*f*u0*(2.0*a + 1.0*gama*u0 - 1.0*u0)/a**2, 0.5*f*(-a - gama*u0 + u0)/a**2, 0.5*f*(gama - 1)/a**2, 0], [0.25*f*u0*(-2.0*a + 1.0*gama*u0 - 1.0*u0)/a**2, 0.5*f*(a - gama*u0 + u0)/a**2, 0.5*f*(gama - 1)/a**2, 0]])'
-                ev = ' diag([u0, u0, -a + u0, a + u0])'
+            if self.species == 'passive_scalar':
+                REV = 'Matrix([[-2.0/a**2, 0, 2.0/(a**2*(gama - 1.0)), 2.0/(a**2*(gama - 1.0))], [-2.0*u0/a**2, 0, 2.0*(-a + u0)/(a**2*(gama - 1)), 2.0*(a + u0)/(a**2*(gama - 1))], [-1.0*u0**2/a**2, 0, 1.0*(2.0*a**2 - 2.0*a*gama*u0 + 2.0*a*u0 + 1.0*gama*u0**2 - 1.0*u0**2)/(a**2*(1.0*gama**2 - 2.0*gama + 1.0)), 1.0*(2.0*a**2 + 2.0*a*gama*u0 - 2.0*a*u0 + 1.0*gama*u0**2 - 1.0*u0**2)/(a**2*(1.0*gama**2 - 2.0*gama + 1.0))], [-2.0*f/a**2, 1.0/a, 2.0*f/(a**2*(gama - 1.0)), 2.0*f/(a**2*(gama - 1.0))]])'
+                LEV = 'Matrix([[-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2, 0.5*u0*(-gama + 1), 0.5*gama - 0.5, 0], [-1.0*a*f, 0, 0, 1.0*a], [0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0), -0.25*(a + u0*(gama - 1.0))*(gama - 1.0), 0.25*(gama - 1.0)**2, 0], [0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0), 0.25*(a - u0*(gama - 1.0))*(gama - 1.0), 0.25*(gama - 1.0)**2, 0]])'
+                ev = 'diag([u0, u0, -a + u0, a + u0])'
+            elif self.species == 'N N2':
+                REV = 'Matrix([[-1.00000000000000, -(2.0*rhoN + 2.0*rhoN2)/a, 2.0*rhoN2/(a*(gama - 1.0)), 2.0*rhoN2/(a*(gama - 1.0))], [1.00000000000000, 0, 2.0*rhoN/(a*(gama - 1.0)), 2.0*rhoN/(a*(gama - 1.0))], [0, -2.0*u0*(rhoN + rhoN2)/a, 2.0*(-a + u0)*(gama - 1)*(rhoN + rhoN2)/(a*(gama - 1.0)**2), 2.0*(a + u0)*(rhoN + rhoN2)/(a*(gama - 1.0))], [0, -1.0*u0**2*(rhoN + rhoN2)/a, (rhoN + rhoN2)*(2.0*a**2*(gama - 1.0) + 2.0*a**2 - 2.0*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2), (rhoN + rhoN2)*(2.0*a**2*(gama - 1.0) + 2.0*a**2 + 2.0*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2)]])'
+                LEV = 'Matrix([[-0.5*rhoN*u0**2*(gama - 1)/(a**2*(rhoN + rhoN2)), (1.0*a**2*rhoN + 1.0*a**2*rhoN2 - 0.5*gama*rhoN*u0**2 + 0.5*rhoN*u0**2)/(a**2*(rhoN + rhoN2)), 1.0*rhoN*u0*(gama - 1)/(a**2*(rhoN + rhoN2)), -1.0*rhoN*(gama - 1)/(a**2*(rhoN + rhoN2))], [1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), 1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), -0.5*u0*(gama - 1)/(a*(rhoN + rhoN2)), 0.5*(gama - 1)/(a*(rhoN + rhoN2))], [0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(-gama + 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))], [0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(gama - 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))]])'
+                ev = 'diag([u0, u0, -a + u0, a + u0])'
             else:
                 ev = 'diag([u0-a, u0, u0+a])'
                 REV = 'Matrix([[1,1,1], [u0-a,u0,u0+a], [H-u0*a,u0**2 /2,H+u0*a]])'
