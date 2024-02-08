@@ -303,6 +303,44 @@ class NonLinearFilterBase(object):
         self.add_kernel(CR_kernel)
         return
 
+    ################## Specifically added for N N2 species (M.C.Walker) ######################################################
+    def constituent_relations_N_N2(self, block, kappa=None):
+        """ Evalutes the constiteunt relations on the state at the end of a full step
+        of the Runge-Kutta explicit time-stepper. Only the invscid terms are evaluted here (no viscosity relation)"""
+        CR_eqns = []
+        # Ensure gama has been added to the constants to define
+        gamma = ConstantObject('gama')
+        CTD.add_constant(gamma)
+        # Conservative Q array entries from the current state
+        rhoN, rhoN2, energy = block.location_dataset('rhoN'), block.location_dataset('rhoN2'), block.location_dataset('rhoE')
+        # Pressure and speed of sound
+        p, a = block.location_dataset('p'), block.location_dataset('a')
+        inv_rho = gv('inv_rho')
+        CR_eqns += [OpenSBLIEq(inv_rho, 1.0/(rhoN + rhoN2))]
+        velocity_components = [block.location_dataset('u%d' % i ) for i in range(self.ndim)]
+
+        if block.conservative:
+            momentum_components = [self.solution_vector[i+2] for i in range(self.ndim)]
+            # Primitive components and speed of sound
+            CR_eqns += [OpenSBLIEq(x, y*inv_rho) for (x, y) in zip(velocity_components, momentum_components)]
+            # rhoE = p/(gama-1) + 0.5*(rhou**2)/rho
+            CR_eqns += [OpenSBLIEq(p, (gamma-1)*(energy - 0.5*sum([dset**2 for dset in momentum_components])*inv_rho))]
+        else:
+            # E = p/((gamma-1)*rho) + 0.5*u**2
+            CR_eqns += [OpenSBLIEq(p, rho*(gamma-1)*(energy - 0.5*sum([dset**2 for dset in velocity_components])))]
+        # Ideal gas, speed of sound
+        CR_eqns += [OpenSBLIEq(a, sqrt(gamma*p*inv_rho))]
+        # Wide halos
+        CR_halos = []
+        for _ in range(self.ndim):
+            CR_halos.append([self.halo_type, self.halo_type])
+        CR_kernel = self.create_kernel('Constituent Relations evaluation', CR_eqns, CR_halos, block)
+        self.component_counter += 1
+        self.add_kernel(CR_kernel)
+        return
+    
+    
+
     def zero_work_arrays(self, block):
         """ Ensure all the temporary arrays are zeroed before calculating the filter."""
         resid_kernel = self.residual_kernels[0]

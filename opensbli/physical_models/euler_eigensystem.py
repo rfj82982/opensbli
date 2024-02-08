@@ -74,8 +74,8 @@ class EulerEquations(object):
                 LEV = 'Matrix([[-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2, 0.5*u0*(-gama + 1), 0.5*gama - 0.5, 0], [-1.0*a*f, 0, 0, 1.0*a], [0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0), -0.25*(a + u0*(gama - 1.0))*(gama - 1.0), 0.25*(gama - 1.0)**2, 0], [0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0), 0.25*(a - u0*(gama - 1.0))*(gama - 1.0), 0.25*(gama - 1.0)**2, 0]])'
                 ev = 'diag([u0, u0, -a + u0, a + u0])'
             elif self.species == 'N N2':
-                REV = 'Matrix([[-1.00000000000000, -(2.0*rhoN + 2.0*rhoN2)/a, 2.0*rhoN2/(a*(gama - 1.0)), 2.0*rhoN2/(a*(gama - 1.0))], [1.00000000000000, 0, 2.0*rhoN/(a*(gama - 1.0)), 2.0*rhoN/(a*(gama - 1.0))], [0, -2.0*u0*(rhoN + rhoN2)/a, 2.0*(-a + u0)*(gama - 1)*(rhoN + rhoN2)/(a*(gama - 1.0)**2), 2.0*(a + u0)*(rhoN + rhoN2)/(a*(gama - 1.0))], [0, -1.0*u0**2*(rhoN + rhoN2)/a, (rhoN + rhoN2)*(2.0*a**2*(gama - 1.0) + 2.0*a**2 - 2.0*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2), (rhoN + rhoN2)*(2.0*a**2*(gama - 1.0) + 2.0*a**2 + 2.0*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2)]])'
-                LEV = 'Matrix([[-0.5*rhoN*u0**2*(gama - 1)/(a**2*(rhoN + rhoN2)), (1.0*a**2*rhoN + 1.0*a**2*rhoN2 - 0.5*gama*rhoN*u0**2 + 0.5*rhoN*u0**2)/(a**2*(rhoN + rhoN2)), 1.0*rhoN*u0*(gama - 1)/(a**2*(rhoN + rhoN2)), -1.0*rhoN*(gama - 1)/(a**2*(rhoN + rhoN2))], [1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), 1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), -0.5*u0*(gama - 1)/(a*(rhoN + rhoN2)), 0.5*(gama - 1)/(a*(rhoN + rhoN2))], [0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(-gama + 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))], [0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(gama - 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))]])'
+                REV = 'Matrix([[-1, -2*(rhoN + rhoN2)/a, 2*rhoN/(a*(gama - 1)), 2*rhoN/(a*(gama - 1))], [1, 0, 2*rhoN2/(a*(gama - 1)), 2*rhoN2/(a*(gama - 1))], [0, -2*u0*(rhoN + rhoN2)/a, 2*(-a + u0)*(gama - 1)*(rhoN + rhoN2)/(a*(gama - 1)**2), 2*(a + u0)*(rhoN + rhoN2)/(a*(gama - 1))], [0, -1*u0**2*(rhoN + rhoN2)/a, (rhoN + rhoN2)*(2*a**2*(gama - 1) + 2*a**2 - 2*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2), (rhoN + rhoN2)*(2.0*a**2*(gama - 1.0) + 2.0*a**2 + 2.0*a*gama*u0*(gama - 1.0) + 1.0*gama*u0**2*(gama - 1.0))/(a*gama*(gama - 1.0)**2)]])'
+                LEV = 'Matrix([[-0.5*rhoN2*u0**2*(gama - 1)/(a**2*(rhoN + rhoN2)), (1.0*a**2*rhoN + 1.0*a**2*rhoN2 - 0.5*gama*rhoN2*u0**2 + 0.5*rhoN2*u0**2)/(a**2*(rhoN + rhoN2)), 1.0*rhoN2*u0*(gama - 1)/(a**2*(rhoN + rhoN2)), -1.0*rhoN2*(gama - 1)/(a**2*(rhoN + rhoN2))], [1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), 1.0*(-0.5*a**2 + 0.25*gama*u0**2 - 0.25*u0**2)/(a*(rhoN + rhoN2)), -0.5*u0*(gama - 1)/(a*(rhoN + rhoN2)), 0.5*(gama - 1)/(a*(rhoN + rhoN2))], [0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(-gama + 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))], [0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*u0*(-a + 0.5*u0*(gama - 1.0))*(gama - 1.0)/(a*(rhoN + rhoN2)), 0.25*(a*(gama - 1) - u0*(gama - 1.0)**2)/(a*(rhoN + rhoN2)), 0.25*(gama - 1.0)**2/(a*(rhoN + rhoN2))]])'
                 ev = 'diag([u0, u0, -a + u0, a + u0])'
             else:
                 ev = 'diag([u0-a, u0, u0+a])'
@@ -84,6 +84,10 @@ class EulerEquations(object):
             ev = parse_expr(ev, local_dict=local_dict, evaluate=False)
             REV = parse_expr(REV, local_dict=local_dict, evaluate=False)
             LEV = parse_expr(LEV, local_dict=local_dict, evaluate=False)
+            pprint(REV)
+            print('------------------------------------------------')
+            pprint(LEV)
+            print('------------------------------------------------')
 
             subs_dict = dict(zip(matrix_symbols, matrix_formulae))
 

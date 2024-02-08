@@ -49,7 +49,11 @@ class TVDFilter(NonSimulationEquations, NonLinearFilterBase):
         else:
             self.kappa = 1
         # Constituent relations evaluations on the Q vector at the end of the full RK time-step
-        self.constituent_relations(block)
+        if self.species == 'N N2':
+            self.constituent_relations_N_N2(block)
+        else:
+            self.constituent_relations(block)
+
         # Zero the work arrays
         self.zero_work_arrays(block)
         # Create the TVD reconstruction kernels
