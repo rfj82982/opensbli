@@ -20,4 +20,5 @@ from .inlet_Lawal import *
 from .pressure_outlet import *
 from .catalyticIsothermalWallBC import *
 from .nonCatalyticIsothermalWallBC import *
+from .chemicalforcing_stripwall import *
 
