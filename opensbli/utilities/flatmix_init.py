@@ -4,14 +4,14 @@ from scipy.integrate import odeint
 import numpy as np
 import numpy.polynomial.polynomial as poly
 import matplotlib.pyplot as plt
-# from opensbli.initialisation import GridBasedInitialisation
+from opensbli.initialisation import GridBasedInitialisation
 from opensbli.core.opensbliobjects import DataObject, ConstantObject
 from opensbli.core.grid import GridVariable
-from opensbli.core.kernel import ConstantsToDeclare as CTD
-# from opensbli.core.kernel import Kernel
+from opensbli.core.kernel import Kernel
 import warnings
-from opensbli.equation_types.opensbliequations import OpenSBLIEq
 # from scipy.optimize import curve_fit
+from opensbli.equation_types.opensbliequations import OpenSBLIEq
+from opensbli.core.kernel import ConstantsToDeclare as CTD
 
 plt.style.use('classic')
 
@@ -28,12 +28,11 @@ class Boundary_layer_profile(object):
     :arg float Tinf: Dimensional free-stream temperature for Sutherland's law."""
 
     # def __init__(self, xmach, Pr, gama, Tw, Re, Tinf):
-    # def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, blthickness):
-    def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref):
+    def __init__(self, Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, deltastar0):
 
         self.y, self.u, self.T, self.scale = self.generate_boundary_layer_profile(Re, xmach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref)
-        # self.uref, self.tref, self.rhoref, self.blthickness 
-        self.uref, self.tinf, self.rhoref, self.blthickness, self.rho = self.extract_parameters()
+        # self.uref, self.tref, self.rhoref, self.deltastar0 
+        self.uref, self.tinf, self.rhoref, self.deltastar0, self.rho = self.extract_parameters()
         self.rhoref, self.cN2, self.cN, self.cO2, self.cO, self.cNO = self.extract_densities()
         
         self.Re = Re
@@ -58,6 +57,15 @@ class Boundary_layer_profile(object):
     def mucalc(self, T,cN2,cN,cO2,cO,cNO):
         mu=((cN2+cO2+cNO)*0.1*np.exp(-11.2202)*T**(0.021823*np.log(T)+0.343567)+(cN+cO)*0.1*np.exp(-11.7344)*T**(0.022652*np.log(T)+0.42509))*(1.0-np.exp(-0.010568*T))
         kappa=(1410.0*(cN2+cO2+cNO)*0.1*np.exp(-11.2202)*T**(0.021823*np.log(T)+0.343567)+2210.0*(cN+cO)*0.1*np.exp(-11.7344)*T**(0.022652*np.log(T)+0.42509))*(1.0-np.exp(-0.010568*T))   
+
+        # sutherland's law
+        # mu=1.458e-6*T^1.5/(T+110.4);
+        # %kappa=2474.7e-6*T^1.5/(T+194.4); % from cfd online (variable Pr). Need to find original source
+        # kappa=1008.8*mu/0.72; % taking cpref at T=216.65 and given composition and Pr=0.72 % for test case
+
+        # mu    = 1.458e-6*T**1.5/(T+110.4)
+        # kappa = 1008.8*mu/0.72
+        
         return mu, kappa 
 
     # frozen specific heat (thermal equilibrium)
@@ -139,8 +147,6 @@ class Boundary_layer_profile(object):
         n_step = n - 1
 
         # flow concentrations
-        # cN2e, cNe, cO2e, cOe, cNOe = 0.64, 0.05, 0.06, 0.15, 0.1 # free stream mass fractions (note that c_s are mass fractions here)
-        # cN2e, cNe, cO2e, cOe, cNOe = 1.0, 0.0, 0.0, 0.0, 0.0 # free stream mass fractions (note that c_s are mass fractions here)
 
         self.xmach, self.Re, self.Tw = xmach, Re, Tw
 
@@ -151,8 +157,8 @@ class Boundary_layer_profile(object):
         adiabatic, catalytic = adiabatic_condition, catalytic_condition 
 
         # derived quantities in free stream
-        # sigOtoNe = (2.0*cO2e/MO2+cOe/MO+cNOe/MNO)/(2.0*cN2e/MN2+cNe/MN+cNOe/MNO) # ratio of moles of O to N in freestream
-        sigOtoNe = 0.0
+        sigOtoNe = (2.0*cO2e/MO2+cOe/MO+cNOe/MNO)/(2.0*cN2e/MN2+cNe/MN+cNOe/MNO) # ratio of moles of O to N in freestream
+        # sigOtoNe = 0.0
         mue, kappae = self.mucalc(Te,cN2e,cNe,cO2e,cOe,cNOe)
 
         # kappave=kappavcalc(Te,cN2e,cNe,cO2e,cOe,cNOe); # not used in this
@@ -173,8 +179,6 @@ class Boundary_layer_profile(object):
         # grid size (uniform grid) and set derivative matrices
         deta=etamax/(n-1)
         d1,d2,d3=self.derivmatrices(d1,d2,d3,deta,n)
-
-        
 
         # set initial variation of f,theta and cs
         for i in range(0,n):
@@ -219,6 +223,8 @@ class Boundary_layer_profile(object):
                 mu,kappa = self.mucalc(T,cN2[i],cN[i],cO2[i],cO[i],cNO[i])
                 cp,cpN2,cpN,cpO2,cpO,cpNO,dum = self.cpcalc(T,cN2[i],cN[i],cO2[i],cO[i],cNO[i],MN2,MN,MO2,MO,MNO)
                 lvar[i]=mu/(mue*theta[i]) # Chapman-Rubesin l=(rho.mu)/(rhoe.mue)
+                # lvar[i]=rho[i]*mu/(mue*theta[i]); # Chapman-Rubesin l=(rho.mu)/(rhoe.mue)  
+
                 cvar[i]=cp/cpe
                 mvar[i]=kappa/(theta[i]*cpe*mue)
                 nvar[i]=lvar[i]/(Sc*cpe)*(cpN2*dcN2[i] + cpN*dcN[i] + cpO2*dcO2[i] + cpO*dcO[i] + cpNO*dcNO[i])
@@ -246,6 +252,7 @@ class Boundary_layer_profile(object):
 
             rhs[1:n-2]=-lvar[1:n-2]*Ue**2/(cpe*Te)*d2f[1:n-2]**2
             rhs[n-1]=1.0
+            
 
             if adiabatic:
                 rhs[0] = 0.0
@@ -324,50 +331,69 @@ class Boundary_layer_profile(object):
         rhoref = (pref/(Rhat*Te)) * (cN2e/MN2 +cNe/MN +cO2e/MO2 +cOe/MO +cNOe/MNO)**(-1)
         rhof = (cN2/MN2+cN/MN+cO2/MO2+cO/MO+cNO/MNO)/theta #rho/rhoe
 
-        print('freestream velocity, uref :', Ue)
-        print('freestream density, rhoref :', rhoref)
+        # print('freestream velocity, uref :', Ue)
+        # print('freestream density, rhoref :', rhoref)
 
         self.Twall = theta[0]
         self.Twall = self.Twall
-        print("The wall temperature is :", self.Twall)
+        # print("The wall temperature is :", self.Twall)
 
         self.deta = deta 
         self.df, self.theta = df, theta
-        Rex = 950 
+        Rex = self.Re 
+        # print('inlet Reynolds number', Rex)
         deltastar = Rex*mue/(Ue*rhoref)
-        print('inlet boundary layer thickness :', deltastar)
+        # print('inlet boundary layer thickness :', deltastar)
+        # print('re, mue, Ue, rhoref',self.Re, mue, Ue, rhoref)
 
         
 
-        self.ue, self.tinf, self.rhoref, self.blthickness = Ue, Te, rhoref, deltastar 
+        self.ue, self.tinf, self.rhoref, self.deltastar0 = Ue, Te, rhoref, deltastar 
         # yO=rhoO/(MO*sumy)
         # sumy=rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO
         self.cN2, self.cN, self.cO2, self.cO, self.cNO = cN2, cN, cO2, cO, cNO
 
-       
-        
 
-        # blthickness, uref, tinf, rhoref = 
-        print('input variables line one: ', Re, Me, self.tinf, self.Twall, Sc)
-        print('input variables: ', pref, rhoref, self.ue, deltastar)
-        
-        # define constants
-        Twall_cpp = ConstantObject('Twall')
-        Twall_cpp.value = self.Twall
-        CTD.add_constant(Twall_cpp)
-
-        # define constants
-        pref_cpp, rhoref_cpp, uref_cpp, blthickness_cpp = ConstantObject('pref'), ConstantObject('rhoref'), ConstantObject('uref'), ConstantObject('blthicknesss')
-        pref_cpp.value, rhoref_cpp.value, uref_cpp.value, blthickness_cpp.value = pref, rhoref, self.ue, deltastar
-
-        CTD.add_constant(pref_cpp); CTD.add_constant(rhoref_cpp); CTD.add_constant(uref_cpp); CTD.add_constant(blthickness_cpp)
-        
+        # deltastar0, uref, tinf, rhoref = 
+        print('input variables Re, Me, Tinf, Twall, Sc       ', Re, Me, self.tinf, self.Twall, Sc, sep=", ")
+        print('input variables pref, rhoref, uref, deltastar ', pref, rhoref, self.ue, deltastar, sep=", ")
 
         # self.Twall = v[1]
         # print("The wall temperature is :", self.Twall)
         # y, u, T, scale_factor = self.integrate_boundary_layer(nstep)
         y, u, T, scale_factor = self.integrate_boundary_layer(n_step)
 
+        # define constants
+        Twall_cpp = ConstantObject('Twall')
+        Twall_cpp.value = self.Twall*self.tinf # *1.000456891
+        
+        # define constants
+        pref_cpp, rhoref_cpp, uref_cpp, deltastar0_cpp = ConstantObject('pref'), ConstantObject('rhoref'), ConstantObject('uref'), ConstantObject('deltastar0')
+        pref_cpp.value, rhoref_cpp.value, uref_cpp.value, deltastar0_cpp.value = pref, rhoref, self.ue, deltastar
+
+        # CTD.add_constant(Twall_cpp); CTD.add_constant(pref_cpp); CTD.add_constant(rhoref_cpp); CTD.add_constant(uref_cpp); CTD.add_constant(deltastar0_cpp)
+        # CTD.add_constant(Twall_cpp, pref_cpp, rhoref_cpp, uref_cpp, deltastar0_cpp)
+        CTD.add_constant([Twall_cpp, pref_cpp, rhoref_cpp, uref_cpp, deltastar0_cpp])
+
+        # sort deltablock out
+        delta0block0m, delta1block0m = ConstantObject('Delta0block0'), ConstantObject('Delta1block0')
+
+        delta0block0m.value, delta1block0m.value = delta0block0m*deltastar0_cpp, delta1block0m*deltastar0_cpp
+
+        inv0, inv1, inv2, inv3 = ConstantObject('inv_0'), ConstantObject('inv_1'), ConstantObject('inv_1'), ConstantObject('inv_3')
+        inv0.value = 1.0/delta0block0m
+        inv1.value = 1.0/delta1block0m
+        inv2.value = delta1block0m**(-2)
+        inv3.value = delta0block0m**(-2)
+
+        CTD.add_constant(delta0block0m)
+        CTD.add_constant(delta1block0m)
+
+        CTD.add_constant(inv0)
+        CTD.add_constant(inv1)
+        CTD.add_constant(inv2)
+        CTD.add_constant(inv3)
+        
         self.scale_factor = scale_factor
         print("The scale factor is :", self.scale_factor)
         # print("Wall normal derivative of velocity at the wall is :", self.dudy)
@@ -380,10 +406,10 @@ class Boundary_layer_profile(object):
         rhoref = self.rhoref
         tinf = self.tinf
 
-        blthickness = self.blthickness
+        deltastar0 = self.deltastar0
         rho = self.rho 
 
-        return uref, tinf, rhoref, blthickness, rho
+        return uref, tinf, rhoref, deltastar0, rho
     
     def extract_densities(self):
 
@@ -418,7 +444,7 @@ class Boundary_layer_profile(object):
                 record_z = 2.0
             scale = sumd
         # print("delta is :", dlta)
-        print("conversion factor is: ", scale)
+        # print("conversion factor is: ", scale)
         # print("scaled delta is: ", dlta/scale)
         # Rescale with displacement thickness and convert to FLOWER variable normalisation
         y, u, T = z/scale, self.df[:], self.theta[:]
@@ -429,7 +455,6 @@ class Boundary_layer_profile(object):
         self.dTdy = (-1.83333333333334*T[0]+3.00000000000002*T[1]-1.50000000000003*T[2]+0.333333333333356*T[3]-8.34657956545823e-15*T[4]+1.06910315192207e-15*T[5])/dy
         return y, u, T, scale
 
-from opensbli.initialisation import GridBasedInitialisation
 class Initialise_Flatmix(GridBasedInitialisation):
     """ Generates the initialiastion equations for the boundary-layer profile.
 
@@ -440,11 +465,11 @@ class Initialise_Flatmix(GridBasedInitialisation):
     :arg int n_coeffs: Desired number of coefficients for the polynomial fit.
     :arg float Re: Reynolds number.
     :arg float xMach: Free-stream Mach number"""
-    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, blthickness, coordinate_evaluations=None):
+    def __new__(cls, bl_directions, n_coeffs, Re, xMach, Tinf, Twall, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, deltastar0, coordinate_evaluations=None):
         ret = super(Initialise_Flatmix, cls).__new__(cls)
         print("Polynomial boundary-layer initialiastion called with Re = %f, Mach = %f, T_inf = %f." % (Re, xMach, Tinf))
         print("                                                     cN2e = %f, cNe = %f, cO2e = %f, cOe = %f, cNOe = %f." % (cN2e, cNe, cO2e, cOe, cNOe))
-        # print("                    with given dimensional constants pref = %f, rhoref = %f, uref = %f, blthickness = %f." % (pref, rhoref, uref, blthickness,))
+        print("                    with given dimensional constants pref = %f, rhoref = %f, uref = %f, deltastar0 = %f." % (pref, rhoref, uref, deltastar0,))
 
         ret.coordinates = [x[1] for x in bl_directions]
         ret.bl_directions = bl_directions
@@ -470,9 +495,9 @@ class Initialise_Flatmix(GridBasedInitialisation):
         # get dimensional constants
         ret.Sc = ret.find_constant_values([Sc])[0]
         ret.pref = ret.find_constant_values([pref])[0]
-        # ret.rhoref = ret.find_constant_values([rhoref])[0]
-        # ret.uref = ret.find_constant_values([uref])[0]
-        # ret.blthickness = ret.find_constant_values([blthickness])[0]
+        ret.rhoref = ret.find_constant_values([rhoref])[0]
+        ret.uref = ret.find_constant_values([uref])[0]
+        ret.deltastar0 = ret.find_constant_values([deltastar0])[0]
 
         return ret
 
@@ -517,25 +542,25 @@ class Initialise_Flatmix(GridBasedInitialisation):
         self.check_coordinate_evaluation(block)
         # Create the Katzer kernel
         from opensbli.core.kernel import Kernel
-        katzer_kernel = Kernel(block, computation_name="Similiarity solution laminar boundary-layer initialisation%d" % self.order)
-        katzer_kernel.set_grid_range(block)
+        flatmix_kernel = Kernel(block, computation_name="Similiarity solution laminar boundary-layer initialisation%d" % self.order)
+        flatmix_kernel.set_grid_range(block)
         # Set halo range
         from opensbli.schemes.spatial.scheme import CentralHalos_defdec
         for d in range(block.ndim):
             # Initialize all five halos
-            katzer_kernel.set_halo_range(d, 0, CentralHalos_defdec())
-            katzer_kernel.set_halo_range(d, 1, CentralHalos_defdec())
-        katzer_kernel.add_equation(self.equations)
-        katzer_kernel.update_block_datasets(block)
-        self.Kernels = [katzer_kernel]
+            flatmix_kernel.set_halo_range(d, 0, CentralHalos_defdec())
+            flatmix_kernel.set_halo_range(d, 1, CentralHalos_defdec())
+        flatmix_kernel.add_equation(self.equations)
+        flatmix_kernel.update_block_datasets(block)
+        self.Kernels = [flatmix_kernel]
         return
 
     def generate_initial_condition(self):
         n_coeffs = self.n_coeffs
         # Load from similarity solution class
-        # y, u, T, rho, n, uref, Tinf, rhoref, blthickness, rhoN2, rhoN, rhoO2, rhoO, rhoNO = self.load_similarity()
-        y, u, T, rho, n, uref, Tinf, rhoref, blthickness, cN2, cN, cO2, cO, cNO = self.load_similarity()
-        self.blthickness = blthickness
+        # y, u, T, rho, n, uref, Tinf, rhoref, deltastar0, rhoN2, rhoN, rhoO2, rhoO, rhoNO = self.load_similarity()
+        y, u, T, rho, n, uref, Tinf, rhoref, deltastar0, cN2, cN, cO2, cO, cNO = self.load_similarity()
+        self.deltastar0 = deltastar0
         
         y0 = y 
         # rho = rho[:]
@@ -547,42 +572,15 @@ class Initialise_Flatmix(GridBasedInitialisation):
         v0, dvdy = self.solved_continuity(y, u, rho)
         v0 = v0/rho
 
-        # uref, Tinf, rhoref, blthickness = self.load_similarity_reference_variables()
-        # rhoN2, rhoN, rhoO2, rhoO, rhoNO = self.load_similarity_densities()
-
-        y, u, v, T, rho, n = y*blthickness , u*uref, v0*uref, T*Tinf, rho*rhoref, n # dimensionalise all variables - gnsa1e21, 2022
-        
-        # rho = (self.pref/(Rhat*( cN2/MN2 + cN/MN + cO2/MO2 + cO/MO + cNO/MNO)))*(1.0/T)
-
-        print('edge concentrations of species')
-        print('cN2', cN2[-1])
-        print('cN', cN[-1])
-        print('cO2', cO2[-1])
-        print('cO', cO[-1])
-        print('cNO', cNO[-1])
-
-        # rhoN2, rhoN, rhoO2, rhoO, rhoNO = rhoN2*rhoref, rhoN*rhoref, rhoO2*rhoref, rhoO*rhoref, rhoNO*rhoref
-        # rhoN2, rhoN, rhoO2, rhoO, rhoNO = cN2*rho, cN*rho, cO2*rho, cO*rho, cNO*rho
-        self.dudy, dvdy = self.dudy*uref/blthickness, dvdy*uref/blthickness # dimensionalise all variables - gnsa1e21, 2022
-
-        # fig3,ax3=plt.subplots(2, 3)
-
-        # ax3[0,0].plot(cN2, y)
-        # ax3[0,1].plot(cN, y)
-        # ax3[0,2].plot(cO2, y)
-        # ax3[1,0].plot(cO, y)
-        # ax3[1,1].plot(cNO, y)
-
-
-
-        # plt.show()
+        y, u, v, T, rho, n = y*deltastar0 , u*uref, v0*uref, T*Tinf, rho*rhoref, n # dimensionalise all variables - gnsa1e21, 2022
+        self.dudy, dvdy = self.dudy*uref/deltastar0, dvdy*uref/deltastar0 # dimensionalise all variables - gnsa1e21, 2022
 
         dy0 = y0[1]
-        dcN2dy = (-1.83333333333334*cN2[0]+3.00000000000002*cN2[1]-1.50000000000003*cN2[2]+0.333333333333356*cN2[3]-8.34657956545823e-15*cN2[4]+1.06910315192207e-15*cN2[5])/dy0
-        dcNdy = (-1.83333333333334*cN[0]+3.00000000000002*cN[1]-1.50000000000003*cN[2]+0.333333333333356*cN[3]-8.34657956545823e-15*cN[4]+1.06910315192207e-15*cN[5])/dy0
-        dcO2dy = (-1.83333333333334*cO2[0]+3.00000000000002*cO2[1]-1.50000000000003*cO2[2]+0.333333333333356*cO2[3]-8.34657956545823e-15*cO2[4]+1.06910315192207e-15*cO2[5])/dy0
-        dcOdy = (-1.83333333333334*cO[0]+3.00000000000002*cO[1]-1.50000000000003*cO[2]+0.333333333333356*cO[3]-8.34657956545823e-15*cO[4]+1.06910315192207e-15*cO[5])/dy0
-        dcNOdy = (-1.83333333333334*cNO[0]+3.00000000000002*cNO[1]-1.50000000000003*cNO[2]+0.333333333333356*cNO[3]-8.34657956545823e-15*cNO[4]+1.06910315192207e-15*cNO[5])/dy0
+        dcN2dy  = (-1.83333333333334*cN2[0]+3.00000000000002*cN2[1]-1.50000000000003*cN2[2]+0.333333333333356*cN2[3]-8.34657956545823e-15*cN2[4]+1.06910315192207e-15*cN2[5])/dy0
+        dcNdy   = (-1.83333333333334*cN[0]+3.00000000000002*cN[1]-1.50000000000003*cN[2]+0.333333333333356*cN[3]-8.34657956545823e-15*cN[4]+1.06910315192207e-15*cN[5])/dy0
+        dcO2dy  = (-1.83333333333334*cO2[0]+3.00000000000002*cO2[1]-1.50000000000003*cO2[2]+0.333333333333356*cO2[3]-8.34657956545823e-15*cO2[4]+1.06910315192207e-15*cO2[5])/dy0
+        dcOdy   = (-1.83333333333334*cO[0]+3.00000000000002*cO[1]-1.50000000000003*cO[2]+0.333333333333356*cO[3]-8.34657956545823e-15*cO[4]+1.06910315192207e-15*cO[5])/dy0
+        dcNOdy  = (-1.83333333333334*cNO[0]+3.00000000000002*cNO[1]-1.50000000000003*cNO[2]+0.333333333333356*cNO[3]-8.34657956545823e-15*cNO[4]+1.06910315192207e-15*cNO[5])/dy0
 
         # Tolerance for finding the edge of the boundary layer.
         tolerance = 1e-10
@@ -596,40 +594,64 @@ class Initialise_Flatmix(GridBasedInitialisation):
             poly_coordinates = self.uniform_1d_coordinate_dimensional()
             # Interpolate u, T, rho onto the grid
             u_new = self.interpolate_onto_grid(y, poly_coordinates, u, self.dudy, 0)
-            T_new = self.interpolate_onto_grid(y, poly_coordinates, T, 0, 0)
             v_new = self.interpolate_onto_grid(y, poly_coordinates, v, dvdy, 0)
+
+            T_new = self.interpolate_onto_grid(y, poly_coordinates, T, 0, 0)
 
             # rho_new = self.interpolate_onto_grid(y, poly_coordinates, rho, 0, 0)
 
-            cN2_new = self.interpolate_onto_grid(y, poly_coordinates, cN2, dcN2dy, 0)
-            cN_new = self.interpolate_onto_grid(y, poly_coordinates, cN, dcNdy, 0)
-            cO2_new = self.interpolate_onto_grid(y, poly_coordinates, cO2, dcO2dy, 0)
-            cO_new = self.interpolate_onto_grid(y, poly_coordinates, cO, dcOdy, 0)
-            cNO_new = self.interpolate_onto_grid(y, poly_coordinates, cNO, 0, 0)
+            cN2_new  = self.interpolate_onto_grid(y, poly_coordinates, cN2 , dcN2dy , 0)
+            cN_new   = self.interpolate_onto_grid(y, poly_coordinates, cN  , dcNdy  , 0)
+            cO2_new  = self.interpolate_onto_grid(y, poly_coordinates, cO2 , dcO2dy , 0)
+            cO_new   = self.interpolate_onto_grid(y, poly_coordinates, cO  , dcOdy  , 0)
+            cNO_new  = self.interpolate_onto_grid(y, poly_coordinates, cNO , 0      , 0)
 
             
 
             rho_new = (self.pref/(Rhat*(cN2_new/MN2 + cN_new/MN + cO2_new/MO2 + cO_new/MO + cNO_new/MNO)))*(1.0/T_new) # create array of varying rhoref values - gnsa1e21, 2023
             
-            # fig3,ax3=plt.subplots(2, 3)
+            fig2,ax2=plt.subplots(3, 3)
 
-            # ax3[0,0].plot(cN2_new, poly_coordinates)
-            # ax3[0,1].plot(cN_new, poly_coordinates)
-            # ax3[0,2].plot(cO2_new, poly_coordinates)
-            # ax3[1,0].plot(cO_new, poly_coordinates)
-            # ax3[1,1].plot(cNO_new, poly_coordinates)
-            # ax3[1,2].plot(rho_new, poly_coordinates)
+            ax2[0,0].plot(u, y)
+            ax2[0,1].plot(v, y)
+            ax2[0,2].plot(T, y)
 
-            
+            ax2[1,0].plot(cO, y)
+            ax2[1,1].plot(cN, y)
+            ax2[1,2].plot(cN2, y)
+
+            ax2[2,0].plot(cNO, y)
+            ax2[2,1].plot(rho, y)
+            ax2[2,2].plot(rho*T, y)
+
+            # plt.show()
+
+            fig3,ax3=plt.subplots(3, 3)
+
+            ax3[0,0].plot(u_new, poly_coordinates)
+            ax3[0,1].plot(v_new, poly_coordinates)
+            ax3[0,2].plot(T_new, poly_coordinates)
+
+            ax3[1,0].plot(cO_new, poly_coordinates)
+            ax3[1,1].plot(cN_new, poly_coordinates)
+            ax3[1,2].plot(cN2_new, poly_coordinates)
+
+            ax3[2,0].plot(cNO_new, poly_coordinates)
+            ax3[2,1].plot(rho_new, poly_coordinates)
+            ax3[2,2].plot(rho_new*T_new, poly_coordinates)
 
             # plt.show()
 
             rhou_new = rho_new*u_new
             rhov_new = rho_new*v_new
+            # rhov_new = self.solve_continuity(poly_coordinates, u_new, rho_new)
+
+            plt.plot(rho_new*T_new, poly_coordinates)
+            plt.show()
 
             # Solve continuity equation to obtain rhov
             # rhov_new = self.solve_continuity(poly_coordinates, u_new, rho_new)
-            print('velocity profile, u0', u_new)
+            # print('velocity profile, u0', u_new)
 
             edge = self.find_edge_of_bl(u_new, tolerance)
             # Obtain polynomial fit coefficients
@@ -638,9 +660,9 @@ class Initialise_Flatmix(GridBasedInitialisation):
             T_coeffs = self.fit_polynomial(poly_coordinates, T_new, edge, n_coeffs)
 
             cN2_coeffs = self.fit_polynomial(poly_coordinates, cN2_new, edge, n_coeffs)
-            cN_coeffs = self.fit_polynomial(poly_coordinates, cN_new, edge, n_coeffs)
+            cN_coeffs  = self.fit_polynomial(poly_coordinates, cN_new, edge, n_coeffs)
             cO2_coeffs = self.fit_polynomial(poly_coordinates, cO2_new, edge, n_coeffs)
-            cO_coeffs = self.fit_polynomial(poly_coordinates, cO_new, edge, n_coeffs)
+            cO_coeffs  = self.fit_polynomial(poly_coordinates, cO_new, edge, n_coeffs)
             cNO_coeffs = self.fit_polynomial(poly_coordinates, cNO_new, edge, n_coeffs)
 
             rho_coeffs = self.fit_polynomial(poly_coordinates, rho_new, edge, n_coeffs)
@@ -684,8 +706,8 @@ class Initialise_Flatmix(GridBasedInitialisation):
         return np.linspace(0, 20.0, n_elem)
     
     def uniform_1d_coordinate_dimensional(self):
-        n_elem = 10000
-        return np.linspace(0, 20.0*10**self.find_exp(self.blthickness), n_elem)
+        n_elem = 100000
+        return np.linspace(0, 20.0*10**(self.find_exp(self.deltastar0)), n_elem)
 
     def temperature_scaling(self, temp_profile, Tw, Tinf):
         """ Computes the temperature profile between [0,1]
@@ -794,6 +816,7 @@ class Initialise_Flatmix(GridBasedInitialisation):
         
         rhoev = GridVariable('rhoev')
         evequilO2, evequilN2, evequilNO = GridVariable('evequilO2'), GridVariable('evequilN2'), GridVariable('evequilNO')
+        Tv = GridVariable('Tv')
 
         # set dimensional grid constants -------------------------------------------------------------------------------------------------------------------------------
         uref, rhoref, pref, Rhat, Twall = ConstantObject('uref'), ConstantObject('rhoref'), ConstantObject('pref'), ConstantObject('Rhat'), ConstantObject('Twall')
@@ -803,7 +826,7 @@ class Initialise_Flatmix(GridBasedInitialisation):
 
         cOe, cNe, cO2e, cN2e, cNOe = ConstantObject('cOe'), ConstantObject('cNe'), ConstantObject('cO2e'), ConstantObject('cN2e'), ConstantObject('cNOe')
         sigOtoNe = ConstantObject('sigOtoNe')
-        CTD.add_constant(sigOtoNe)
+        hf0 = ConstantObject('hf0')
 
         # rho_eqn = OpenSBLIEq(rho, 1.0/T)
         # rho_store = OpenSBLIEq(DataObject('rho'), rhoN2 + rhoN + rhoO2 + rhoO + rhoNO )
@@ -828,26 +851,32 @@ class Initialise_Flatmix(GridBasedInitialisation):
         # Tinf = GridVariable('T')
         # tempeq = OpenSBLIEq(Tinf, pref/(Rhat*(rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO)))
         Tempwall = GridVariable('Twalld')
-        tempwall = OpenSBLIEq(Tempwall,  pref/(Rhat*(rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO)) + Twall + cOe+ cNe+ cO2e+ cN2e+ cNOe + sigOtoNe)
+        tempwall = OpenSBLIEq(Tempwall,  pref/(Rhat*(rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO)) + Twall + cOe+ cNe+ cO2e+ cN2e+ cNOe + sigOtoNe + hf0)
         # equilibrium quantities
+
+        
+        Tveq = OpenSBLIEq(Tv, pref/(Rhat*(rhoO/MO+rhoO2/MO2+rhoN/MN+rhoN2/MN2+rhoNO/MNO)))
+
         evequilO2eq = OpenSBLIEq(evequilO2, thetavO2*Rhat/(MO2*(exp(thetavO2/T)-1.0)))
         evequilN2eq = OpenSBLIEq(evequilN2, thetavN2*Rhat/(MN2*(exp(thetavN2/T)-1.0)))
         evequilNOeq = OpenSBLIEq(evequilNO, thetavNO*Rhat/(MNO*(exp(thetavNO/T)-1.0)))
-        rhoev_store = OpenSBLIEq(DataObject('rhoev'), evequilN2*rhoN2 + evequilNO*rhoNO+ evequilO2*rhoO2)
+        rhoev_store = OpenSBLIEq(DataObject('rhoev'), (evequilN2*rhoN2 + evequilNO*rhoNO+ evequilO2*rhoO2)*rho/(rhoO2+rhoN2+rhoNO))
         
 
-        rhof = OpenSBLIEq(DataObject('rhof'), rhoN)
+        rhof = OpenSBLIEq(DataObject('rhof'), rho)
         # gama, Minf = ConstantObject("gama"), ConstantObject("Minf")
         rhoE_store = OpenSBLIEq(DataObject('rhoE'), Rhat*T*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))+4.1868e6*(dhO*rhoO/MO+dhN*rhoN/MN+dhNO*rhoNO/MNO)+ (rhoO2*evequilO2+rhoN2*evequilN2+rhoNO*evequilNO )+0.5*((rhou0/rho)**2+(rhou1/rho)**2)*rho)
-        # rhoE_store = OpenSBLIEq(DataObject('rhoE'), Rhat*T*(3.0/2.0*(rhoOi/MO+rhoNi/MN)+5.0/2.0*(rhoO2i/MO2+rhoN2i/MN2+rhoNOi/MNO))+4.1868e6*(dhO*rhoOi/MO+dhN*rhoNi/MN+dhNO*rhoNOi/MNO)+rhoO2i*evequilO2+rhoN2i*evequilN2+rhoNOi*evequilNO+0.5*((rhou0/rho)**2+(rhou1/rho)**2)*rho)
+        # pref*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))/(rhoO/MO+rhoN/MN+rhoO2/MO2+rhoN2/MN2+rhoNO/MNO)+4.1868e6*(dhO*rhoO/MO+dhN*rhoN/MN+dhNO*rhoNO/MNO)+rhoO2*evO2+rhoN2*evN2+rhoNO*evNO+0.5*rho*(u**2+v**2))
+
+        # rhoE_store = OpenSBLIEq(DataObject('rhoE'),  Rhat*T*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))/(rhoO/MO+rhoN/MN+rhoO2/MO2+rhoN2/MN2+rhoNO/MNO) +  hf0*(dhO*rhoO/MO+dhN*rhoN/MN+dhNO*rhoNO/MNO) +  (evequilN2*rhoN2 + evequilNO*rhoNO+ evequilO2*rhoO2) +0.5*((rhou0/rho)**2+(rhou1/rho)**2)*rho)
+        # rhoE_store = OpenSBLIEq(DataObject('rhoE'), Rhat*T*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))+0.0*(dhO*rhoO/MO+dhN*rhoN/MN+dhNO*rhoNO/MNO)+ (rhoO2*evequilO2+rhoN2*evequilN2+rhoNO*evequilNO )+0.5*((rhou0/rho)**2+(rhou1/rho)**2)*rho)
         
-
-
+        # # rhoE_store = OpenSBLIEq(DataObject('rhoE'), Rhat*T*(3.0/2.0*(rhoOi/MO+rhoNi/MN)+5.0/2.0*(rhoO2i/MO2+rhoN2i/MN2+rhoNOi/MNO))+4.1868e6*(dhO*rhoOi/MO+dhN*rhoNi/MN+dhNO*rhoNOi/MNO)+rhoO2i*evequilO2+rhoN2i*evequilN2+rhoNOi*evequilNO+0.5*((rhou0/rho)**2+(rhou1/rho)**2)*rho)
         # gama, Minf = ConstantObject("gama"), ConstantObject("Minf")
         # rhoE_store = OpenSBLIEq(DataObject('rhoE'), rho*T/(gama*(gama-1)*Minf**2) + 0.5*(rhou0**2 + rhou1**2)/rho)
 
 
-        self.eqns += [rhou0_eqn, rhou1_eqn, T_eqn, cN2_eqn, cN_eqn, cO2_eqn, cO_eqn, cNO_eqn, rho_store, rhou0_store, rhou1_store, rhoN2_pre,  rhoN_pre, rhoO2_pre, rhoO_pre, rhoNO_pre, rhoN2_store, rhoN_store, rhoO2_store, rhoO_store, rhoNO_store, evequilO2eq, evequilN2eq, evequilNOeq, rhoev_store, rhoE_store, rhof, tempwall]
+        self.eqns += [rhou0_eqn, rhou1_eqn, T_eqn, cN2_eqn, cN_eqn, cO2_eqn, cO_eqn, cNO_eqn, rho_store, rhou0_store, rhou1_store, rhoN2_pre,  rhoN_pre, rhoO2_pre, rhoO_pre, rhoNO_pre, rhoN2_store, rhoN_store, rhoO2_store, rhoO_store, rhoNO_store, Tveq, evequilO2eq, evequilN2eq, evequilNOeq, rhoev_store, rhoE_store, rhof, tempwall]
         if self.block.ndim == 3:  # Periodic case, rhow = 0
             self.eqns += [OpenSBLIEq(DataObject('rhou2'), 0.0)]
         return
@@ -928,9 +957,9 @@ class Initialise_Flatmix(GridBasedInitialisation):
         n = np.size(y)
         ya2 = y[:]
         # delta, scale, re = 0.001, self.scale_factor, self.Re
-        delta, scale, re = 0.01*10**self.find_exp(self.blthickness), self.scale_factor, self.Re
+        delta, scale, re = 0.001*10**self.find_exp(self.deltastar0), self.scale_factor, self.Re
 
-        print('-------------------------------------------- printing out delta value :',delta)
+        # print('-------------------------------------------- printing out delta value :',delta)
         rex0 = 0.5*(re/scale)**2
         x0 = 0.5*re/scale**2
        
@@ -971,11 +1000,14 @@ class Initialise_Flatmix(GridBasedInitialisation):
         :arg ndarray rho: Density values.
         :returns: ndarray: rhov: Array of values for the wall normal velocity components. """
         # Grid offset delta to form derivative approximation
+        u = u/self.find_exp(self.uref)
+        # y = u/self.find_exp(self.delsta)
+
         n = np.size(y)
         ya2 = y[:]
-        delta, scale, re = 0.001, self.scale_factor, self.Re
+        delta, scale, re = 0.001*10**self.find_exp(self.deltastar0), self.scale_factor, self.Re
         rex0 = 0.5*(re/scale)**2
-        x0 = 0.5*re/scale**2
+        x0   = (0.5*re/scale**2)
         # print "Domain inlet is when the boundary-layer has developed for a length of x0 = %.10f" % x0
         drudx, rhov = np.zeros_like(y), np.zeros_like(y)
         # Local Reynolds number scaling to obtain a v profile
@@ -995,31 +1027,30 @@ class Initialise_Flatmix(GridBasedInitialisation):
             rhoxm = splint(ya2, rho, d2y_rho, n, ym)
             drudx[j] = (rhoxp*uxp-rhoxm*uxm)/(2.0*delta)
             rhov[j] = rhov[j-1]-0.5*(ya2[j]-ya2[j-1])*(drudx[j]+drudx[j-1])
+
+        rhov = rhov*self.find_exp(self.uref)
         return rhov
 
     def load_similarity(self):
         """ Solves the compressible boundary-layer equations via similarity solution."""
         Re, xMach, Tinf, Tw, Sc = self.Re, self.xMach, self.Tinf, self.Tw, self.Sc
         cN2e, cNe, cO2e, cOe, cNOe = self.cN2e, self.cNe, self.cO2e, self.cOe, self.cNOe
-        # pref, rhoref, uref, blthickness = self.pref, self.rhoref, self.uref, self.blthickness
-        pref = self.pref 
+        pref, rhoref, uref, deltastar0 = self.pref, self.rhoref, self.uref, self.deltastar0
 
         adiabatic_condition, catalytic_condition = self.adiabatic_condition, self.catalytic_condition
 
-
-
         Pr, gama = 0.72, 1.4  # Prandtl number, ratio of specific heats
         # bl = Boundary_layer_profile(xMach, Pr, gama, -1, Re, Tinf)  # -1 for Tw sets an adiabatic wall
-        bl = Boundary_layer_profile(Re, xMach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref)
+        bl = Boundary_layer_profile(Re, xMach, Tinf, Tw, Sc, adiabatic_condition, catalytic_condition, cN2e, cNe, cO2e, cOe, cNOe, pref, rhoref, uref, deltastar0)
         y, u, T, rho, n = bl.y, bl.u, bl.T, bl.rho, np.size(bl.y)
-        uref, Tinf, rhoref, blthickness, rho = bl.uref, bl.tinf, bl.rhoref, bl.blthickness, bl.rho
+        uref, Tinf, rhoref, deltastar0, rho = bl.uref, bl.tinf, bl.rhoref, bl.deltastar0, bl.rho
         cN2, cN, cO2, cO, cNO = bl.cN2, bl.cN, bl.cO2, bl.cO, bl.cNO
 
-        # self.uref, self.tinf, self.rhoref, self.blthickness 
+        # self.uref, self.tinf, self.rhoref, self.deltastar0 
 
         self.Twall, self.scale_factor = bl.Twall, bl.scale_factor  # Wall temperature and scale factor from the similarity solution
         self.dudy = bl.dudy  # du/dy at the wall
-        return y, u, T, rho, n, uref, Tinf, rhoref, blthickness, cN2, cN, cO2, cO, cNO
+        return y, u, T, rho, n, uref, Tinf, rhoref, deltastar0, cN2, cN, cO2, cO, cNO
     
     def load_similarity_reference_variables(self):
         """ Solves the compressible boundary-layer equations via similarity solution."""
@@ -1027,14 +1058,14 @@ class Initialise_Flatmix(GridBasedInitialisation):
         Pr, gama = 0.72, 1.4  # Prandtl number, ratio of specific heats
         bl = Boundary_layer_profile(xMach, Pr, gama, -1, Re, Tinf)  # -1 for Tw sets an adiabatic wall
         # y, u, T, rho, n = bl.y, bl.u, bl.T, 1.0/bl.T, np.size(bl.y)
-        uref, tinf, rhoref, blthickness, rho = bl.uref, bl.tinf, bl.rhoref, bl.blthickness, bl.rho
+        uref, tinf, rhoref, deltastar0, rho = bl.uref, bl.tinf, bl.rhoref, bl.deltastar0, bl.rho
         cN2, cN, cO2, cO, cNO = bl.cN2, bl.cN, bl.cO2, bl.cO, bl.cNO
 
-        # self.uref, self.tinf, self.rhoref, self.blthickness 
+        # self.uref, self.tinf, self.rhoref, self.deltastar0 
 
         # self.Twall, self.scale_factor = bl.Twall, bl.scale_factor  # Wall temperature and scale factor from the similarity solution
         # self.dudy = bl.dudy  # du/dy at the wall
-        return uref, tinf, rhoref, blthickness
+        return uref, tinf, rhoref, deltastar0
 
     def interpolate_onto_grid(self, y_in, y_out, var_in, y0, yn):
         # Create interpolating second derivative spline
