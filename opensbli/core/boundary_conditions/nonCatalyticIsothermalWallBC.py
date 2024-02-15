@@ -1,6 +1,6 @@
 """@brief This contains non catalytic isothermal wall boundary condition
-   @authors Teja Ala
-   @contributors 
+   @authors 
+   @contributors Teja Ala
    @details
 """
 
@@ -81,6 +81,8 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         dhNO,dhN2,dhN,dhO,dhO2 = ConstantObject('dhNO'),ConstantObject('dhN2'),ConstantObject('dhN'),ConstantObject('dhO'),ConstantObject('dhO2') # setting rhoNO density for catalytic wall
         sigOtoNe = ConstantObject('sigOtoNe') # ratio of freestream O-N, currently definied in the main script
 
+        pref, hf0 = ConstantObject('pref'), ConstantObject('hf0')
+
         # definite physical variables
         rN2v, rNv, rO2v, rOv, rNOv = PhysicsVariable('rhoN2'), PhysicsVariable('rhoN'), PhysicsVariable('rhoO2'), PhysicsVariable('rhoO'), PhysicsVariable('rhoNO')
         energy_storev, evib_storev = PhysicsVariable('rhoE'), PhysicsVariable('rhoev')
@@ -104,6 +106,7 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         deriv_equation = sum([c*cNO_values[i+1] for i, c in enumerate(coeffs[1:])])
         # Rearrange the equation to solve for the wall cNO
         deriv_equation = OpenSBLIEq(cNO_values[0], -1.0*deriv_equation/(coeffs[0]))  # set wall value of dcNO/dy to 0...
+        wall_eqns += [deriv_equation]
 
         # Non catalytic condition - N2 --------------------------------------------------------------------------------------------------
         # Calculate cNO at the wall associated with  dcNO/dy = 0
@@ -118,6 +121,7 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         deriv_equation = sum([c*cN2_values[i+1] for i, c in enumerate(coeffs[1:])])
         # Rearrange the equation to solve for the wall cNO
         deriv_equation = OpenSBLIEq(cN2_values[0], -1.0*deriv_equation/(coeffs[0]))  # set wall value of dcN2/dy to 0...
+        wall_eqns += [deriv_equation]
 
         # Non catalytic condition - O2 --------------------------------------------------------------------------------------------------
         # Calculate cNO at the wall associated with  dcNO/dy = 0
@@ -132,6 +136,7 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         deriv_equation = sum([c*cO2_values[i+1] for i, c in enumerate(coeffs[1:])])
         # Rearrange the equation to solve for the wall cNO
         deriv_equation = OpenSBLIEq(cO2_values[0], -1.0*deriv_equation/(coeffs[0]))  # set wall value of dcO2/dy to 0...
+        wall_eqns += [deriv_equation]
 
         # Non catalytic condition - O --------------------------------------------------------------------------------------------------
         # Calculate cNO at the wall associated with  dcNO/dy = 0
@@ -139,13 +144,14 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         # Evaluate yNO values at the wall and 5 points above/below it
         cO_values = [GridVariable('cO%d' % i) for i in range(len(grid_indices))]
         
-        cO_evaluations = [OpenSBLIEq(cO_values[i], increment_dataset(rO / (rN2 + rN + rO + rO + rNO), self.direction, i*to_side_factor))
+        cO_evaluations = [OpenSBLIEq(cO_values[i], increment_dataset(rO / (rN2 + rN + rO2 + rO + rNO), self.direction, i*to_side_factor))
                                    for i in range(1, len(cO_values))]
 
         wall_eqns += cO_evaluations
         deriv_equation = sum([c*cO_values[i+1] for i, c in enumerate(coeffs[1:])])
         # Rearrange the equation to solve for the wall cNO
         deriv_equation = OpenSBLIEq(cO_values[0], -1.0*deriv_equation/(coeffs[0]))  # set wall value of dcO/dy to 0...
+        wall_eqns += [deriv_equation]
 
         # Non catalytic condition - N --------------------------------------------------------------------------------------------------
         # Calculate cNO at the wall associated with  dcNO/dy = 0
@@ -153,17 +159,17 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         # Evaluate yNO values at the wall and 5 points above/below it
         cN_values = [GridVariable('cN%d' % i) for i in range(len(grid_indices))]
         
-        cN_evaluations = [OpenSBLIEq(cN_values[i], increment_dataset(rN / (rN2 + rN + rN + rO + rNO), self.direction, i*to_side_factor))
+        cN_evaluations = [OpenSBLIEq(cN_values[i], increment_dataset(rN / (rN2 + rN + rO2 + rO + rNO), self.direction, i*to_side_factor))
                                    for i in range(1, len(cN_values))]
 
         wall_eqns += cN_evaluations
         deriv_equation = sum([c*cN_values[i+1] for i, c in enumerate(coeffs[1:])])
         # Rearrange the equation to solve for the wall cNO
         deriv_equation = OpenSBLIEq(cN_values[0], -1.0*deriv_equation/(coeffs[0]))  # set wall value of dcN/dy to 0...
-
         wall_eqns += [deriv_equation]
+
         wall_eqns += [OpenSBLIEq(GridVariable('cNw'), cN_values[0])]
-        wall_eqns += [OpenSBLIEq(GridVariable('cOw'), cN_values[0])]
+        wall_eqns += [OpenSBLIEq(GridVariable('cOw'), cO_values[0])]
         wall_eqns += [OpenSBLIEq(GridVariable('cNOw'), cNO_values[0])]
         wall_eqns += [OpenSBLIEq(GridVariable('cN2w'), cN2_values[0] )]
         wall_eqns += [OpenSBLIEq(GridVariable('cO2w'), cO2_values[0])]
@@ -182,7 +188,7 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         coeffs, grid_indices = self.deriv_coeffs[side], self.deriv_indices[side]
         # Evaluate temperature values at the wall and 5 points above/below it
         temperature_values = [GridVariable('T%d' % i) for i in range(len(grid_indices))]
-        temperature_evaluations = [OpenSBLIEq(temperature_values[i], increment_dataset(NS.temperature(relation=True, conservative=True)+ evib_store, self.direction, i*to_side_factor))
+        temperature_evaluations = [OpenSBLIEq(temperature_values[i], increment_dataset(energy_store + evib_store, self.direction, i*to_side_factor))
                                    for i in range(1, len(temperature_values))]
 
         wall_eqns += temperature_evaluations
@@ -192,12 +198,25 @@ class nonCatalyticIsothermalWallBC(ModifyCentralDerivative, BoundaryConditionBas
         wall_eqns += [deriv_equation]
 
         # Set energy on the wall based on this calculated wall temperature and the density that comes from the continuity equation
-        wall_eqns += [OpenSBLIEq(evib_store, Rhat*rN2*thetavN2/(MN2*exp(Mul(thetavN2, Pow(Twall, -1) )) -1.0) + Rhat*rO2*thetavO2/(MO2*exp(Mul(thetavO2, Pow(Twall,-1))) -1.0) + Rhat*rNO*thetavNO/(MNO*exp(Mul(thetavNO, Pow(Twall, -1))) -1.0) )]
-        wall_eqns += [OpenSBLIEq(energy_store, evib_store + 4.1868e6*(rO*(dhO/MO)+rN*(dhN/MN)+rNO*(dhNO/MNO)) +  Mul(Twall, Rhat*((3.0/2.0)*((rO/MO)+(rN/MN))+(5.0/2.0)*((rO2/MO2)+(rN2/MN2)+(rNO/MNO)))) )]
+        wall_eqns += [OpenSBLIEq(evib_store, (Rhat*rN2*thetavN2/(MN2*(exp(Mul(thetavN2, Pow(Twall, -1) )) -1.0)) + Rhat*rO2*thetavO2/(MO2*(exp(Mul(thetavO2, Pow(Twall,-1))) -1.0)) + Rhat*rNO*thetavNO/(MNO*(exp(Mul(thetavNO, Pow(Twall, -1))) -1.0)))*(rO+rN+rO2+rN2+rNO)/(rO2+rN2+rNO) )]
+        # wall_eqns += [OpenSBLIEq(evib_store, Rhat*(rhoO2_B0(0,0)*thetavO2/(MO2*(exp(thetavO2/Tw)-1.0))+rhoN2_B0(0,0)*thetavN2/(MN2*(exp(thetavN2/Tw)-1.0))+rhoNO_B0(0,0)*thetavNO/(MNO*(exp(thetavNO/Tw)-1.0)));
+        # wall_eqns += [OpenSBLIEq(energy_store, evib_store + 4.1868e6*(rO*(dhO/MO)+rN*(dhN/MN)+rNO*(dhNO/MNO)) +  Mul(Twall, Rhat*((3.0/2.0)*((rO/MO)+(rN/MN))+(5.0/2.0)*((rO2/MO2)+(rN2/MN2)+(rNO/MNO)))) )]
         
+        # + Rhat*(rhoO2_B0(0,0)*thetavO2/(MO2*(exp(thetavO2/Tw)-1.0))
+        # Rhat*(rN2*thetavN2/(MN2*(exp(thetavN2/Twall)-1.0)))
+        # Rhat*rN2*thetavN2/(MN2*(exp(Mul(thetavN2, Pow(Twall, -1) )) -1.0))
+        # +rhoNO_B0(0,0)*thetavNO/(MNO*(exp(thetavNO/Tw)-1.0)));
+
+        #
+        
+        # wall_eqns += [OpenSBLIEq(energy_store, evib_store + 4.1868e6*(rO*(dhO/MO)+rN*(dhN/MN)+rNO*(dhNO/MNO)) +  Mul(Twall, Rhat*((3.0/2.0)*((rO/MO)+(rN/MN))+(5.0/2.0)*((rO2/MO2)+(rN2/MN2)+(rNO/MNO)))) )]
+        # pref*(3.0/2.0*(rhoO/MO+rhoN/MN)+5.0/2.0*(rhoO2/MO2+rhoN2/MN2+rhoNO/MNO))/(rhoO/MO+rhoN/MN+rhoO2/MO2+rhoN2/MN2+rhoNO/MNO)+4.1868e6*(dhO*rhoO/MO+dhN*rhoN/MN+dhNO*rhoNO/MNO)+rhoO2*evO2+rhoN2*evN2+rhoNO*evNO+0.5*rho*(u**2+v**2))
+
+        # wall_eqns   += [OpenSBLIEq(energy_store, Mul(Twall, Rhat*((3.0/2.0)*((rO/MO)+(rN/MN))+(5.0/2.0)*((rO2/MO2)+(rN2/MN2)+(rNO/MNO)))/(rO/MO+rN/MN+rO2/MO2+rN2/MN2+rNO/MNO))  +  hf0*(rO*(dhO/MO)+rN*(dhN/MN)+rNO*(dhNO/MNO))  +  Rhat*rO2*thetavO2/(MO2*(exp(Mul(thetavO2, Pow(Twall,-1))) -1.0)) + Rhat*rN2*thetavN2/(MN2*(exp(Mul(thetavN2, Pow(Twall, -1) )) -1.0)) + Rhat*rNO*thetavNO/(MNO*(exp(Mul(thetavNO, Pow(Twall, -1))) -1.0)) ) ] 
+        wall_eqns += [OpenSBLIEq(energy_store, evib_store + hf0*(rO*(dhO/MO)+rN*(dhN/MN)+rNO*(dhNO/MNO)) +  Mul(Twall, Rhat*((3.0/2.0)*((rO/MO)+(rN/MN))+(5.0/2.0)*((rO2/MO2)+(rN2/MN2)+(rNO/MNO)))) )]                                                                                  
         kernel.add_equation(wall_eqns)
         # Print out the current equations for the adiabatic wall conditio
-        print("Printing equations for catalytic wall boundary condition (Carp-4):")  # <<<
+        print("printing equations for catalytic wall boundary condition (carp-4):")  # <<<
         for eqn in kernel.equations:
             pprint(eqn)
         # exit()
