@@ -479,7 +479,7 @@ class LFWeno(LFCharacteristic, Weno):
     :arg object physics: Physics object, defaults to NSPhysics.
     :arg object averaging: The averaging procedure to be applied for characteristics, defaults to Simple averaging. """
 
-    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='LLF', flux_split=True, passive_scalar=False):
+    def __init__(self, order, physics=None, averaging=None, shock_filter=None, formulation="JS", conservative=True, flux_type='LLF', flux_split=True, species=None):
         if flux_type == 'LLF':
             print("Local Lax-Friedrich flux splitting.")
         elif flux_type == 'GLF':
@@ -489,7 +489,7 @@ class LFWeno(LFCharacteristic, Weno):
         # Check WENO order
         if (order % 2 == 0):
             raise ValueError("Please set an odd-order for the WENO scheme, currently {} is not supported".format(order))
-        self.passive_scalar = passive_scalar
+        self.species = species
         self.flux_type = flux_type
         self.temp_wk_arrays = {}
         LFCharacteristic.__init__(self, physics, flux_split=flux_split, flux_type=flux_type, averaging=averaging, shock_filter=shock_filter)
@@ -524,7 +524,7 @@ class LFWeno(LFCharacteristic, Weno):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block, self.passive_scalar)
+            self.instantiate_eigensystem(block, self.species)
 
             for direction, derivatives in sorted(grouped.items()):
                 # Create a work array for each component of the system
@@ -558,7 +558,7 @@ class LFWeno(LFCharacteristic, Weno):
             reconstruction_halos = self.reconstruction_halotype(self.order, reconstruction=True)
             solution_vector = flatten(type_of_eq.time_advance_arrays)
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block, self.passive_scalar)
+            self.instantiate_eigensystem(block, self.species)
             for direction, derivatives in sorted(grouped.items()):
                 all_derivatives_evaluated_locally += derivatives
                 for no, deriv in enumerate(derivatives):
@@ -600,6 +600,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
             print("HLLC-LM flux splitting.")
         else:
             raise ValueError("Please select either HLLC or HLLC-LM for the flux-splitting.")
+        self.species = None
         self.flux_type = flux_type
         self.flux_split = False # No flux split into WENO for HLLC solver
         self.temp_wk_arrays = {}
@@ -635,7 +636,7 @@ class HLLCWeno(HLLCCharacteristic, Weno):
             solution_vector = flatten(type_of_eq.time_advance_arrays)
 
             # Instantiate eigensystems with block, but don't add metrics yet
-            self.instantiate_eigensystem(block, self.passive_scalar)
+            self.instantiate_eigensystem(block, self.species)
 
             for direction, derivatives in sorted(grouped.items()):
                 # Create a work array for each component of the system

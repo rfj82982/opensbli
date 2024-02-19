@@ -96,7 +96,7 @@ class NonLinearFilterBase(object):
             ps = "Eq(Der(rhof,t), -Conservative(u_j*rhof, x_j, %s))" % scheme_type
             output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([mass, momentum, energy, ps])])
         else:
-            if self.passive_scalar:
+            if self.species == 'passive_scalar':
                 raise ValueError("WARNING: Passive scalar has not been added to curvilinear equations yet.")
             # Full curvilinear
             if self.curvilinear:
@@ -149,7 +149,7 @@ class NonLinearFilterBase(object):
             # Added passive scalar equation here for filter methods
             output_equations = flatten([self.EE.expand(eq, self.ndim, coordinate_symbol, [], constants) for eq in flatten([massN, massN2, momentum, energy])])
         else:
-            if self.passive_scalar:
+            if self.species == 'N N2':
                 raise ValueError("WARNING: Passive scalar has not been added to curvilinear equations yet.")
             # Full curvilinear
             if self.curvilinear:
@@ -408,9 +408,9 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
     portion of a WENO procedure is used in characteristic space, by substracting a central difference flux approximation of order n+1. The shock location sensor
     uses the absolute difference of the non-linear to ideal WENO weights. The amount of dissipation is controlled by Mach number or dilatation/vorticity sensors. The governing
     equations in the user script should be central derivatives in a skew-symmetric formulation to improve numerical stability."""
-    def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False, passive_scalar=False):
+    def __init__(self, block, order, metrics=None, flux_type='LLF', airfoil=False, formulation='Z', optimize=False, species=None):
         print("Using non-linear WENO filtering on block {:}.".format(block.blocknumber))
-        self.passive_scalar = passive_scalar
+        self.species = species
         # Get the shared functionality between TVD/WENO non-linear filters
         NonLinearFilterBase.__init__(self, airfoil, block, metrics, optimize=optimize)
         self.flux_type = flux_type
@@ -425,7 +425,7 @@ class WENOFilter(NonSimulationEquations, NonLinearFilterBase):
         # Counter to order the kernels. Put the WENO filtering kernels at the very end of the time loop
         self.component_counter = 1000 + block.blocknumber*1000
         # Create the equations for WENO
-        if self.passive_scalar:
+        if self.species == 'passive_scalar':
             eqn = self.Euler_equations_passive_scalar(block, "Weno")
         else:
             eqn = self.Euler_equations(block, "Weno")

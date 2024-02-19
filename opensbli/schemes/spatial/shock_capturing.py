@@ -258,9 +258,9 @@ class EigenSystem(object):
         self.physics = physics
         return
 
-    def instantiate_eigensystem(self, block, passive_scalar):
+    def instantiate_eigensystem(self, block, species):
         if self.physics is None:
-            Euler_eq = EulerEquations(block.ndim, passive_scalar)
+            Euler_eq = EulerEquations(block.ndim, species)
             Euler_eq.generate_eig_system(block)
         else:
             self.physics.generate_eig_system(block)
