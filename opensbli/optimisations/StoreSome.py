@@ -1,4 +1,9 @@
-from sympy import flatten, simplify, symbols, factor, count_ops, pprint, Piecewise, Equality, simplify, Pow, Mul
+"""@brief
+   @authors Satya Pramod Jammy, David J Lusher
+   @contributors 
+   @details
+"""
+from sympy import flatten, simplify, symbols, factor, count_ops, pprint, Piecewise, Equality, simplify, Pow, Mul, collect, Rational, factor_terms, gcd_terms
 from sympy.functions.elementary.piecewise import ExprCondPair
 from opensbli.core.opensbliobjects import ConstantObject, CoordinateObject, DataObject, DataSet, GroupedPiecewise, ConstantIndexed, Grididx
 from opensbli.core.grid import GridVariable
@@ -21,6 +26,7 @@ class StoreSome(Central):
         self.fns = der_fns_to_store
         self.merged = merged
         self.group_stored = group_stored
+        self.factor = False
         return
 
     def generate_derivatives_to_store(self, coordinates, block):
@@ -172,11 +178,21 @@ class StoreSome(Central):
                 type_of_eq.Kernels += [ker]
 
         if convective_equations:
-            for i, eqn in enumerate(convective_equations):
-                if isinstance(eqn, OpenSBLIEq):
-                    # pprint(count_ops(convective_equations[i].rhs))
-                    convective_equations[i] = OpenSBLIEq(eqn.lhs, eqn.rhs.func(*(factor(term) for term in eqn.rhs.args)))
-                    # pprint(count_ops(convective_equations[i].rhs))
+            # Factor common constants
+            if self.factor:
+                print("StoreSome: Factoring convective equations.")
+                saving, total = 0, 0
+                for i, eqn in enumerate(convective_equations):
+                    lhs, rhs = eqn.lhs, eqn.rhs
+                    before = count_ops(rhs)
+                    total += before
+                    rhs = factor_terms(eqn.rhs, clear=True)
+                    after = count_ops(rhs)
+                    # print("Operations - Before: {} After: {} Saving: {}".format(before, after, ))
+                    if after < before:
+                        saving += before - after
+                        convective_equations[i] = OpenSBLIEq(lhs, rhs, evaluate=False)
+                print("Reduced number of operations by: {:.2f}%.".format(saving/total * 100))
             convective_kernel = Kernel(block, computation_name="Convective terms")
             convective_kernel.set_grid_range(block)
             for eq in convective_equations:
@@ -184,11 +200,21 @@ class StoreSome(Central):
             convective_kernel.update_block_datasets(block)
             type_of_eq.Kernels += [convective_kernel]
         if viscous_equations:
-            for i, eqn in enumerate(viscous_equations):
-                if isinstance(eqn, OpenSBLIEq):
-                    # pprint(count_ops(viscous_equations[i].rhs))
-                    viscous_equations[i] = OpenSBLIEq(eqn.lhs, eqn.rhs.func(*(factor(term) for term in eqn.rhs.args)))
-                    # pprint(count_ops(viscous_equations[i].rhs))
+            # Factor common constants
+            if self.factor:
+                print("StoreSome: Factoring viscous equations.")
+                saving, total = 0, 0 
+                for i, eqn in enumerate(viscous_equations):
+                    lhs, rhs = eqn.lhs, eqn.rhs
+                    before = count_ops(rhs)
+                    total += before
+                    rhs = factor_terms(eqn.rhs, clear=True)
+                    after = count_ops(rhs)
+                    # print("Operations - Before: {} After: {} Saving: {}".format(before, after, before - after))
+                    if after < before:
+                        saving += before - after
+                        viscous_equations[i] = OpenSBLIEq(lhs, rhs, evaluate=False)
+                print("Reduced number of operations by: {:.2f}%.".format(saving/total * 100))
             viscous_kernel = Kernel(block, computation_name="Viscous terms")
             viscous_kernel.set_grid_range(block)
             for eq in viscous_equations:
@@ -325,12 +351,12 @@ class StoreSome(Central):
                         gv = GridVariable('d2_%s_d%s' % (var_name, directions[der.args[1].direction]))
                     else:
                         raise ValueError("Only first and second derivatives are supported in StoreSome.")
+                    # Evaluate the expression and assign to the local grid variable
+                    grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
                     if str(gv) in names:
                         print("WARNING: Duplicated derivative {} in StoreSome due to using old Skew operator.".format(str(gv)))
                     # assert str(gv) not in names # no repeated grid variable names
                     names.append(str(gv))
-                    # Evaluate the expression and assign to the local grid variable
-                    grid_variable_evaluations += [OpenSBLIEq(gv, der._discretise_derivative(self, block, type_of_eq=type_of_eq))]
                     for no, c in enumerate(discrete_equations):
                         discrete_equations[no] = discrete_equations[no].subs(der, gv)
             # Check the each input derivative received a local grid variable

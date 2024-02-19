@@ -447,10 +447,10 @@ class Weno(Scheme, ShockCapturing):
         import numpy
         if normalised:
             theta = ConstantObject('sensor_theta')
-            theta.value = 0.5
+            theta.value = 1
             for L in range(self.k):
-                formula += Abs(gv('omega_%d' % L)/opt_weights[L] - 1.0)**theta
-            denominator = Abs(1.0/numpy.min(opt_weights) - 1.0)**theta + (self.k-1)
+                formula += Abs(gv('omega_%d' % L)/opt_weights[L] - 1.0)
+            denominator = Abs(1.0/numpy.min(opt_weights) - 1.0) + (self.k-1)
             sensor_equation = OpenSBLIEq(gv('rj'), formula/denominator)          
         else:
             for r in range(self.k):
