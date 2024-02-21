@@ -1215,7 +1215,7 @@ class HLLCCharacteristic(Characteristic):
             phi, M_local = GridVariable('phi'), GridVariable('M_local')
             pp_equations += [OpenSBLIEq(M_local, Max(Abs(uL/aL), Abs(uR/aR)))]
             Mach_limit = 0.1 # Ensure the correction only applies when uL is less than 10% of the local sound speed
-            pp_equations += [OpenSBLIEq(phi, sin(Min(1, M_local/Mach_limit)*Rational(1,2)*pi))]
+            pp_equations += [OpenSBLIEq(phi, sin(Min(1.0, M_local/Mach_limit)*Rational(1,2)*pi))]
             # Modify the wave-speeds
             pp_equations += [OpenSBLIEq(sL, sL*phi), OpenSBLIEq(sR, sR*phi)]
             # Build the conditional states
