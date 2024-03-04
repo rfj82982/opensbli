@@ -569,7 +569,7 @@ class OPSC(object):
         constant_declarations = ["%s %s;" % ('int', 'restart')]
         constant_declarations += ["%s %s;" % ('int', 'iter')]
         constant_declarations += ["%s %s;" % ('int', 'stage')]
-        constant_declarations += ["%s %s;" % ('double', 'tstart')]
+        constant_declarations += ["%s %s;" % (SimulationDataType.opsc(), 'tstart')]
 
         # Write the constants to a separate file instead
         for d in sorted(ConstantsToDeclare.constants, key=lambda x: str(x)):
