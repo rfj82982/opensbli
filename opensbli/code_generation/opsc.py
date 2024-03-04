@@ -408,7 +408,10 @@ class OPSC(object):
         tuple_list = ins + outs + inouts + idx_constants
         for key, val in (tuple_list):
             if str(key) == 'rkA' or str(key) == 'rkB' or str(key) == 'rkold' or str(key) == 'rknew': # RK coefficients in the kernel header
-                code += ['const double *%s' % key]
+                if hasattr(key, "datatype") and key.datatype:
+                    code += ['const %s *%s' % (key.datatype.opsc(), key)]
+                else:
+                    code += ['const %s *%s' % (SimulationDataType.opsc(), key)]
             elif str(key) == 'iter': # current iteration counter
                 code += ['const int *%s' % key]
             elif isinstance(key, ReductionVariable):
