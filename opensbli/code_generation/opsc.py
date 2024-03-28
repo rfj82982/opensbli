@@ -587,6 +587,8 @@ class OPSC(object):
         const_file.close()
         # Declare the simulation blocks
         out += ['#define OPS_%dD' % algorithm.block_descriptions[0].ndim]
+        if self.OPS_V2:
+            out += ['#define OPS_API 2']
         out += ['#include \"ops_seq.h\"']
         for b in algorithm.block_descriptions:
             out += ['#include \"%s_kernels.h\"' % b.block_name]
@@ -958,7 +960,7 @@ class OPSC(object):
             # Else clause
             out += [WriteString('else {')]
             out += self.initialize_dataset(dset, dtype)
-            out += [WriteString("}")]   
+            out += [WriteString("}")]
         # All other arrays
         else:
             # Externally provided grid file or restart file
