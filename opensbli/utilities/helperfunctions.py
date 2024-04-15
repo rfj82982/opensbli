@@ -7,7 +7,9 @@
 from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, DataObject
 from opensbli.code_generation.opsc import rc
 from sympy import pprint
-
+from opensbli.core.datatypes import SimulationDataType
+from opensbli.core.datatypes import FloatC, Double
+import re
 
 def get_min_max_halo_values(halos):
     halo_m = []
@@ -161,6 +163,12 @@ def substitute_simulation_parameters(constants, values, simulation_name='opensbl
         for const, value in substitutions.items():
             old_str = const + '=Input;'
             if old_str in s:
+                # Literal floats based on the precision set in the simulation options
+                if isinstance(SimulationDataType.dtype(), FloatC):
+                    # Find doubles in the user input string for the value to set to the constant
+                    floats = [x for x in re.findall(r"[-+]?(?:\d*\.*\d+)", value) if '.' in x]
+                    for input_float in floats:
+                        value = value.replace(input_float, input_float + 'f')
                 new_str = const + ' = %s' % value + ';'
                 s = s.replace(old_str, new_str)
         f.write(s)

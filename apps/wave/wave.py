@@ -77,7 +77,7 @@ block.discretise()
 # Algorithm for the block
 alg = TraditionalAlgorithmRK(block)
 SimulationDataType.set_datatype(Double)
-OPSC(alg, OPS_V2=False)
+OPSC(alg, OPS_V2=True)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='phi', every=100)
