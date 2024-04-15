@@ -29,6 +29,11 @@ class FloatC(DataType):
     def opsc():
         return "float"
 
+class Half(DataType):
+    @staticmethod
+    def opsc():
+        return "half"
+
 
 class UserDefined(DataType):
     """ User defined datatype this is either float or double depending on input"""
