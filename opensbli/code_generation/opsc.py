@@ -14,6 +14,7 @@ from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Const
 from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
+from opensbli.core.datatypes import FloatC, Double
 from sympy import Pow, Idx, pprint, count_ops
 import os
 import logging
@@ -65,6 +66,13 @@ class OPSCCodePrinter(C99CodePrinter):
             self.settings_opsc['rational'] = True
         C99CodePrinter.__init__(self, settings={'order':'none'})
 
+    def return_args(self, expr):
+        """ Retrieves the arguments of an input expression. Used for modifying the function call with custom code printers."""
+        args = map(ccode, expr.args)
+        args = [x for x in args]
+        result = ','.join(args)
+        return result
+
     def _print_ReductionVariable(self, expr):
         return '*%s' % str(expr)
 
@@ -75,7 +83,10 @@ class OPSCCodePrinter(C99CodePrinter):
         if self.settings_opsc.get('rational', True):
             expr = nsimplify(expr)
             p, q = int(expr.p), int(expr.q)
-            return '(%d.0/%d.0)' % (p, q)
+            if isinstance(SimulationDataType.dtype(), FloatC):
+                return '(%d.0f/%d.0f)' % (p, q)
+            else:
+                return '(%d.0/%d.0)' % (p, q)
         else:
             pass
             # print(expr)
@@ -86,25 +97,75 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def _print_Mod(self, expr):
         """ All modulus functions are expressed as fmod currently and no integer values."""
-        args = map(ccode, expr.args)
-        args = [x for x in args]
-        result = ','.join(args)
-        result = 'fmod(%s)' % result
+        result = 'fmod(%s)' % self.return_args(expr)
         return result
+
+    def _print_Float(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return str(float(expr)) + 'f'
+        else:
+            return super()._print_Float(expr)
+
+    def _print_sin(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'sinf(%s)' % self.return_args(expr)
+        else:
+            return 'sin(%s)' % self.return_args(expr)
+
+    def _print_cos(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'cosf(%s)' % self.return_args(expr)
+        else:
+            return 'cos(%s)' % self.return_args(expr)
+
+    def _print_tan(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'tanf(%s)' % self.return_args(expr)
+        else:
+            return 'tan(%s)' % self.return_args(expr)
+
+    def _print_sinh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'sinhf(%s)' % self.return_args(expr)
+        else:
+            return 'sinh(%s)' % self.return_args(expr)
+
+    def _print_cosh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'coshf(%s)' % self.return_args(expr)
+        else:
+            return 'cosh(%s)' % self.return_args(expr)
+
+    def _print_tanh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'tanhf(%s)' % self.return_args(expr)
+        else:
+            return 'tanh(%s)' % self.return_args(expr)
 
     def _print_GridVariable(self, expr):
         """Prints the grid variable"""
         return str(expr)
 
+
+    def _print_Abs(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'fabsf(%s)' % self.return_args(expr)
+        else:
+            return 'fabs(%s)' % self.return_args(expr)
+
     def _print_Max(self, expr):
         """MAXIMUM of the arguments, can handle any number of arguments:
         Max(a,b,c,d) is written as max(a, max(max(b,c),d))"""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            func_call = 'fmaxf(%s, %s)'
+        else:
+            func_call = 'fmax(%s, %s)'
 
         nargs = len(expr.args)
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            template = 'fmax(%s, %s)' % (args_code[-2], args_code[-1])
+            template = func_call % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
             args_code.append(template)
@@ -113,12 +174,16 @@ class OPSCCodePrinter(C99CodePrinter):
     def _print_Min(self, expr):
         """MINIUM of the arguments, can handle any number of arguments:
         Min(a,b,c,d) is written as min(a, min(min(b,c),d))"""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            func_call = 'fminf(%s, %s)'
+        else:
+            func_call = 'fmin(%s, %s)'
 
         nargs = len(expr.args)
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            template = 'fmin(%s, %s)' % (args_code[-2], args_code[-1])
+            template = func_call % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
             args_code.append(template)
@@ -150,15 +215,24 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def _print_Pow(self, expr):
         """ Replace pow function calls with direct multiplication."""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            sqrt, pow_func, one = 'sqrtf(', 'powf(', '1.0f'
+        else:
+            sqrt, pow_func, one = 'sqrt(', 'pow(', '1.0'
         PREC = precedence(expr)
         if expr.exp in range(2, 7):
             return '(' + '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp)) + ')'
         elif expr.exp in range(-6, 0):
-            return '1.0/(' + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
+            return '%s/(' % one + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
         elif expr.exp == Rational(3,2):
-            return '*'.join([self.parenthesize(expr.base, PREC)] + ['sqrt(' + self.parenthesize(expr.base, PREC) + ')'])
+            return '*'.join([self.parenthesize(expr.base, PREC)] + [sqrt + self.parenthesize(expr.base, PREC) + ')'])
+        elif expr.exp == Rational(1,2):
+            return '*'.join([sqrt + self.parenthesize(expr.base, PREC) + ')'])
         else:
-            return super()._print_Pow(expr)
+            if isinstance(SimulationDataType.dtype(), FloatC):
+                return '*'.join([pow_func + self.parenthesize(expr.base, PREC) + ', ' + str(expr.exp) + ')'])
+            else:
+                return super()._print_Pow(expr)
 
     def _print_Equality(self, expr):
         from opensbli.equation_types.opensbliequations import OpenSBLIEquation
