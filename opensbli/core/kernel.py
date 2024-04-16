@@ -324,7 +324,10 @@ class Kernel(object):
                 if i.reduction_type != 'OPS_INC': # summation reduction variables are not an input
                     code += ['ops_arg_gbl(&%s_out, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
             elif isinstance(i, DataSetBase):
-                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
+                if hasattr(i, "dtype") and i.dtype:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], i.dtype.opsc(), self.opsc_access['ins'])]
+                else:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
             elif isinstance(i, Globalvariable):
                 code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (i, 1, i.datatype.opsc(), self.opsc_access['ins'])]
             # elif isinstance(i, ConstantIndexed):
@@ -336,7 +339,10 @@ class Kernel(object):
             if isinstance(o, ReductionVariable):
                 code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (o, 1, sim_dtype, o.reduction_type)]
             elif isinstance(o, DataSetBase):
-                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]
+                if hasattr(o, "dtype") and o.dtype:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], o.dtype.opsc(), self.opsc_access['outs'])]
+                else:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]
             elif isinstance(o, Globalvariable):
                 code += ["ops_arg_gbl(&%s, %d, \"%s\", %s)" % (o, 1, o.datatype.opsc(), self.opsc_access['outs'])]
             else:
@@ -344,7 +350,10 @@ class Kernel(object):
         # Step 3: Input & Output quantities
         for io in sorted(inouts, key=lambda x: str(x)):
             # Only DataSets are Read/Write
-            code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], sim_dtype, self.opsc_access['inouts'])]
+            if hasattr(io, "dtype") and io.dtype:
+                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], io.dtype.opsc(), self.opsc_access['inouts'])]
+            else:
+                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], sim_dtype, self.opsc_access['inouts'])]
 
         # Add indexed constants (e.g. rkA, rkB)
         if self.IndexedConstants:

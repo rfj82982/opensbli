@@ -545,8 +545,8 @@ class OPSC(object):
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
             else:
                 # if any of the list has the datatype then use the data type
-                if hasattr(key, "datatype") and key.datatype:
-                    code += [self.ops_headers[val] % (key.datatype.opsc(), key)]
+                if hasattr(key, "dtype") and key.dtype:
+                    code += [self.ops_headers[val] % (key.dtype.opsc(), key)]
                 else:
                     code += [self.ops_headers[val] % (SimulationDataType.opsc(), key)]
         code = ', '.join(code)
