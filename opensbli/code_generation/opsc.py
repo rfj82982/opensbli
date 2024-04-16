@@ -446,9 +446,11 @@ class OPSC(object):
             # Different preset strategies
             # Time advance arrays (rho, rhou, rhov, rhow, rhoE)
             if strategy == 'q_vector':
-                for d in algorithm.time_advance_arrays:
-                    d.dtype = modified_precision
-                    store_dsets.append(d)
+                lhs = [x.base for x in algorithm.time_advance_arrays]
+                for d in simulation_dsets:
+                    if d in lhs:
+                        d.dtype = modified_precision
+                        store_dsets.append(d)
                 arrays = store_dsets
             # Work arrays used for temporary derivative calculations (StoreSome, and others)
             elif strategy == 'wk_arrays':
