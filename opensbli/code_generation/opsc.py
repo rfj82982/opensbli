@@ -414,7 +414,8 @@ class OPSC(object):
         else:
             self.monitoring_output_file = False
         # Process any mixed precision customisations
-        self.modify_dataset_precision(algorithm, mixed_precision_config)
+        if mixed_precision_config is not None:
+            self.modify_dataset_precision(algorithm, mixed_precision_config)
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
