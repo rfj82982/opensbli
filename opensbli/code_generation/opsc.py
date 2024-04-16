@@ -386,7 +386,7 @@ def indent_code(code_lines):
 
 
 class OPSC(object):
-    def __init__(self, algorithm, operation_count=False, OPS_diagnostics=1, OPS_V2=True):
+    def __init__(self, algorithm, operation_count=False, OPS_diagnostics=1, OPS_V2=True, mixed_precision_config=None):
         """ Generating an OPSC code from the algorithm class.
         :arg object algorithm: An OpenSBLI algorithm class.
         :arg bool operation_count: If True, prints the number of arithmetic operations per kernel.
@@ -413,6 +413,8 @@ class OPSC(object):
                 self.monitoring_output_file = False
         else:
             self.monitoring_output_file = False
+        # Process any mixed precision customisations
+        self.modify_dataset_precision(algorithm, mixed_precision_config)
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
@@ -424,6 +426,51 @@ class OPSC(object):
         f.write('\n'.join(code))
         f.close()
         print("Successfully generated the OPS C code.")
+        return
+
+
+    def modify_dataset_precision(self, algorithm, config):
+        """ Apply mixed precision options - change precision of certain quantities relative to the global simulation precision."""
+        simulation_dsets = []
+        self.mixed_precision_config = config
+        # Get all the datasets defined in the simulation
+        for d in algorithm.definitions_and_declarations.components:
+            if isinstance(d, DataSetBase):
+                simulation_dsets.append(d)
+        # Process the different input strategies to perform the precision changes
+        for strategy, inputs in config.items():
+            # Get the inputs
+            store_dsets = []
+            arrays, modified_precision = [x.base for x in flatten(inputs[0])], inputs[1]
+            # Different preset strategies
+            # Time advance arrays (rho, rhou, rhov, rhow, rhoE)
+            if strategy == 'q_vector':
+                for d in algorithm.time_advance_arrays:
+                    d.dtype = modified_precision
+                    store_dsets.append(d)
+                arrays = store_dsets
+            # Work arrays used for temporary derivative calculations (StoreSome, and others)
+            elif strategy == 'wk_arrays':
+                for d in simulation_dsets:
+                    if 'wk' in str(d):
+                        store_dsets.append(d)
+                        d.dtype = modified_precision
+                arrays = store_dsets
+            # Residual arrays used for time-advancement
+            elif strategy == 'residuals':
+                for d in simulation_dsets:
+                    if 'Residual' in str(d):
+                        store_dsets.append(d)
+                        d.dtype = modified_precision
+                    arrays = store_dsets
+            # Custom input, user specified arrays
+            else:
+                for d in simulation_dsets:
+                    if d in arrays:
+                        store_dsets.append(d)
+                        d.dtype = modified_precision
+            store_dsets = sorted(store_dsets, key=lambda x: str(x))
+            print("Performed mixed precision on: {} - Modified precision of: {} from {} to {}.".format(strategy, store_dsets, SimulationDataType.dtype().opsc(), modified_precision.opsc()))
         return
 
     def wrap_long_lines(self, code_lines):
@@ -701,7 +748,7 @@ class OPSC(object):
         output += [WriteString("#include \"defdec_data_set.h\"")]
         # Sort the declarations alphabetically before writing out
         store_stencils, store_dsets, store_reductions = [], [], []
-        for d in algorithm.defnitionsdeclarations.components:
+        for d in algorithm.definitions_and_declarations.components:
             if isinstance(d, DataSetBase):
                 store_dsets.append(d)
             elif isinstance(d, StencilObject):

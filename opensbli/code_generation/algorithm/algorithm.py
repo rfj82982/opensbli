@@ -367,7 +367,7 @@ class TraditionalAlgorithmRK(object):
         self.prg = MainPrg()
         self.add_block_names(blocks)
         defdecs = self.get_definitions_declarations(blocks)
-        self.defnitionsdeclarations = defdecs
+        self.definitions_and_declarations = defdecs
         self.generate_solution(blocks)
         return
 
