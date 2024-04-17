@@ -11,7 +11,7 @@ from opensbli.code_generation.latex import LatexWriter
 from opensbli.core.opensbliobjects import Constant, DataSetBase
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts, AfterSimulationEnds, InTheSimulation
 import copy
-
+from opensbli.core.datatypes import SimulationDataType
 
 class Loop(object):
     """ Base object representing loops in an algorithm
@@ -336,7 +336,7 @@ class TraditionalAlgorithmRK(object):
     which gives the user control to perform modifications for extra functionality such as
     adding post processing."""
 
-    def __init__(self, blocks, simulation_monitor=None, dtype=None):
+    def __init__(self, blocks, simulation_monitor=None):
         from opensbli.core.block import SimulationBlock as SB
         self.block_descriptions = []
         self.ntimers = 0
@@ -354,15 +354,8 @@ class TraditionalAlgorithmRK(object):
         else:
             self.MultiBlock = True
             raise NotImplementedError("")
-        if dtype:
-            self.dtype = dtype
-        else:
-            # TODO V2 import Double datatype
-            self.dtype = "double"
-
-        # for name in blocks[0].block_kernel_names:
-        #     print(name)
-        # # exit()
+        self.blocks = blocks
+        self.datatype = SimulationDataType.dtype()
         self.check_temporal_scheme(blocks)
         self.prg = MainPrg()
         self.add_block_names(blocks)

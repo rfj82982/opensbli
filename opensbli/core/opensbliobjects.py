@@ -7,7 +7,7 @@ from sympy.tensor.indexed import IndexException
 from sympy.core.cache import cacheit
 from opensbli.core.datatypes import SimulationDataType
 from sympy.core import Tuple
-from opensbli.core.datatypes import Int
+from opensbli.core.datatypes import Int, Half, FloatC, Double
 
 
 _projectname = "opensbli"
@@ -441,6 +441,7 @@ class DataSetBase(IndexedBase):
         if shape is None:
             raise ValueError("Dataset base requires shape of the block")
         ret = super(DataSetBase, cls).__new__(cls, sym, shape, **kw_args)
+        ret._datatype = SimulationDataType
         ret.blocknumber = blocknumber
         ret._args = tuple(list(ret._args) + [Idx(blocknumber)])
         return ret
@@ -486,6 +487,16 @@ class DataSetBase(IndexedBase):
         This is provided so that if in future staggered grid arrangement can be implemented."""
         return [0 for i in range(len(self.shape))]
 
+    @property
+    def datatype(self):
+        """Numeric data type of the dataset array.
+
+        :returns: Numerical datatype (see :class:`.SimulationDataType`)"""
+        return self._datatype
+
+    @datatype.setter
+    def datatype(self, dtype):
+        self._datatype = dtype
 
 class DataSet(Indexed):
     """ It is the Data set of a DatasetBase which is defined on a block.
@@ -527,6 +538,17 @@ class DataSet(Indexed):
         """ Returns the relative location of the dataset, as used in discretisation
         :rtype: list """
         return [i for i in self.indices if not isinstance(i, Idx)]
+
+    @property
+    def datatype(self):
+        """Numeric data type of the dataset array.
+
+        :returns: Numerical datatype (see :class:`.SimulationDataType`)"""
+        return self._datatype
+
+    @datatype.setter
+    def datatype(self, dtype):
+        self._datatype = dtype
 
 
 class GridIndex(Indexed):

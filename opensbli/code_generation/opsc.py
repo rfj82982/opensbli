@@ -402,7 +402,6 @@ class OPSC(object):
         self.operation_count = operation_count
         self.OPS_diagnostics = OPS_diagnostics
         self.MultiBlock = False
-        self.dtype = algorithm.dtype
         self.nblocks = len(algorithm.block_descriptions)
         self.const_fname = 'constants.h'
         # Check if the simulation monitoring should be written to an output log file
@@ -414,8 +413,9 @@ class OPSC(object):
         else:
             self.monitoring_output_file = False
         # Process any mixed precision customisations
-        if mixed_precision_config is not None:
-            self.modify_dataset_precision(algorithm, mixed_precision_config)
+        self.mixed_precision_config = mixed_precision_config
+        if self.mixed_precision_config is not None:
+            self.modify_dataset_precision(algorithm)
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
@@ -429,17 +429,21 @@ class OPSC(object):
         print("Successfully generated the OPS C code.")
         return
 
-
-    def modify_dataset_precision(self, algorithm, config):
+    def modify_dataset_precision(self, algorithm):
         """ Apply mixed precision options - change precision of certain quantities relative to the global simulation precision."""
         simulation_dsets = []
-        self.mixed_precision_config = config
         # Get all the datasets defined in the simulation
         for d in algorithm.definitions_and_declarations.components:
             if isinstance(d, DataSetBase):
                 simulation_dsets.append(d)
+        # Add any missing ones
+        for b in algorithm.blocks:
+            for k, v, in b.block_datasets.items():
+                simulation_dsets.append(v)
+        # Remove duplicates
+        simulation_dsets = list(set(simulation_dsets))
         # Process the different input strategies to perform the precision changes
-        for strategy, inputs in config.items():
+        for strategy, inputs in self.mixed_precision_config.items():
             # Get the inputs
             store_dsets = []
             arrays, modified_precision = [x.base for x in flatten(inputs[0])], inputs[1]
@@ -449,7 +453,7 @@ class OPSC(object):
                 lhs = [x.base for x in algorithm.time_advance_arrays]
                 for d in simulation_dsets:
                     if d in lhs:
-                        d.dtype = modified_precision
+                        d.datatype = modified_precision
                         store_dsets.append(d)
                 arrays = store_dsets
             # Work arrays used for temporary derivative calculations (StoreSome, and others)
@@ -457,23 +461,27 @@ class OPSC(object):
                 for d in simulation_dsets:
                     if 'wk' in str(d):
                         store_dsets.append(d)
-                        d.dtype = modified_precision
+                        d.datatype = modified_precision
                 arrays = store_dsets
             # Residual arrays used for time-advancement
             elif strategy == 'residuals':
                 for d in simulation_dsets:
                     if 'Residual' in str(d):
                         store_dsets.append(d)
-                        d.dtype = modified_precision
+                        d.datatype = modified_precision
                     arrays = store_dsets
             # Custom input, user specified arrays
             else:
                 for d in simulation_dsets:
                     if d in arrays:
                         store_dsets.append(d)
-                        d.dtype = modified_precision
+                        # print("Before:", d.datatype.opsc())
+                        d.datatype = modified_precision
+                        # print("After:", d.datatype.opsc())
             store_dsets = sorted(store_dsets, key=lambda x: str(x))
             print("Performed mixed precision on: {} - Modified precision of: {} from {} to {}.".format(strategy, store_dsets, SimulationDataType.dtype().opsc(), modified_precision.opsc()))
+            # For preset values (non-custom) - update the list of arrays that had their precision modified
+            self.mixed_precision_config[strategy] = (store_dsets, modified_precision)
         return
 
     def wrap_long_lines(self, code_lines):
@@ -526,7 +534,6 @@ class OPSC(object):
 
     def kernel_header(self, tuple_list, idx_constants):
         code = []
-        # Fix the ordering
         ins, outs, inouts = [x for x in tuple_list if x[1] == 'input'], [x for x in tuple_list if x[1] == 'output'], [x for x in tuple_list if x[1] == 'inout']
         ins, outs, inouts = sorted(ins, key=lambda x: str(x[0])), sorted(outs, key=lambda x: str(x[0])), sorted(inouts, key=lambda x: str(x[0]))
         tuple_list = ins + outs + inouts + idx_constants
@@ -546,11 +553,17 @@ class OPSC(object):
                 else:
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
             else:
-                # if any of the list has the datatype then use the data type
-                if hasattr(key, "dtype") and key.dtype:
-                    code += [self.ops_headers[val] % (key.dtype.opsc(), key)]
+                # Argument is a DataSet
+                # Re-apply mixed precision if needed - some DataSets revert back to the simulation datatype - why?
+                if hasattr(key, "datatype") and key.datatype:
+                    if self.mixed_precision_config is not None:
+                        for k, v in self.mixed_precision_config.items():
+                            to_modify = [str(x) for x in flatten(v[0])]
+                            if str(key) in to_modify:
+                                key.datatype = v[1]
+                    code += [self.ops_headers[val] % (key.datatype.opsc(), key)]
                 else:
-                    code += [self.ops_headers[val] % (SimulationDataType.opsc(), key)]
+                    raise ValueError("Dataset: {} is missing its datatype.".format(key))
         code = ', '.join(code)
         return code
 
@@ -828,7 +841,7 @@ class OPSC(object):
 
     def ops_stencils_declare(self, s):
         out = []
-        dtype = s.dtype.opsc()
+        dtype = s.datatype.opsc()
         name = s.name + 'temp'
         sorted_stencil = s.sort_stencil_indices()
         out = [self.declare_inline_array(dtype, name, [st for st in flatten(sorted_stencil) if not isinstance(st, Idx)])]
@@ -1054,8 +1067,8 @@ class OPSC(object):
         for b in algorithm.block_descriptions:
             coordinates_to_restart += [str(x) for x in b.coordinate_arrays_to_restart]
         # Set the datatype of the array to declare
-        if dset.dtype:
-            dtype = dset.dtype
+        if dset.datatype:
+            dtype = dset.datatype
         else:
             dtype = SimulationDataType.dtype()
         # Create the code segment

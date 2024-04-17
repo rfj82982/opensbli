@@ -10,7 +10,7 @@ from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, ConstantObje
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.grid import Grididx
 from opensbli.core.datatypes import SimulationDataType
-from opensbli.utilities.helperfunctions import get_min_max_halo_values, dataset_attributes
+from opensbli.utilities.helperfunctions import get_min_max_halo_values
 from opensbli.core.datatypes import Int
 import copy
 
@@ -46,9 +46,6 @@ class ConstantsToDeclare(object):
         ConstantsToDeclare.constants = regular + rational
         return
 
-
-
-
 def copy_block_attributes(block, otherclass):
     """ Move this to block."""
     otherclass.block_number = block.blocknumber
@@ -56,13 +53,23 @@ def copy_block_attributes(block, otherclass):
     otherclass.block_name = block.blockname
     return
 
+def dataset_attributes(dset):
+    """ Add missing attributes to datasets if needed."""
+    dset.block_number = None
+    dset.read_from_hdf5 = False
+    # dset.datatype = None
+    dset.size = None
+    dset.halo_ranges = None
+    dset.block_name = None
+    return dset
+
 
 class StencilObject(object):
     def __init__(self, name, stencil, ndim):
         self.name = name
         self.stencil = stencil
         self.ndim = ndim
-        self.dtype = Int()
+        self.datatype = Int()
         return
 
     def sort_stencil_indices(self):
@@ -324,8 +331,8 @@ class Kernel(object):
                 if i.reduction_type != 'OPS_INC': # summation reduction variables are not an input
                     code += ['ops_arg_gbl(&%s_out, %d, \"%s\", %s)' % (i, 1, sim_dtype, 'OPS_READ')]
             elif isinstance(i, DataSetBase):
-                if hasattr(i, "dtype") and i.dtype:
-                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], i.dtype.opsc(), self.opsc_access['ins'])]
+                if hasattr(i, "datatype") and i.datatype:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], i.datatype.opsc(), self.opsc_access['ins'])]
                 else:
                     code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (i, 1, self.stencil_names[i], sim_dtype, self.opsc_access['ins'])]
             elif isinstance(i, Globalvariable):
@@ -339,8 +346,8 @@ class Kernel(object):
             if isinstance(o, ReductionVariable):
                 code += ['ops_arg_reduce(%s, %d, \"%s\", %s)' % (o, 1, sim_dtype, o.reduction_type)]
             elif isinstance(o, DataSetBase):
-                if hasattr(o, "dtype") and o.dtype:
-                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], o.dtype.opsc(), self.opsc_access['outs'])]
+                if hasattr(o, "datatype") and o.datatype:
+                    code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], o.datatype.opsc(), self.opsc_access['outs'])]
                 else:
                     code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (o, 1, self.stencil_names[o], sim_dtype, self.opsc_access['outs'])]
             elif isinstance(o, Globalvariable):
@@ -350,8 +357,8 @@ class Kernel(object):
         # Step 3: Input & Output quantities
         for io in sorted(inouts, key=lambda x: str(x)):
             # Only DataSets are Read/Write
-            if hasattr(io, "dtype") and io.dtype:
-                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], io.dtype.opsc(), self.opsc_access['inouts'])]
+            if hasattr(io, "datatype") and io.datatype:
+                code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], io.datatype.opsc(), self.opsc_access['inouts'])]
             else:
                 code += ['ops_arg_dat(%s, %d, %s, \"%s\", %s)' % (io, 1, self.stencil_names[io], sim_dtype, self.opsc_access['inouts'])]
 
