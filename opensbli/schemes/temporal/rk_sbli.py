@@ -100,7 +100,8 @@ class RungeKutta(Scheme):
             old_data_sets = cls.create_old_data_sets(td_fns, block)
             new_data_sets = [eq.time_advance_array for eq in td_fns]
             zipped = zip(old_data_sets, new_data_sets)
-
+            cls.var_solved = new_data_sets
+            cls.temp_RK_arrays = old_data_sets
             # create a kernel for the save equations
             kernel = cls.create_start_computations(zipped, block)
             # Add Kernel to the Solution

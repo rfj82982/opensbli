@@ -455,21 +455,30 @@ class OPSC(object):
                     if d in lhs:
                         d.datatype = modified_precision
                         store_dsets.append(d)
-                arrays = store_dsets
             # Work arrays used for temporary derivative calculations (StoreSome, and others)
             elif strategy == 'wk_arrays':
                 for d in simulation_dsets:
                     if 'wk' in str(d):
                         store_dsets.append(d)
                         d.datatype = modified_precision
-                arrays = store_dsets
             # Residual arrays used for time-advancement
             elif strategy == 'residuals':
                 for d in simulation_dsets:
                     if 'Residual' in str(d):
                         store_dsets.append(d)
                         d.datatype = modified_precision
-                    arrays = store_dsets
+            # Intermediate arrays used for time-stepping, filters
+            elif strategy == 'RK_arrays':
+                RK_arrays = []
+                for b in flatten(algorithm.blocks):
+                    for label, sc in b.discretisation_schemes.items():
+                        if sc.schemetype == 'Temporal':
+                            RK_arrays.append(sc.temp_RK_arrays)
+                RK_arrays = [x.base for x in flatten(RK_arrays)]
+                for d in simulation_dsets:
+                        if d in RK_arrays:
+                            store_dsets.append(d)
+                            d.datatype = modified_precision
             # Custom input, user specified arrays
             else:
                 for d in simulation_dsets:
