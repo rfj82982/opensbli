@@ -107,9 +107,10 @@ viscosity = "Eq(mu, (T**0.7))"
 enthalpy = "Eq(H, (rhoE + p) / rho)"
 speed_of_sound = "Eq(a, (gama*p/rho)**0.5)"
 Force = "Eq(phi, tanh(aCF*DataObject('x1')))"
+internal_energy = "Eq(e, p / (rho*(gama-1)))"
 # Expand the constituent relations and them to the constituent relations class
 constituent = ConstituentRelations()  # Instantiate constituent relations object
-for input_eqn in [velocity, pressure, temperature, enthalpy, viscosity, speed_of_sound, Force]:
+for input_eqn in [velocity, pressure, temperature, enthalpy, viscosity, speed_of_sound, Force, internal_energy]:
     eqns = einstein_eq.expand(input_eqn, ndim, coordinate_symbol, [], constants)
     constituent.add_equations(eqns)
 
@@ -254,7 +255,7 @@ if not weno and not teno:
         WF = TVDFilter(block, airfoil=False)
         block.set_equations(WF.equation_classes)
     else:
-        WF = WENOFilter(block, order=5, formulation='Z', flux_type='LLF', airfoil=False, metrics=metriceq, optimize=True)
+        WF = WENOFilter(block, order=7, formulation='Z', flux_type='LLF', airfoil=False, metrics=metriceq, optimize=True)
         block.set_equations(WF.equation_classes)
 # Additional filtering if needed
 if explicit_filters:
@@ -285,19 +286,46 @@ block.set_equations(stat_equation_classes)
 # STEP 4 add io for the block
 kwargs = {'iotype': "Write"}
 output_arrays = simulation_eq.time_advance_arrays + [x, y, z, DataObject('D11')]
-output_hdf5 = iohdf5(arrays=output_arrays, **kwargs)
+output_hdf5 = iohdf5(arrays=output_arrays, save_every=5000, **kwargs)
 block.setio([output_hdf5])
 try:
     block.setio([stats_hdf5])
 except:
     pass
 
+# Add 2D I/O slicing option
+grid_slice_hdf5_side = iohdf5_slices(blocknumber=0, **{'iotype': "Init"})
+# x-y side view coordinates
+coords = [([DataObject('x0'), DataObject('x1')], 2, 'block0np2/2')]
+grid_slice_hdf5_side.add_slices(coords)
+# Q vector slices written out in time
+slices_hdf5_side = iohdf5_slices(save_every=500, blocknumber=0, **{'iotype': "Write"})
+# x-y side view
+if not weno and not teno and not TVD:
+    slice_arrays = [DataObject('%s' % i) for i in ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']] + [DataObject('WENO_filter')]
+else:
+    slice_arrays = [DataObject('%s' % i) for i in ['rho', 'rhou0', 'rhou1', 'rhou2', 'rhoE']]
+slices = [(slice_arrays, 2, 'block0np2/2')]
+slices_hdf5_side.add_slices(slices)
+grid_slice_hdf5_surfaces = iohdf5_slices(blocknumber=1, **{'iotype': "Init"})
+# Surface coordinates
+coords = [([DataObject('x0'), DataObject('x2')], 1, 20)]
+coords += [([DataObject('x0'), DataObject('x2')], 1, 'block0np1 - 20')]
+grid_slice_hdf5_surfaces.add_slices(coords)
+# Q vector slices written out in time
+slices_hdf5_surfaces = iohdf5_slices(save_every=500, blocknumber=0, **{'iotype': "Write"})
+# Wall normal planes 
+slices = [(slice_arrays, 1, 20)]
+slices += [(slice_arrays, 1, 'block0np1 - 20')]
+slices_hdf5_surfaces.add_slices(slices)
+block.setio([grid_slice_hdf5_side, slices_hdf5_side, slices_hdf5_surfaces])
 
 # Perform the symbolic discretisation of the equations
 block.discretise()
 
 # Apply a periodic BC for WENO filter: # Note -> has to be done after block.discretise()
-WF.update_periodic_boundary(block, halos=[-4,4])
+if not teno and not weno and not TVD:
+    WF.update_periodic_boundary(block, halos=[-4,4])
 
 #Add some full [-5,5] halo swaps over the periodic directions only when the filter is called
 if explicit_filters:
@@ -329,7 +357,7 @@ arrays += ['T']
 probe_locations += [(0, 1, '(block0np2-1)/2')]
 SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100)
 # create an algorithm from the numerical solution
-alg = TraditionalAlgorithmRK(block, simulation_monitor=SM)
+alg = TraditionalAlgorithmRK(block)#, simulation_monitor=SM)
 
 # Set the simulation data type: if not set "Double" is default
 SimulationDataType.set_datatype(Double)
