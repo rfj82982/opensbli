@@ -156,6 +156,7 @@ class RungeKuttaLS(Scheme):
             temp_data_sets = cls.create_temp_data_sets(td_fns, block)
             new_data_sets = [eq.time_advance_array for eq in td_fns]
             cls.var_solved = new_data_sets
+            cls.temp_RK_arrays = temp_data_sets
             # Create the stage and solution updates
             residuals = [eq.residual for eq in flatten(type_of_eq.equations)]
             zipped = zip(temp_data_sets, new_data_sets, residuals)

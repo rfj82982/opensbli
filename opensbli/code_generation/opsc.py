@@ -14,6 +14,7 @@ from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Const
 from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
+from opensbli.core.datatypes import FloatC, Double
 from sympy import Pow, Idx, pprint, count_ops
 import os
 import logging
@@ -65,6 +66,13 @@ class OPSCCodePrinter(C99CodePrinter):
             self.settings_opsc['rational'] = True
         C99CodePrinter.__init__(self, settings={'order':'none'})
 
+    def return_args(self, expr):
+        """ Retrieves the arguments of an input expression. Used for modifying the function call with custom code printers."""
+        args = map(ccode, expr.args)
+        args = [x for x in args]
+        result = ','.join(args)
+        return result
+
     def _print_ReductionVariable(self, expr):
         return '*%s' % str(expr)
 
@@ -75,7 +83,10 @@ class OPSCCodePrinter(C99CodePrinter):
         if self.settings_opsc.get('rational', True):
             expr = nsimplify(expr)
             p, q = int(expr.p), int(expr.q)
-            return '(%d.0/%d.0)' % (p, q)
+            if isinstance(SimulationDataType.dtype(), FloatC):
+                return '(%d.0f/%d.0f)' % (p, q)
+            else:
+                return '(%d.0/%d.0)' % (p, q)
         else:
             pass
             # print(expr)
@@ -86,25 +97,75 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def _print_Mod(self, expr):
         """ All modulus functions are expressed as fmod currently and no integer values."""
-        args = map(ccode, expr.args)
-        args = [x for x in args]
-        result = ','.join(args)
-        result = 'fmod(%s)' % result
+        result = 'fmod(%s)' % self.return_args(expr)
         return result
+
+    def _print_Float(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return str(float(expr)) + 'f'
+        else:
+            return super()._print_Float(expr)
+
+    def _print_sin(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'sinf(%s)' % self.return_args(expr)
+        else:
+            return 'sin(%s)' % self.return_args(expr)
+
+    def _print_cos(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'cosf(%s)' % self.return_args(expr)
+        else:
+            return 'cos(%s)' % self.return_args(expr)
+
+    def _print_tan(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'tanf(%s)' % self.return_args(expr)
+        else:
+            return 'tan(%s)' % self.return_args(expr)
+
+    def _print_sinh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'sinhf(%s)' % self.return_args(expr)
+        else:
+            return 'sinh(%s)' % self.return_args(expr)
+
+    def _print_cosh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'coshf(%s)' % self.return_args(expr)
+        else:
+            return 'cosh(%s)' % self.return_args(expr)
+
+    def _print_tanh(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'tanhf(%s)' % self.return_args(expr)
+        else:
+            return 'tanh(%s)' % self.return_args(expr)
 
     def _print_GridVariable(self, expr):
         """Prints the grid variable"""
         return str(expr)
 
+
+    def _print_Abs(self, expr):
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return 'fabsf(%s)' % self.return_args(expr)
+        else:
+            return 'fabs(%s)' % self.return_args(expr)
+
     def _print_Max(self, expr):
         """MAXIMUM of the arguments, can handle any number of arguments:
         Max(a,b,c,d) is written as max(a, max(max(b,c),d))"""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            func_call = 'fmaxf(%s, %s)'
+        else:
+            func_call = 'fmax(%s, %s)'
 
         nargs = len(expr.args)
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            template = 'fmax(%s, %s)' % (args_code[-2], args_code[-1])
+            template = func_call % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
             args_code.append(template)
@@ -113,12 +174,16 @@ class OPSCCodePrinter(C99CodePrinter):
     def _print_Min(self, expr):
         """MINIUM of the arguments, can handle any number of arguments:
         Min(a,b,c,d) is written as min(a, min(min(b,c),d))"""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            func_call = 'fminf(%s, %s)'
+        else:
+            func_call = 'fmin(%s, %s)'
 
         nargs = len(expr.args)
         args_code = [self._print(a) for a in expr.args]
         for i in range(nargs-1):
             # Max of the last 2 arguments in the array
-            template = 'fmin(%s, %s)' % (args_code[-2], args_code[-1])
+            template = func_call % (args_code[-2], args_code[-1])
             # Remove the last 2 entries and append the max of the last 2
             del args_code[-2:]
             args_code.append(template)
@@ -150,15 +215,24 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def _print_Pow(self, expr):
         """ Replace pow function calls with direct multiplication."""
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            sqrt, pow_func, one = 'sqrtf(', 'powf(', '1.0f'
+        else:
+            sqrt, pow_func, one = 'sqrt(', 'pow(', '1.0'
         PREC = precedence(expr)
         if expr.exp in range(2, 7):
             return '(' + '*'.join([self.parenthesize(expr.base, PREC)] * int(expr.exp)) + ')'
         elif expr.exp in range(-6, 0):
-            return '1.0/(' + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
+            return '%s/(' % one + ('*'.join([self.parenthesize(expr.base, PREC)] * int(-expr.exp))) + ')'
         elif expr.exp == Rational(3,2):
-            return '*'.join([self.parenthesize(expr.base, PREC)] + ['sqrt(' + self.parenthesize(expr.base, PREC) + ')'])
+            return '*'.join([self.parenthesize(expr.base, PREC)] + [sqrt + self.parenthesize(expr.base, PREC) + ')'])
+        elif expr.exp == Rational(1,2):
+            return '*'.join([sqrt + self.parenthesize(expr.base, PREC) + ')'])
         else:
-            return super()._print_Pow(expr)
+            if isinstance(SimulationDataType.dtype(), FloatC):
+                return '*'.join([pow_func + self.parenthesize(expr.base, PREC) + ', ' + str(expr.exp) + ')'])
+            else:
+                return super()._print_Pow(expr)
 
     def _print_Equality(self, expr):
         from opensbli.equation_types.opensbliequations import OpenSBLIEquation
@@ -312,7 +386,7 @@ def indent_code(code_lines):
 
 
 class OPSC(object):
-    def __init__(self, algorithm, operation_count=False, OPS_diagnostics=1, OPS_V2=True):
+    def __init__(self, algorithm, operation_count=False, OPS_diagnostics=1, OPS_V2=True, mixed_precision_config=None):
         """ Generating an OPSC code from the algorithm class.
         :arg object algorithm: An OpenSBLI algorithm class.
         :arg bool operation_count: If True, prints the number of arithmetic operations per kernel.
@@ -328,7 +402,6 @@ class OPSC(object):
         self.operation_count = operation_count
         self.OPS_diagnostics = OPS_diagnostics
         self.MultiBlock = False
-        self.dtype = algorithm.dtype
         self.nblocks = len(algorithm.block_descriptions)
         self.const_fname = 'constants.h'
         # Check if the simulation monitoring should be written to an output log file
@@ -339,6 +412,10 @@ class OPSC(object):
                 self.monitoring_output_file = False
         else:
             self.monitoring_output_file = False
+        # Process any mixed precision customisations
+        self.mixed_precision_config = mixed_precision_config
+        if self.mixed_precision_config is not None:
+            self.modify_dataset_precision(algorithm)
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
@@ -350,6 +427,70 @@ class OPSC(object):
         f.write('\n'.join(code))
         f.close()
         print("Successfully generated the OPS C code.")
+        return
+
+    def modify_dataset_precision(self, algorithm):
+        """ Apply mixed precision options - change precision of certain quantities relative to the global simulation precision."""
+        simulation_dsets = []
+        # Get all the datasets defined in the simulation
+        for d in algorithm.definitions_and_declarations.components:
+            if isinstance(d, DataSetBase):
+                simulation_dsets.append(d)
+        # Add any missing ones
+        for b in algorithm.blocks:
+            for k, v, in b.block_datasets.items():
+                simulation_dsets.append(v)
+        # Remove duplicates
+        simulation_dsets = list(set(simulation_dsets))
+        # Process the different input strategies to perform the precision changes
+        for strategy, inputs in self.mixed_precision_config.items():
+            # Get the inputs
+            store_dsets = []
+            arrays, modified_precision = [x.base for x in flatten(inputs[0])], inputs[1]
+            # Different preset strategies
+            # Time advance arrays (rho, rhou, rhov, rhow, rhoE)
+            if strategy == 'q_vector':
+                lhs = [x.base for x in algorithm.time_advance_arrays]
+                for d in simulation_dsets:
+                    if d in lhs:
+                        d.datatype = modified_precision
+                        store_dsets.append(d)
+            # Work arrays used for temporary derivative calculations (StoreSome, and others)
+            elif strategy == 'wk_arrays':
+                for d in simulation_dsets:
+                    if 'wk' in str(d):
+                        store_dsets.append(d)
+                        d.datatype = modified_precision
+            # Residual arrays used for time-advancement
+            elif strategy == 'residuals':
+                for d in simulation_dsets:
+                    if 'Residual' in str(d):
+                        store_dsets.append(d)
+                        d.datatype = modified_precision
+            # Intermediate arrays used for time-stepping, filters
+            elif strategy == 'RK_arrays':
+                RK_arrays = []
+                for b in flatten(algorithm.blocks):
+                    for label, sc in b.discretisation_schemes.items():
+                        if sc.schemetype == 'Temporal':
+                            RK_arrays.append(sc.temp_RK_arrays)
+                RK_arrays = [x.base for x in flatten(RK_arrays)]
+                for d in simulation_dsets:
+                        if d in RK_arrays:
+                            store_dsets.append(d)
+                            d.datatype = modified_precision
+            # Custom input, user specified arrays
+            else:
+                for d in simulation_dsets:
+                    if d in arrays:
+                        store_dsets.append(d)
+                        # print("Before:", d.datatype.opsc())
+                        d.datatype = modified_precision
+                        # print("After:", d.datatype.opsc())
+            store_dsets = sorted(store_dsets, key=lambda x: str(x))
+            print("Performed mixed precision on: {} - Modified precision of: {} from {} to {}.".format(strategy, store_dsets, SimulationDataType.dtype().opsc(), modified_precision.opsc()))
+            # For preset values (non-custom) - update the list of arrays that had their precision modified
+            self.mixed_precision_config[strategy] = (store_dsets, modified_precision)
         return
 
     def wrap_long_lines(self, code_lines):
@@ -402,7 +543,6 @@ class OPSC(object):
 
     def kernel_header(self, tuple_list, idx_constants):
         code = []
-        # Fix the ordering
         ins, outs, inouts = [x for x in tuple_list if x[1] == 'input'], [x for x in tuple_list if x[1] == 'output'], [x for x in tuple_list if x[1] == 'inout']
         ins, outs, inouts = sorted(ins, key=lambda x: str(x[0])), sorted(outs, key=lambda x: str(x[0])), sorted(inouts, key=lambda x: str(x[0]))
         tuple_list = ins + outs + inouts + idx_constants
@@ -422,11 +562,17 @@ class OPSC(object):
                 else:
                     code += ['%s *%s' % (key.datatype.opsc(), key)]
             else:
-                # if any of the list has the datatype then use the data type
+                # Argument is a DataSet
+                # Re-apply mixed precision if needed - some DataSets revert back to the simulation datatype - why?
                 if hasattr(key, "datatype") and key.datatype:
+                    if self.mixed_precision_config is not None:
+                        for k, v in self.mixed_precision_config.items():
+                            to_modify = [str(x) for x in flatten(v[0])]
+                            if str(key) in to_modify:
+                                key.datatype = v[1]
                     code += [self.ops_headers[val] % (key.datatype.opsc(), key)]
                 else:
-                    code += [self.ops_headers[val] % (SimulationDataType.opsc(), key)]
+                    raise ValueError("Dataset: {} is missing its datatype.".format(key))
         code = ', '.join(code)
         return code
 
@@ -627,7 +773,7 @@ class OPSC(object):
         output += [WriteString("#include \"defdec_data_set.h\"")]
         # Sort the declarations alphabetically before writing out
         store_stencils, store_dsets, store_reductions = [], [], []
-        for d in algorithm.defnitionsdeclarations.components:
+        for d in algorithm.definitions_and_declarations.components:
             if isinstance(d, DataSetBase):
                 store_dsets.append(d)
             elif isinstance(d, StencilObject):
@@ -704,7 +850,7 @@ class OPSC(object):
 
     def ops_stencils_declare(self, s):
         out = []
-        dtype = s.dtype.opsc()
+        dtype = s.datatype.opsc()
         name = s.name + 'temp'
         sorted_stencil = s.sort_stencil_indices()
         out = [self.declare_inline_array(dtype, name, [st for st in flatten(sorted_stencil) if not isinstance(st, Idx)])]
@@ -930,8 +1076,8 @@ class OPSC(object):
         for b in algorithm.block_descriptions:
             coordinates_to_restart += [str(x) for x in b.coordinate_arrays_to_restart]
         # Set the datatype of the array to declare
-        if dset.dtype:
-            dtype = dset.dtype
+        if dset.datatype:
+            dtype = dset.datatype
         else:
             dtype = SimulationDataType.dtype()
         # Create the code segment

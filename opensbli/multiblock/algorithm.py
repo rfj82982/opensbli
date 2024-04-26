@@ -9,6 +9,7 @@ from opensbli.core.datatypes import Int
 from opensbli.code_generation.algorithm.common import BeforeSimulationStarts, AfterSimulationEnds, InTheSimulation
 from opensbli.code_generation.algorithm import MainPrg, Condition, Condition, MainPrg, Loop, DoLoop, Timers, DefDecs
 import copy
+from opensbli.core.datatypes import SimulationDataType
 
 
 class BlockDescription(object):
@@ -22,7 +23,7 @@ class TraditionalAlgorithmRKMB(object):
     is to be performed like, doing some post processing for every time loop or
     sub rk loop. """
 
-    def __init__(self, blocks, simulation_monitor=None, dtype=None):
+    def __init__(self, blocks, simulation_monitor=None):
         self.block_descriptions = []
         self.ntimers = 0
         self.MultiBlock = True
@@ -34,15 +35,12 @@ class TraditionalAlgorithmRKMB(object):
             for eqn_class in b.list_of_equation_classes:
                 if isinstance(eqn_class, SimulationEquations):
                     self.time_advance_arrays += flatten(eqn_class.time_advance_arrays)
-        if dtype:
-            self.dtype = dtype
-        else:
-            self.dtype = "double"
+        self.datatype = SimulationDataType.dtype()
         self.check_temporal_scheme(blocks)
         self.prg = MainPrg()
         self.add_block_names(blocks)
         defdecs = self.get_definitions_declarations(blocks)
-        self.defnitionsdeclarations = defdecs
+        self.definitions_and_declarations = defdecs
         self.spatial_solution(blocks)
         return
 

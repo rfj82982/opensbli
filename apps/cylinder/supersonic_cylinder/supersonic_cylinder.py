@@ -212,12 +212,12 @@ for no, eq in enumerate(block.list_of_equation_classes):
 
 # Monitor the residuals
 # Simulation monitor
-arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'u1_B0']
-probe_locations = ['residual', 'residual', 'residual', 'residual', (0, 100)]
-SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
+# arrays = ['L2_R0', 'L2_R1', 'L2_R2', 'L2_R3', 'u1_B0']
+# probe_locations = ['residual', 'residual', 'residual', 'residual', (0, 100)]
+# SM = SimulationMonitor(arrays, probe_locations, block, print_frequency=100, output_file='residuals.log')
 
 # Create algorithm
-alg = TraditionalAlgorithmRK(block, SM)
+alg = TraditionalAlgorithmRK(block)
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
 SimulationDataType.set_datatype(Double)
 # Write the code for the algorithm
