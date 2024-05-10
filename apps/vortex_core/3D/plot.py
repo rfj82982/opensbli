@@ -138,59 +138,74 @@ for index, fname in enumerate(fnames):
         # Get the constants
         dt, Minf, Re, gama = ff['dt'][0], ff['Minf'][0], ff['Re'][0], ff['gama'][0]
         Nx, Ny, Nz = ff['block0np0'][0], ff['block0np1'][0], ff['block0np2'][0]
+        y_0, y_1, Lx = ff['y_0'][0], ff['y_1'][0], ff['Lx'][0]
         stretch = ff['stretch'][0]
+        # Shear-layer parameters.
+
         # Mixing layer configuration
         print("Processing case with parameters: dt: {:.4f}, Re: {:.4f}, Minf: {:.4f}".format(dt, Re, Minf))
         print("Grid info: (Nx, Ny, Nz) = ({:d}, {:d}, {:d}), Stretching factor: {:.4f}".format(Nx, Ny, Nz, stretch))
 
-    # Get simulation time
-    simulation_times.append(ff['simulation_time'][0])
-    print("Processing file: {} at time {:.3f}".format(fname, simulation_times[-1]))
+        # Get the grid spacing within the shear-layer
+        zloc = int(Nz/2.0)
+        dx = read_dataset(ff,'x0_B0')[zloc,int(Ny/2),1] - read_dataset(ff,'x0_B0')[zloc,int(Ny/2),0]
+        dy = 1
+        dz = read_dataset(ff,'x2_B0')[1,int(Ny/2),0] - read_dataset(ff,'x2_B0')[0,int(Ny/2),0]
+        print("Grid resolution at centreline: delta_x: {:3f}, delta_y: {:3f}, delta_z: {:3f}".format(dx, dy, dz))
+        print("Shear-layer parameters: y_0: {:.4f}, y_1: {:.3f}, L_x: {:.1f}, y_0/L_x: {:.4f}".format(y_0, y_1, Lx, y_0/Lx))
+        # Load a plane of the grid for plotting
+        x0 = read_dataset(ff,'x0_B0')[zloc,:,:]
+        x1 = read_dataset(ff,'x1_B0')[zloc,:,:]
+        x2 = read_dataset(ff,'x2_B0')[zloc,:,:]
+        # exit()
 
-    zloc = int(Nz/2.0)
+    # Check if file already processed
+    file_check = output_dir + 'vortex_core_omega_z_%d.png' % index
+    if not os.path.isfile(file_check):
+        # Get simulation time
+        simulation_times.append(ff['simulation_time'][0])
+        print("Processing file: {} at time {:.3f}".format(fname, simulation_times[-1]))
 
-    x0 = read_dataset(ff,'x0_B0')[zloc,:,:]
-    x1 = read_dataset(ff,'x1_B0')[zloc,:,:]
-    x2 = read_dataset(ff,'x2_B0')[zloc,:,:]
-    rho = read_dataset(ff, 'rho_B0')[zloc,:,:]
-    rhou = read_dataset(ff, 'rhou0_B0')[zloc,:,:]
-    rhov = read_dataset(ff, 'rhou1_B0')[zloc,:,:]
-    rhow = read_dataset(ff, 'rhou2_B0')[zloc,:,:]
-    rhoE = read_dataset(ff, 'rhoE_B0')[zloc,:,:]
-    # Post process quantities
-    wx = read_dataset(ff, 'wx_B0')[zloc,:,:]
-    wy = read_dataset(ff, 'wy_B0')[zloc,:,:]
-    wz = read_dataset(ff, 'wz_B0')[zloc,:,:]
-    divV = read_dataset(ff, 'divV_B0')[zloc,:,:]
-    dudy = read_dataset(ff, 'dudy_B0')[zloc,:,:]
 
-    print("Grid resolution at centreline: delta_x: {:3f}, delta_y: {:3f}, delta_z: {:3f}")
+        rho = read_dataset(ff, 'rho_B0')[zloc,:,:]
+        rhou = read_dataset(ff, 'rhou0_B0')[zloc,:,:]
+        rhov = read_dataset(ff, 'rhou1_B0')[zloc,:,:]
+        rhow = read_dataset(ff, 'rhou2_B0')[zloc,:,:]
+        rhoE = read_dataset(ff, 'rhoE_B0')[zloc,:,:]
+        # Post process quantities
+        # wx = read_dataset(ff, 'wx_B0')[zloc,:,:]
+        # wy = read_dataset(ff, 'wy_B0')[zloc,:,:]
+        wz = read_dataset(ff, 'wz_B0')[zloc,:,:]
+        # divV = read_dataset(ff, 'divV_B0')[zloc,:,:]
+        dudy = read_dataset(ff, 'dudy_B0')[zloc,:,:]
 
-    print('Calculating variables')
-    u = ne.evaluate('rhou/rho')
-    v = ne.evaluate('rhov/rho')
-    w = ne.evaluate('rhow/rho')
-    e = ne.evaluate('rhoE/rho-0.5*(u**2+v**2+w**2)')
-    p = ne.evaluate('(gama-1.0)*rho*e')
-    T = ne.evaluate('e*Minf**2*gama*(gama-1.0)')
-    #f = ne.evaluate('rhof/rho')
-    a = np.sqrt(gama*p/rho)
-    Mach = np.sqrt(u**2 + v**2 + w**2) / a
-    mu = T**0.7
+        print('Calculating variables')
+        u = ne.evaluate('rhou/rho')
+        v = ne.evaluate('rhov/rho')
+        w = ne.evaluate('rhow/rho')
+        e = ne.evaluate('rhoE/rho-0.5*(u**2+v**2+w**2)')
+        p = ne.evaluate('(gama-1.0)*rho*e')
+        # T = ne.evaluate('e*Minf**2*gama*(gama-1.0)')
+        #f = ne.evaluate('rhof/rho')
+        a = np.sqrt(gama*p/rho)
+        Mach = np.sqrt(u**2 + v**2 + w**2) / a
+        # mu = T**0.7
 
-    variables = ['rho', 'Mach', 'T', 'p', 'u', 'v', 'w', 'omega_x', 'omega_y', 'omega_z', 'divV', 'dudy', 'enstrophy']
-    #variables = ['u', 'v', 'omega_z']
-    nvariables = len(variables)
-    raw_data = [rho, Mach, T, p, u, v, w, wx, wy, wz, divV, dudy, mu*(wx**2+wy**2+wz**2)]
-    #raw_data = [u, v, wz]
-    # raw_data = [dset[zloc,:,:] for dset in raw_data]
-    index = [index for _ in range(len(variables))]
-    packed_data = zip(index, raw_data, variables)
-    # Plot images in parallel
-    with multiprocessing.Pool(processes=nvariables) as pool:
-        pool.map(plot_instant, packed_data)
-    # # Wait for all tasks to finish processing
-    barrier = multiprocessing.Barrier(1) # wait one second
+        variables = ['Mach', 'p', 'u', 'v', 'w', 'omega_z', 'dudy']
+        nvariables = len(variables)
+        # raw_data = [rho, Mach, T, p, u, v, w, wx, wy, wz, divV, dudy, mu*(wx**2+wy**2+wz**2)]
+        raw_data = [Mach, p, u, v, w, wz, dudy]
+        #raw_data = [u, v, wz]
+        # raw_data = [dset[zloc,:,:] for dset in raw_data]
+        index = [index for _ in range(len(variables))]
+        packed_data = zip(index, raw_data, variables)
+        # Plot images in parallel
+        with multiprocessing.Pool(processes=nvariables) as pool:
+            pool.map(plot_instant, packed_data)
+        # # Wait for all tasks to finish processing
+        barrier = multiprocessing.Barrier(1) # wait one second
+    else:
+        print("Skipping file: {}".format(index))
 
 
 make_GIFs = True
