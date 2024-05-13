@@ -979,14 +979,10 @@ class OPSC(object):
         out += [WriteString('// User defined constant values')]
         # Give priority to lengths used to calculate grid spacings
         lengths = ['Lx', 'Ly', 'Lz', 'Lx0', 'Lx1', 'Lx2']
-        for c in init_constants:
+        for c in sorted(init_constants, key=lambda x: str(x))[::-1]:
             if str(c) in lengths:
-                if isinstance(c, ConstantObject):
-                    if not isinstance(c.value, str):
-                        out += [WriteString("%s = %s;" % (str(c), ccode(c.value, settings={'rational': True})))]
-                    else:
-                        out += [WriteString("%s=%s;" % (str(c), c.value))]
                 init_constants.remove(c)
+                init_constants.insert(0, c)
         # Write the rest of the constants
         for c in init_constants:
             if isinstance(c, ConstantObject):
