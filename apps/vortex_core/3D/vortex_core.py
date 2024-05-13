@@ -7,24 +7,24 @@ from sympy import sin, cos, sinh, tanh, exp, pi
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 simulation_parameters = {
-'Re'        :   '1000.0',   
+'Re'        :   '500000.0',   
 'gama'      :   '1.4',   
 'Minf'      :   '0.5',   
 'Pr'        :   '0.72',   
 'Sc'        :   '1.0',   
-'dt'        :   '0.005',   
+'dt'        :   '0.0025',   
 'niter'     :   '200000',   
-'block0np0'     :   '800',   
+'block0np0'     :   '1500',   
 'block0np1'     :   '521',   
-'block0np2'     :   '25',
+'block0np2'     :   '125',
 'Lx'        : '10.0',
 'Ly'        :   '80.0',
-'Lz'        : '0.5',
+'Lz'        : '1.0',
 'Delta0block0'      :   'Lx/(block0np0)',   
 'Delta1block0'      :   'Ly/(block0np1-1)',   
 'Delta2block0'      :   'Lz/(block0np2)',
-'stretch'       :   '3.0',
-'y_0'        : '0.01',
+'stretch'       :   '4.0',
+'y_0'        : '0.1',
 'y_1'        : '0.1',
 'U_0'        : '1.0',
 'RN_amplitude' : '1.0',
@@ -92,7 +92,7 @@ rho, u, v, w, p, T = symbols('rho, u, v, w, p, T', **{'cls': GridVariable})
 
 initial_equations += [Eq(u, U_0*tanh((y - y_1*cos(2*pi*(x+Lx/4)/Lx))/y_0))]
 # initial_equations += [Eq(vpert,0.1*cos((2.0*pi*(x+Lx/4))/Lx)*exp(-y**2.0/10.0))]
-conditions = Piecewise((RN_amplitude*DataObject('random_nums'), Abs(y) < y_0), (0, True))
+conditions = Piecewise((RN_amplitude*DataObject('random_nums'), Abs(y) < y_0/2), (0, True))
 initial_equations += [Eq(v, conditions)]
 initial_equations += [Eq(w, 0.0)]
 # initial_equations += [Eq(T,1.0+Minf**2*(gama-1.0)/2.0*(1.0-u**2))]
@@ -131,14 +131,14 @@ schemes[rk.name] = rk
 # Create boundaries, one for each side per dimension, so in total 6 BC's for 3D'
 boundaries = []
 direction=0
-boundaries += [PeriodicBC(direction, side=0, halos=[-5,5])]
-boundaries += [PeriodicBC(direction, side=1, halos=[-5,5])]
+boundaries += [PeriodicBC(direction, side=0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, side=1, halos=[-2,2])]
 direction=1
 boundaries += [SymmetryBC(direction, 0)]
 boundaries += [SymmetryBC(direction, 1)]
 direction=2
-boundaries += [PeriodicBC(direction, side=0, halos=[-5,5])]
-boundaries += [PeriodicBC(direction, side=1, halos=[-5,5])]
+boundaries += [PeriodicBC(direction, side=0, halos=[-2,2])]
+boundaries += [PeriodicBC(direction, side=1, halos=[-2,2])]
 block.set_block_boundaries(boundaries)
 
 # Post processing
@@ -191,17 +191,18 @@ else:
 rho_m, KE, eps_D, eps_S = ReductionSum('rhom'), ReductionSum('KE'), ReductionSum('dilatation_dissipation'), ReductionSum('enstrophy_dissipation')
 rho_eqn = OpenSBLIEq(rho_m, rho_m + DataObject('rho'))
 ke_eqn = OpenSBLIEq(KE, KE + 0.5*DataObject('rho')*sum([u**2 for u in vel]))
-dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*mu*divV**2)
-enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + mu*(wx**2 + wy**2 + wz**2))
-post.add_equations([dudy, vorticity_thickness, dil, vortz, rho_eqn, ke_eqn, dilatation_eqn, enstrophy_eqn])
+# dilatation_eqn = OpenSBLIEq(eps_D, eps_D + Rational(4,3)*mu*divV**2)
+# enstrophy_eqn = OpenSBLIEq(eps_S, eps_S + mu*(wx**2 + wy**2 + wz**2))
+# post.add_equations([dudy, vorticity_thickness, dil, vortz, rho_eqn, ke_eqn, dilatation_eqn, enstrophy_eqn])
+post.add_equations([dudy, vorticity_thickness, vortz, rho_eqn, ke_eqn])
 
 # Dispersion relation preserving filters
 DRP = ExplicitFilter(block, [0,1,2], width=11, filter_type='DRP', frequency=25000000, optimized=True, sigma=0.1, airfoil=False, multi_block=None)
 
 # set the IO class to write out arrays
 kwargs = {'iotype': "Write"}
-h5 = iohdf5(save_every=1000, **kwargs)
-h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z] + [DataObject('dudy'), DataObject('wx'), DataObject('wy'), DataObject('wz'), DataObject('divV')])
+h5 = iohdf5(save_every=500, **kwargs)
+h5.add_arrays(simulation_eq.time_advance_arrays + [x, y, z] + [DataObject('dudy'), DataObject('wz')])
 block.setio(copy.deepcopy(h5))
 
 # Read in random numbers
@@ -235,8 +236,8 @@ for no, eq in enumerate(block.list_of_equation_classes):
         if eq.full_swap:
             eq.Kernels += filter_swaps
 
-arrays = ['KE', 'dilatation_dissipation', 'enstrophy_dissipation', 'rhom']
-probe_locations = [(None), (None), (None), (None)]
+arrays = ['KE', 'rhom']
+probe_locations = [(None), (None)]
 SM = SimulationMonitor(arrays, probe_locations, block, output_file='vortex_history.log', print_frequency=100)
 
 # create an algorithm from the discretised computations
