@@ -18,7 +18,7 @@ simulation_parameters = {
 'block0np1'     :   '521',   
 'block0np2'     :   '125',
 'Lx'        : '10.0',
-'Ly'        :   '80.0',
+'Ly'        :   '40.0',
 'Lz'        : '1.0',
 'Delta0block0'      :   'Lx/(block0np0)',   
 'Delta1block0'      :   'Ly/(block0np1-1)',   
@@ -165,23 +165,23 @@ vorticity_thickness = OpenSBLIEq(dudy_max, dudy_lhs)
 metriceq.apply_transformation(vorticity_thickness)
 
 # # # X vorticity
-vortx = der_matrix[2,1] - der_matrix[1,2]
-# vortx = metriceq.apply_transformation(vortx)
-vortx = Eq(wx, vortx)
-post.add_equations(vortx)
-# # Y vorticity
-vorty = der_matrix[0,2] - der_matrix[2,0]
-# vorty = metriceq.apply_transformation(vorty)
-vorty = Eq(wy, vorty)
-post.add_equations(vorty)
+# vortx = der_matrix[2,1] - der_matrix[1,2]
+# # vortx = metriceq.apply_transformation(vortx)
+# vortx = Eq(wx, vortx)
+# post.add_equations(vortx)
+# # # Y vorticity
+# vorty = der_matrix[0,2] - der_matrix[2,0]
+# # vorty = metriceq.apply_transformation(vorty)
+# vorty = Eq(wy, vorty)
+# post.add_equations(vorty)
 # # Z vorticity
 vortz = der_matrix[1,0] - der_matrix[0,1]
 vortz = metriceq.apply_transformation(vortz)
 vortz = Eq(wz, vortz)
 # # # Dilatation
-divV = symbols("divV", **{'cls':DataObject})
-dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
-dil = metriceq.apply_transformation(dil)
+# divV = symbols("divV", **{'cls':DataObject})
+# dil = Eq(divV, der_matrix[0,0] + der_matrix[1,1] + der_matrix[2,2])
+# dil = metriceq.apply_transformation(dil)
 
 # # Evaluate quantities required for dissipation measures
 if viscosity_relation == 'constant':
@@ -236,8 +236,8 @@ for no, eq in enumerate(block.list_of_equation_classes):
         if eq.full_swap:
             eq.Kernels += filter_swaps
 
-arrays = ['KE', 'rhom']
-probe_locations = [(None), (None)]
+arrays = ['KE', 'rhom', 'dudy_max']
+probe_locations = [(None), (None), (None)]
 SM = SimulationMonitor(arrays, probe_locations, block, output_file='vortex_history.log', print_frequency=100)
 
 # create an algorithm from the discretised computations

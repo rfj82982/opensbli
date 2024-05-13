@@ -977,6 +977,16 @@ class OPSC(object):
         self.restarted_constants = [x for x in constants if x.restart]
         init_constants = [c for c in constants if not c.restart]
         out += [WriteString('// User defined constant values')]
+        # Give priority to lengths used to calculate grid spacings
+        lengths = ['Lx', 'Ly', 'Lz', 'Lx0', 'Lx1', 'Lx2']
+        for c in init_constants:
+            if str(c) in lengths:
+                if isinstance(c, ConstantObject):
+                    if not isinstance(c.value, str):
+                        out += [WriteString("%s = %s;" % (str(c), ccode(c.value, settings={'rational': True})))]
+                    else:
+                        out += [WriteString("%s=%s;" % (str(c), c.value))]
+                init_constants.remove(c)
         # Write the rest of the constants
         for c in init_constants:
             if isinstance(c, ConstantObject):
