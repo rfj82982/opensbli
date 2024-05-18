@@ -2,16 +2,15 @@
 
 # Import all the functions from opensbli
 from opensbli import *
-from sympy import sin, cos, sinh, tanh, exp, pi
+from sympy import sin, cos, sinh, tanh, exp, pi, sech
 #import copy
 from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 
 simulation_parameters = {
-'Re'        :   '500000.0',   
+'Re'        :   '50000.0',   
 'gama'      :   '1.4',   
-'Minf'      :   '0.5',   
+'Minf'      :   '0.4',   
 'Pr'        :   '0.72',   
-'Sc'        :   '1.0',   
 'dt'        :   '0.0025',   
 'niter'     :   '200000',   
 'block0np0'     :   '1500',   
@@ -24,7 +23,7 @@ simulation_parameters = {
 'Delta1block0'      :   'Ly/(block0np1-1)',   
 'Delta2block0'      :   'Lz/(block0np2)',
 'stretch'       :   '4.0',
-'y_0'        : '0.1',
+'y_0'        : '0.2',
 'y_1'        : '0.1',
 'U_0'        : '1.0',
 'RN_amplitude' : '1.0',
@@ -84,14 +83,22 @@ nx, ny, nz, stretch = symbols('block0np0 block0np1 block0np2 stretch', **{'cls':
 Lx, Ly, Lz = symbols('Lx Ly Lz', **{'cls': ConstantObject})
 grid_equations= []
 # Stretched in y between slip conditions
-stretch_eqn=0.5*Ly*sinh(stretch*(j-(ny-1)/2)/((ny-1)/2))/sinh(stretch)
+stretch_eqn = 0.5*Ly*sinh(stretch*(j-(ny-1)/2)/((ny-1)/2))/sinh(stretch)
 grid_equations += [Eq(x, -Lx/2.0 + i*dx), Eq(y,stretch_eqn), Eq(z, -Lz/2.0 + k*dz)]
 
 initial_equations = []
 rho, u, v, w, p, T = symbols('rho, u, v, w, p, T', **{'cls': GridVariable})
-
-initial_equations += [Eq(u, U_0*tanh((y - y_1*cos(2*pi*(x+Lx/4)/Lx))/y_0))]
-# initial_equations += [Eq(vpert,0.1*cos((2.0*pi*(x+Lx/4))/Lx)*exp(-y**2.0/10.0))]
+k = 2*pi/Lx # before (2*pi*(x+Lx/4)/Lx) with cosine
+# initial_equations += [Eq(u, U_0*tanh((y - y_1*cos(2*pi*(x+Lx/4)/Lx))/y_0))]
+# initial_equations += [Eq(u, U_0*tanh((y - y_1*cos(k*(x+Lx/4))/exp(Abs(x)/0.5))/y_0))]
+# x_factor = (x+Lx/4)
+x_factor = x
+initial_equations += [Eq(u, U_0*tanh((y - y_1*(sin(k*x_factor) + (1/2)*sin(2*k*x_factor)))/y_0))]
+# initial_equations += [Eq(u, U_0*tanh((y - y_1*(sech(k*x_factor)**2))/y_0))]
+# initial_equations += [Eq(u, U_0*tanh((y - y_1*(1 - tanh(k*x_factor)**2))/y_0))]
+# temp = GridVariable('PW')
+# initial_equations += [Eq(temp, Piecewise((-y_1, And(x > 0, x < 0.5)), (y_1, And(x > -0.5, x < 0)), (0, True)))]
+# initial_equations += [Eq(u, U_0*tanh((y - temp)/y_0))]
 conditions = Piecewise((RN_amplitude*DataObject('random_nums'), Abs(y) < y_0/2), (0, True))
 initial_equations += [Eq(v, conditions)]
 initial_equations += [Eq(w, 0.0)]

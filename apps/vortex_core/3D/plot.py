@@ -30,8 +30,8 @@ def get_levels(data,nvar):
         vmax = 1.05
         cpal = 'jet'
     elif nvar == 'omega_z':
-        vmin = -abs_max
-        vmax = 0
+        vmin = -10
+        vmax = 10
         cpal = "jet_r"
     else:
         cpal = "RdBu_r"
@@ -149,10 +149,15 @@ for index, fname in enumerate(fnames):
         # Get the grid spacing within the shear-layer
         zloc = int(Nz/2.0)
         dx = read_dataset(ff,'x0_B0')[zloc,int(Ny/2),1] - read_dataset(ff,'x0_B0')[zloc,int(Ny/2),0]
-        dy = 1
+        dy = np.abs(read_dataset(ff,'x1_B0')[zloc,int(Ny/2),1] - read_dataset(ff,'x1_B0')[zloc,int(Ny/2)+1,1])
         dz = read_dataset(ff,'x2_B0')[1,int(Ny/2),0] - read_dataset(ff,'x2_B0')[0,int(Ny/2),0]
         print("Grid resolution at centreline: delta_x: {:3f}, delta_y: {:3f}, delta_z: {:3f}".format(dx, dy, dz))
         print("Shear-layer parameters: y_0: {:.4f}, y_1: {:.3f}, L_x: {:.1f}, y_0/L_x: {:.4f}".format(y_0, y_1, Lx, y_0/Lx))
+        edge_index = np.abs(read_dataset(ff,'x1_B0')[zloc,:,1] - 2.5).argmin()
+        print(edge_index)
+        dy_edge = np.abs(read_dataset(ff,'x1_B0')[zloc,edge_index+1,1] - read_dataset(ff,'x1_B0')[zloc,edge_index,1])
+        print(dy_edge)
+        #exit()
         # Load a plane of the grid for plotting
         x0 = read_dataset(ff,'x0_B0')[zloc,:,:]
         x1 = read_dataset(ff,'x1_B0')[zloc,:,:]
