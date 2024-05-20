@@ -102,7 +102,7 @@ store_sensor = True
 schemes = {}
 if weno:
     Avg = SimpleAverage([0, 1])
-    LF = LFWeno(order=7, formulation='Z', averaging=Avg, flux_type='LLF')
+    LF = LFWeno(order=5, formulation='Z', averaging=Avg, flux_type='LLF')
     #LF = HLLCWeno(order=5, formulation='Z', averaging=Avg, flux_type='HLLC-LM')
     # Add to schemes
     schemes[LF.name] = LF
@@ -196,8 +196,24 @@ if not weno and not teno:
 block.discretise()
 
 alg = TraditionalAlgorithmRK(block)
-SimulationDataType.set_datatype(Double)
-OPSC(alg)
+mixed_precision = False
+if mixed_precision:
+    SimulationDataType.set_datatype(FloatC)
+    # Define custom precision options
+    custom_arrays = [block.location_dataset(dset) for dset in ['rho', 'p']]
+    # Create the dictionary of mixed precision options
+    mixed_precision_config = {
+    'q_vector' : ([], Double),
+    'RK_arrays' : ([], Double),
+    # 'casting' : 'explicit',
+    # 'residuals' : ([], FloatC),
+    # 'wk_arrays' : ([], FloatC),
+    # 'custom'   : (custom_arrays, FloatC),
+    }
+    OPSC(alg, mixed_precision_config=mixed_precision_config)
+else:
+    SimulationDataType.set_datatype(Double)
+    OPSC(alg)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')

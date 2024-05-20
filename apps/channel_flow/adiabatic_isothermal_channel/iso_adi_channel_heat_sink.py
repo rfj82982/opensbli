@@ -37,7 +37,7 @@ constants = ["Re", "Pr", "gama", "Minf", "c_j"]
 coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
-NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
+NS = NS_Split('KEEP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic', energy_formulation='enthalpy', debug=False)
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 
 # Add channel forcing term and heat sink
@@ -56,7 +56,8 @@ velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
 viscosity = "Eq(mu, (T**0.7))"
-enthalpy = "Eq(H, (rhoE + p) / rho)"
+# enthalpy = "Eq(H, (rhoE + p) / rho)"
+internal_energy = "Eq(e, p / (rho*(gama-1)))"
 
 # Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
 einstein_eq = EinsteinEquation()
@@ -75,8 +76,11 @@ constituent.add_equations(eqns)
 # Expand viscosity add the expanded equations to the constituent relations
 eqns = einstein_eq.expand(viscosity, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
-# Expand enthalpy add the expanded equations to the constituent relations
-eqns = einstein_eq.expand(enthalpy, ndim, coordinate_symbol, [], constants)
+# # Expand enthalpy add the expanded equations to the constituent relations
+# eqns = einstein_eq.expand(enthalpy, ndim, coordinate_symbol, [], constants)
+# constituent.add_equations(eqns)
+# Expand internal_energy add the expanded equations to the constituent relations
+eqns = einstein_eq.expand(internal_energy, ndim, coordinate_symbol, [], constants)
 constituent.add_equations(eqns)
 
 # Write the expanded equations to a Latex file with a given name and titile

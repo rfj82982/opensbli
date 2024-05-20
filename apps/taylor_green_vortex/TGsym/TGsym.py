@@ -129,10 +129,11 @@ initial.add_equations(initial_equations)
 # Create a schemes dictionary to be used for discretisation
 schemes = {}
 # Central scheme for spatial discretisation and add to the schemes dictionary
-cent = Central(4)
+cent = StoreSome(4, 'u0 u1 u2 T')
+# cent = Central(4)
 schemes[cent.name] = cent
 # RungeKutta scheme for temporal discretisation and add to the schemes dictionary
-rk = RungeKutta(3)
+rk = RungeKuttaLS(3)
 schemes[rk.name] = rk
 
 boundaries = []
@@ -161,11 +162,25 @@ block.discretise()
 # create an algorithm from the discretised computations
 alg = TraditionalAlgorithmRK(block)
 
+mixed_precision = False
 # set the simulation data type, for more information on the datatypes see opensbli.core.datatypes
-SimulationDataType.set_datatype(Double)
+if mixed_precision:
+    SimulationDataType.set_datatype(FloatC)
+    # Define custom precision options
+    # custom_arrays = [block.location_dataset(dset) for dset in ['p']]
+    # Create the dictionary of mixed precision options
+    mixed_precision_config = {
+    'q_vector' : ([], Double),
+    'RK_arrays' : ([], Double),
+    # 'residuals' : ([], Half),
+    # 'wk_arrays' : ([], Double),
+    # 'custom'   : (custom_arrays, Double),
+    }
+    OPSC(alg, mixed_precision_config=mixed_precision_config)
+else:
+    SimulationDataType.set_datatype(Double)
+    OPSC(alg)
 
-# Write the code for the algorithm
-OPSC(alg)
 # Add the simulation constants to the OPS C code
 substitute_simulation_parameters(simulation_parameters.keys(), simulation_parameters.values())
 print_iteration_ops(NaN_check='rho')
