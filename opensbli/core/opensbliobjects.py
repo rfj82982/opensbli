@@ -519,6 +519,7 @@ class DataSet(Indexed):
             raise ValueError("Declare DatasetBase and instantiate a dataset")
         indices = base.check_index(indices)
         ret = Indexed.__new__(cls, base, *indices)
+        ret.cast_precision = False
         return ret
 
     def _sympystr(self, p):

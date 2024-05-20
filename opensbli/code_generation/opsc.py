@@ -10,12 +10,12 @@ from sympy.utilities.iterables import is_sequence
 from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
-from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable, DataObject
+from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable, DataObject, DataSet
 from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
 from opensbli.core.datatypes import FloatC, Double
-from sympy import Pow, Idx, pprint, count_ops
+from sympy import Pow, Idx, pprint, count_ops, Piecewise
 import os
 import logging
 from collections import OrderedDict
@@ -64,6 +64,14 @@ class OPSCCodePrinter(C99CodePrinter):
             self.settings_opsc = settings
         else:
             self.settings_opsc['rational'] = True
+        # Mixed precision settings
+        if 'arrays_to_cast' in settings.keys():
+            if len(settings['arrays_to_cast']) > 0:
+                self.cast_precision = True
+            else:
+                self.cast_precision = False
+        else:
+            self.cast_precision = False
         C99CodePrinter.__init__(self, settings={'order':'none'})
 
     def return_args(self, expr):
@@ -245,15 +253,28 @@ class OPSCCodePrinter(C99CodePrinter):
         """ Prints the OpenSBLI dataset in the OPS format with the access numbers provided.
         Access numbers are updated for each kernel, see writing kernel in the OPSC class. """
         base = expr.base
-        if self.dataset_accs_dictionary[base]:
-            indices = expr.get_grid_indices
-            if self.settings_opsc.get('OPS_V2', True):
-                out = "%s(%s)" % (self._print(base), ','.join([self._print(i) for i in indices]))
+        indices = expr.get_grid_indices
+        out = ""
+        # print(expr.__dict__)
+        if self.cast_precision: # Change precision on the RHS of the equation only for certain quantites
+            if hasattr(expr, "cast_precision") and not expr.cast_precision:
+                pass # No casting on left hand side of equations
+            elif hasattr(expr, "cast_precision") and expr.cast_precision: # Force the computation to be performed in lower precision on the RHS of the equations
+                if base in self.settings_opsc['arrays_to_cast']:
+                    # Change precision to that of the global simulation datatype
+                    out += "(%s)" % SimulationDataType.dtype().opsc()
             else:
-                out = "%s[%s(%s)]" % (self._print(base), self.dataset_accs_dictionary[base].name, ','.join([self._print(i) for i in indices]))
+                print("Quantity: {} does not have this attribute.".format(expr))
+
+        # Write the C code for this DataSet
+        if self.settings_opsc.get('OPS_V2', True):
+            out += "%s(%s)" % (self._print(base), ','.join([self._print(i) for i in indices]))
             return out
         else:
-            raise ValueError("Did not find the OPS Access for %s " % expr.base)
+            if self.dataset_accs_dictionary[base]:
+                out += "%s[%s(%s)]" % (self._print(base), self.dataset_accs_dictionary[base].name, ','.join([self._print(i) for i in indices]))
+            else:
+                raise ValueError("Did not find the OPS Access for DataSet %s " % expr.base)
 
 #MBCHANGE
     def _print_IndexedBase(self, expr):
@@ -414,8 +435,19 @@ class OPSC(object):
             self.monitoring_output_file = False
         # Process any mixed precision customisations
         self.mixed_precision_config = mixed_precision_config
+        self.arrays_to_cast = []
         if self.mixed_precision_config is not None:
+            if 'casting' in self.mixed_precision_config:
+                if self.mixed_precision_config['casting']:
+                    self.cast_precision = True
+                else:
+                    self.cast_precision = False
+                del self.mixed_precision_config['casting']
+            else:
+                self.cast_precision = False
             self.modify_dataset_precision(algorithm)
+        else:
+            self.cast_precision = False
         # First write the kernels, with this we will have the Rational constants to declare
         self.write_kernels(algorithm)
         def_decs = self.opsc_def_decs(algorithm)
@@ -442,55 +474,65 @@ class OPSC(object):
                 simulation_dsets.append(v)
         # Remove duplicates
         simulation_dsets = list(set(simulation_dsets))
-        # Process the different input strategies to perform the precision changes
-        for strategy, inputs in self.mixed_precision_config.items():
-            # Get the inputs
-            store_dsets = []
-            arrays, modified_precision = [x.base for x in flatten(inputs[0])], inputs[1]
-            # Different preset strategies
-            # Time advance arrays (rho, rhou, rhov, rhow, rhoE)
-            if strategy == 'q_vector':
-                lhs = [x.base for x in algorithm.time_advance_arrays]
-                for d in simulation_dsets:
-                    if d in lhs:
-                        d.datatype = modified_precision
-                        store_dsets.append(d)
-            # Work arrays used for temporary derivative calculations (StoreSome, and others)
-            elif strategy == 'wk_arrays':
-                for d in simulation_dsets:
-                    if 'wk' in str(d):
-                        store_dsets.append(d)
-                        d.datatype = modified_precision
-            # Residual arrays used for time-advancement
-            elif strategy == 'residuals':
-                for d in simulation_dsets:
-                    if 'Residual' in str(d):
-                        store_dsets.append(d)
-                        d.datatype = modified_precision
-            # Intermediate arrays used for time-stepping, filters
-            elif strategy == 'RK_arrays':
-                RK_arrays = []
-                for b in flatten(algorithm.blocks):
-                    for label, sc in b.discretisation_schemes.items():
-                        if sc.schemetype == 'Temporal':
-                            RK_arrays.append(sc.temp_RK_arrays)
-                RK_arrays = [x.base for x in flatten(RK_arrays)]
-                for d in simulation_dsets:
-                        if d in RK_arrays:
+        # Change casting behaviour - force the quantities to lower precision in all RHS calculations
+        if self.mixed_precision_config is not None:
+            # Process the different input strategies to perform the precision changes
+            for strategy, inputs in self.mixed_precision_config.items():
+                # Get the inputs
+                store_dsets = []
+                arrays, modified_precision = [x.base for x in flatten(inputs[0])], inputs[1]
+                # Different preset strategies
+                # Time advance arrays (rho, rhou, rhov, rhow, rhoE)
+                if strategy == 'q_vector':
+                    lhs = [x.base for x in algorithm.time_advance_arrays]
+                    for d in simulation_dsets:
+                        if d in lhs:
+                            d.datatype = modified_precision
+                            store_dsets.append(d)
+                # Work arrays used for temporary derivative calculations (StoreSome, and others)
+                elif strategy == 'wk_arrays':
+                    for d in simulation_dsets:
+                        if 'wk' in str(d):
                             store_dsets.append(d)
                             d.datatype = modified_precision
-            # Custom input, user specified arrays
-            else:
-                for d in simulation_dsets:
-                    if d in arrays:
-                        store_dsets.append(d)
-                        # print("Before:", d.datatype.opsc())
-                        d.datatype = modified_precision
-                        # print("After:", d.datatype.opsc())
-            store_dsets = sorted(store_dsets, key=lambda x: str(x))
-            print("Performed mixed precision on: {} - Modified precision of: {} from {} to {}.".format(strategy, store_dsets, SimulationDataType.dtype().opsc(), modified_precision.opsc()))
-            # For preset values (non-custom) - update the list of arrays that had their precision modified
-            self.mixed_precision_config[strategy] = (store_dsets, modified_precision)
+                # Residual arrays used for time-advancement
+                elif strategy == 'residuals':
+                    for d in simulation_dsets:
+                        if 'Residual' in str(d):
+                            store_dsets.append(d)
+                            d.datatype = modified_precision
+                # Intermediate arrays used for time-stepping, filters
+                elif strategy == 'RK_arrays':
+                    RK_arrays = []
+                    for b in flatten(algorithm.blocks):
+                        for label, sc in b.discretisation_schemes.items():
+                            if sc.schemetype == 'Temporal':
+                                RK_arrays.append(sc.temp_RK_arrays)
+                    RK_arrays = [x.base for x in flatten(RK_arrays)]
+                    for d in simulation_dsets:
+                            if d in RK_arrays:
+                                store_dsets.append(d)
+                                d.datatype = modified_precision
+                # Custom input, user specified arrays
+                elif strategy == 'custom':
+                    for d in simulation_dsets:
+                        if d in arrays:
+                            store_dsets.append(d)
+                            # print("Before:", d.datatype.opsc())
+                            d.datatype = modified_precision
+                            # print("After:", d.datatype.opsc())
+                else:
+                    raise ValueError("Unknown mixed precision preset: {}. Please choose from: q_vector, wk_arrays, residuals, RK_arrays, or custom.".format(strategy))
+                store_dsets = sorted(store_dsets, key=lambda x: str(x))
+                # Casting behaviour for the mixed-precision strategies
+                if self.cast_precision:
+                    self.arrays_to_cast += store_dsets
+                print("Performed mixed precision on: {} - Modified precision of: {} from {} to {}.".format(strategy, store_dsets, SimulationDataType.dtype().opsc(), modified_precision.opsc()))
+
+                # For preset values (non-custom) - update the list of arrays that had their precision modified
+                self.mixed_precision_config[strategy] = (store_dsets, modified_precision)
+        else: # No mixed precision
+            pass    
         return
 
     def wrap_long_lines(self, code_lines):
@@ -576,6 +618,16 @@ class OPSC(object):
         code = ', '.join(code)
         return code
 
+    def add_casting_switch(self, input_eqn):
+        RHS_args = input_eqn.rhs.args
+        for argument in RHS_args:
+            for dset in argument.atoms(DataSet):
+                if str(dset) in [str(x) for x in self.arrays_to_cast]:
+                    dset.cast_precision = True
+                else:
+                    dset.cast_precision = False
+        return input_eqn
+
     def kernel_computation_opsc(self, kernel):
         """ Function to write the out the contents of each computational kernel."""
         ins = kernel.rhs_datasetbases
@@ -615,6 +667,47 @@ class OPSC(object):
         gridvariables = set()
         out = []
         for eq in kernel.equations:
+            # ccode writer settings
+            settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast}
+            # Note which DataSets are used on the LHS of equations
+            if self.cast_precision:
+                if isinstance(eq, GroupedPiecewise):
+                    for i, (expr, condition) in enumerate(eq.args):
+                        # Process all grouped equations within this condition
+                        for single_eqn in expr:
+                            # Don't cast LHS
+                            LHS_of_equation = single_eqn.lhs
+                            if isinstance(LHS_of_equation, DataSet):
+                                single_eqn.lhs.cast_precision = False
+                            # Loop over all arguments of this equation
+                            single_eqn = self.add_casting_switch(single_eqn)
+                            # Make sure LHS is not cast
+                            # if not isinstance(LHS_of_equation, GridVariable):
+                            #     single_eqn.lhs.cast_precision = False
+                else: # Regular equations
+                    # Never cast precision of left-hand side assignments
+                    LHS_of_equation = eq.lhs
+                    if isinstance(eq.lhs, DataSet):
+                        eq.lhs.cast_precision = False
+                    # # Check for Piecewise conditions
+                    if isinstance(eq.rhs, Piecewise):
+                        eq.lhs.cast_precision = False
+                    else: # LHS of the equation is a DataSet
+                        # # Quantity does not appear on the right hand side of the equation also
+                        # if LHS_of_equation not in eq.rhs.atoms(DataSet):
+                        #     eq.lhs.cast_precision = True
+                        if isinstance(eq.rhs, Piecewise):
+                            for pairs in eq.rhs.args:
+                                pw_expr = pairs[0]
+                                for dset in pw_expr.atoms(DataSet):
+                                    dset.cast_precision = True
+                            eq.lhs.cast_precision = False
+                        else: # Regular equation
+                            eq = self.add_casting_switch(eq)
+                            # Make sure LHS is not cast
+                            if not isinstance(LHS_of_equation, GridVariable):
+                                eq.lhs.cast_precision = False
+
             # Get the grid variables
             gridvariables = gridvariables.union(eq.atoms(GridVariable))
             # Get the reduction variables and detect whether they are input or output
@@ -625,32 +718,32 @@ class OPSC(object):
                     rv.usage = 'rhs'
 
             if isinstance(eq, Equality):
-                out += [ccode(eq, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                out += [ccode(eq, settings=settings) + ';\n']
             elif isinstance(eq, GroupedPiecewise):
                 for i, (expr, condition) in enumerate(eq.args):
                     if i == 0:
-                        out += ['if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'boolean_equality' : True}) + '{\n']
+                        out += ['if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                                out += [ccode(eqn, settings=settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                            out += [ccode(expr, settings=settings) + ';\n']
                         out += ['}\n']
                     elif condition != True:
-                        out += ['else if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'boolean_equality' : True}) + '{\n']
+                        out += ['else if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                                out += [ccode(eqn, settings=settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                            out += [ccode(expr, settings=settings) + ';\n']
                         out += ['}\n']
                     else:
                         out += ['else{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                                out += [ccode(eqn, settings=settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings={'kernel': True, 'OPS_V2': self.OPS_V2}) + ';\n']
+                            out += [ccode(expr, settings=settings) + ';\n']
                         out += ['}\n']
             else:
                 pprint(eq)
