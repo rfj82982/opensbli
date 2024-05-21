@@ -757,3 +757,192 @@ class GroupedPiecewise(Piecewise):
     @property
     def extract_all_conditions(cls):
         cls.all_conditions = flatten([pair.cond for pair in cls.pairs])
+
+
+class WhileLoop(Piecewise):
+    nargs = None
+    is_Piecewise = True
+
+    def __new__(cls, *args, **options):
+        return Piecewise.__new__(cls, *args, **options)
+
+    def add_pair(cls, expr_pair):
+        cls.pairs.append(expr_pair)
+        cls.extract_all_equations
+        cls.extract_all_conditions
+        # assert isinstance(Boolean, expr_pair[1])
+        cls.grouped_conditions += [expr_pair[1]]
+        cls.grouped_equations += [expr_pair[0]]  # add input checking here
+        return
+
+    def convert_to_datasets(self, block):
+        replacements = {}
+        for d in self.atoms(DataObject):
+            replacements[d] = block.location_dataset(d)
+        return self.subs(replacements)
+
+    def _eval_subs(self, old, new):
+        args = list(self.args)
+        for i, (e, c) in enumerate(args):
+            c = c._subs(old, new)
+            if is_sequence(e):
+                for no, eq1 in enumerate(e):
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    e[no] = eq1._subs(old, new)
+            else:
+                e = e._subs(old, new)
+            args[i] = (e, c)
+        return self.func(*args)
+
+    @property
+    def lhs_datasetbases(self):
+        """ These are the datsets to be written out, so only expressions are considered and condition is omitted"""
+        dsets = set()
+        for e, c in self.args[0:1]: # Equations should all be in the first pair
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.lhs_datasetbases)
+            else:
+                dsets = dsets.union(e.lhs_datasetbases)
+        return dsets
+
+    @property
+    def lhs_datasets_full(self):
+        """ These are the datsets to be written out, so only expressions are considered and condition is omitted"""
+        dsets = set()
+        for e, c in self.args:
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.atoms(DataSet))
+            else:
+                dsets = dsets.union(e.atoms(DataSet))
+        return dsets
+
+    @property
+    def rhs_datasetbases(self):
+        dsets = set()
+        for e, c in self.args[0:1]: # Equations should all be in the first pair
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.rhs_datasetbases)
+            else:
+                dsets = dsets.union(e.rhs_datasetbases)
+            dsets = dsets.union(c.atoms(DataSetBase))
+        return dsets
+
+    @property
+    def expr_rhs(cls):
+        return flatten([pairs.rhs for pairs in cls.pairs])
+
+    @property
+    def expr_lhs(cls):
+        return flatten([pairs.lhs for pairs in cls.pairs])
+
+    @property
+    def extract_all_equations(cls):
+        cls.all_equations = flatten([pair.expressions for pair in cls.pairs])
+
+    @property
+    def extract_all_conditions(cls):
+        cls.all_conditions = flatten([pair.cond for pair in cls.pairs])
+
+class ForLoop(Piecewise):
+    nargs = None
+    is_Piecewise = True
+
+    def __new__(cls, *args, **options):
+        return Piecewise.__new__(cls, *args, **options)
+
+    def add_pair(cls, expr_pair):
+        cls.pairs.append(expr_pair)
+        cls.extract_all_equations
+        cls.extract_all_conditions
+        # assert isinstance(Boolean, expr_pair[1])
+        cls.grouped_conditions += [expr_pair[1]]
+        cls.grouped_equations += [expr_pair[0]]  # add input checking here
+        return
+
+    def convert_to_datasets(self, block):
+        replacements = {}
+        for d in self.atoms(DataObject):
+            replacements[d] = block.location_dataset(d)
+        return self.subs(replacements)
+
+    def _eval_subs(self, old, new):
+        args = list(self.args)
+        for i, (e, c) in enumerate(args):
+            c = c._subs(old, new)
+            if is_sequence(e):
+                for no, eq1 in enumerate(e):
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    e[no] = eq1._subs(old, new)
+            else:
+                e = e._subs(old, new)
+            args[i] = (e, c)
+        return self.func(*args)
+
+    @property
+    def lhs_datasetbases(self):
+        """ These are the datsets to be written out, so only expressions are considered and condition is omitted"""
+        dsets = set()
+        for e, c in self.args[0:1]: # Equations should all be in the first pair
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.lhs_datasetbases)
+            else:
+                dsets = dsets.union(e.lhs_datasetbases)
+        return dsets
+
+    @property
+    def lhs_datasets_full(self):
+        """ These are the datsets to be written out, so only expressions are considered and condition is omitted"""
+        dsets = set()
+        for e, c in self.args:
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.atoms(DataSet))
+            else:
+                dsets = dsets.union(e.atoms(DataSet))
+        return dsets
+
+    @property
+    def rhs_datasetbases(self):
+        dsets = set()
+        for e, c in self.args[0:1]: # Equations should all be in the first pair
+            if is_sequence(e):
+                for eq1 in e:
+                    if is_sequence(eq1):
+                        raise NotImplementedError("")
+                    dsets = dsets.union(eq1.rhs_datasetbases)
+            else:
+                dsets = dsets.union(e.rhs_datasetbases)
+            dsets = dsets.union(c.atoms(DataSetBase))
+        return dsets
+
+    @property
+    def expr_rhs(cls):
+        return flatten([pairs.rhs for pairs in cls.pairs])
+
+    @property
+    def expr_lhs(cls):
+        return flatten([pairs.lhs for pairs in cls.pairs])
+
+    @property
+    def extract_all_equations(cls):
+        cls.all_equations = flatten([pair.expressions for pair in cls.pairs])
+
+    @property
+    def extract_all_conditions(cls):
+        cls.all_conditions = flatten([pair.cond for pair in cls.pairs])

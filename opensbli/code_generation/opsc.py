@@ -10,7 +10,7 @@ from sympy.utilities.iterables import is_sequence
 from sympy.printing.ccode import C99CodePrinter
 # from sympy.printing.c import C99CodePrinter
 from sympy.core.relational import Equality
-from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable, DataObject, DataSet
+from opensbli.core.opensbliobjects import ConstantObject, ConstantIndexed, Constant, DataSetBase, GroupedPiecewise, ReductionVariable, DataObject, DataSet, WhileLoop, ForLoop
 from sympy import Symbol, flatten, Rational, nsimplify
 from opensbli.core.grid import GridVariable
 from opensbli.core.datatypes import SimulationDataType
@@ -684,6 +684,10 @@ class OPSC(object):
                             # Make sure LHS is not cast
                             # if not isinstance(LHS_of_equation, GridVariable):
                             #     single_eqn.lhs.cast_precision = False
+                elif isinstance(eq, WhileLoop):
+                    raise ValueError("Mixed precision not implemented yet for WhileLoop.")
+                elif isinstance(eq, ForLoop):
+                    raise ValueError("Mixed precision not implemented yet for ForLoop.")
                 else: # Regular equations
                     # Never cast precision of left-hand side assignments
                     LHS_of_equation = eq.lhs
@@ -745,6 +749,40 @@ class OPSC(object):
                         else:
                             out += [ccode(expr, settings=settings) + ';\n']
                         out += ['}\n']
+            elif isinstance(eq, WhileLoop):
+                for i, (expr, condition) in enumerate(eq.args):
+                    if i == 0:
+                        out += ['while (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
+                        if is_sequence(expr):
+                            for eqn in expr:
+                                out += [ccode(eqn, settings=settings) + ';\n']
+                        else:
+                            out += [ccode(expr, settings=settings) + ';\n']
+                        out += ['}\n']
+                    elif i == 1:
+                        pass
+                    else:
+                        raise ValueError("While Loop should only have two conditions.")
+            elif isinstance(eq, ForLoop):
+                for i, (expr, condition) in enumerate(eq.args):
+                    if i == 0:
+                        start = condition
+                        evaluate = expr
+                    elif i == 1:
+                        end = expr
+                    else:
+                        raise ValueError("While Loop should only have two conditions.")
+                # Create the C code for the for loop and populate it with equations
+                iteration_index = start.lhs
+                bool_settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}
+                out += ['for (int %s; %s; %s++)' % ((ccode(start, settings=settings), ccode(end, settings=bool_settings), ccode(iteration_index, settings=bool_settings))) + '{\n']
+                # Add equations inside the for loop
+                if is_sequence(evaluate):
+                    for eqn in evaluate:
+                        out += [ccode(eqn, settings=settings) + ';\n']
+                else:
+                    out += [ccode(evaluate, settings=settings) + ';\n']
+                out += ['}\n']
             else:
                 pprint(eq)
                 raise TypeError("Unclassified type of equation.")

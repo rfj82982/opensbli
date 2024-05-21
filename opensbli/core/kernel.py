@@ -6,7 +6,7 @@
 
 from sympy import flatten, Equality, pprint
 from opensbli.core.opensbliobjects import DataSet, ConstantIndexed, ConstantObject,\
-    GlobalValue, GroupedPiecewise, Constant, ReductionVariable, DataSetBase, Globalvariable
+    GlobalValue, GroupedPiecewise, Constant, ReductionVariable, DataSetBase, Globalvariable, WhileLoop, ForLoop
 from opensbli.equation_types.opensbliequations import OpenSBLIEq
 from opensbli.core.grid import Grididx
 from opensbli.core.datatypes import SimulationDataType
@@ -14,7 +14,7 @@ from opensbli.utilities.helperfunctions import get_min_max_halo_values
 from opensbli.core.datatypes import Int
 import copy
 
-_known_equation_types = (GroupedPiecewise, OpenSBLIEq)
+_known_equation_types = (WhileLoop, ForLoop, GroupedPiecewise, OpenSBLIEq)
 
 
 class ConstantsToDeclare(object):
@@ -122,6 +122,10 @@ class Kernel(object):
             self.equations += [equation]
         elif isinstance(equation, GroupedPiecewise):
             self.equations += [equation]
+        elif isinstance(equation, WhileLoop):
+            self.equations += [equation]
+        elif isinstance(equation, ForLoop):
+            self.equations += [equation]
         elif equation:
             pass
         else:
@@ -182,6 +186,10 @@ class Kernel(object):
             if isinstance(eq, OpenSBLIEq):
                 reduction_vars = reduction_vars.union(eq.rhs.atoms(ReductionVariable))
             elif isinstance(eq, GroupedPiecewise):
+                reduction_vars = reduction_vars.union(eq.atoms(ReductionVariable))
+            elif isinstance(eq, WhileLoop):
+                reduction_vars = reduction_vars.union(eq.atoms(ReductionVariable))
+            elif isinstance(eq, ForLoop):
                 reduction_vars = reduction_vars.union(eq.atoms(ReductionVariable))
             elif isinstance(eq, Equality):
                 raise TypeError("Equality should be of types %s" % _known_equation_types)
