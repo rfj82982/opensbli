@@ -85,8 +85,9 @@ class TraditionalAlgorithmRKMB(object):
                 for sc in b.get_temporal_schemes:
                     # Iteration counter for any conditional expressions
                     temporal_iteration = sc.temporal_iteration
+                    temporal_iteration.main_file = True
                     inner_loop_blocks += [sc.stage]
-                    tloop_blocks += [sc.temporal_iteration]
+                    tloop_blocks += [temporal_iteration]
                     for key, value in iter(sc.solution.items()):
                         #print(key, value)
                         if isinstance(key, SimulationEquations):

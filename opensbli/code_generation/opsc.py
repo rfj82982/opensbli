@@ -60,10 +60,6 @@ class OPSCCodePrinter(C99CodePrinter):
     def __init__(self, settings={}):
         """ Initialise the code printer. """
         self.settings_opsc = settings
-        if 'rational' in settings.keys():
-            self.settings_opsc = settings
-        else:
-            self.settings_opsc['rational'] = True
         # Mixed precision settings
         if 'arrays_to_cast' in settings.keys():
             if len(settings['arrays_to_cast']) > 0:
@@ -76,7 +72,12 @@ class OPSCCodePrinter(C99CodePrinter):
 
     def return_args(self, expr):
         """ Retrieves the arguments of an input expression. Used for modifying the function call with custom code printers."""
-        args = map(ccode, expr.args)
+        settings = {'kernel': True}
+        for const in expr.atoms(Idx).union(expr.atoms(ConstantObject)):
+            if hasattr(const, "main_file"):
+                settings = {'kernel': False}
+                break
+        args = map(lambda x: ccode(x, settings), expr.args)
         args = [x for x in args]
         result = ','.join(args)
         return result
@@ -88,20 +89,12 @@ class OPSCCodePrinter(C99CodePrinter):
         """ Settings: if rational is True then rational numbers are printed as they are.
         Otherwise optimisations will be performed for rational constants that are evaluated
         at the start of the program to reduce divisions."""
-        if self.settings_opsc.get('rational', True):
-            expr = nsimplify(expr)
-            p, q = int(expr.p), int(expr.q)
-            if isinstance(SimulationDataType.dtype(), FloatC):
-                return '(%d.0f/%d.0f)' % (p, q)
-            else:
-                return '(%d.0/%d.0)' % (p, q)
+        expr = nsimplify(expr)
+        p, q = int(expr.p), int(expr.q)
+        if isinstance(SimulationDataType.dtype(), FloatC):
+            return '(%d.0f/%d.0f)' % (p, q)
         else:
-            pass
-            # print(expr)
-            # if expr in rc.existing:
-            #     return self._print(rc.existing[expr])
-            # else:
-            #     return self._print(rc.get_next_rational_constant(expr))
+            return '(%d.0/%d.0)' % (p, q)
 
     def _print_Mod(self, expr):
         """ All modulus functions are expressed as fmod currently and no integer values."""
@@ -667,8 +660,8 @@ class OPSC(object):
         gridvariables = set()
         out = []
         for eq in kernel.equations:
-            # ccode writer settings
-            settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast}
+            default_kernel_settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast}
+            bool_settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}
             # Note which DataSets are used on the LHS of equations
             if self.cast_precision:
                 if isinstance(eq, GroupedPiecewise):
@@ -722,42 +715,42 @@ class OPSC(object):
                     rv.usage = 'rhs'
 
             if isinstance(eq, Equality):
-                out += [ccode(eq, settings=settings) + ';\n']
+                out += [ccode(eq, settings=default_kernel_settings) + ';\n']
             elif isinstance(eq, GroupedPiecewise):
                 for i, (expr, condition) in enumerate(eq.args):
                     if i == 0:
-                        out += ['if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
+                        out += ['if (%s)' % ccode(condition, settings=bool_settings) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings=settings) + ';\n']
+                                out += [ccode(eqn, settings=default_kernel_settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings=settings) + ';\n']
+                            out += [ccode(expr, settings=default_kernel_settings) + ';\n']
                         out += ['}\n']
                     elif condition != True:
-                        out += ['else if (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
+                        out += ['else if (%s)' % ccode(condition, settings=bool_settings) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings=settings) + ';\n']
+                                out += [ccode(eqn, settings=default_kernel_settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings=settings) + ';\n']
+                            out += [ccode(expr, settings=default_kernel_settings) + ';\n']
                         out += ['}\n']
                     else:
                         out += ['else{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings=settings) + ';\n']
+                                out += [ccode(eqn, settings=default_kernel_settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings=settings) + ';\n']
+                            out += [ccode(expr, settings=default_kernel_settings) + ';\n']
                         out += ['}\n']
             elif isinstance(eq, WhileLoop):
                 for i, (expr, condition) in enumerate(eq.args):
                     if i == 0:
-                        out += ['while (%s)' % ccode(condition, settings={'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}) + '{\n']
+                        out += ['while (%s)' % ccode(condition, settings=bool_settings) + '{\n']
                         if is_sequence(expr):
                             for eqn in expr:
-                                out += [ccode(eqn, settings=settings) + ';\n']
+                                out += [ccode(eqn, settings=default_kernel_settings) + ';\n']
                         else:
-                            out += [ccode(expr, settings=settings) + ';\n']
+                            out += [ccode(expr, settings=default_kernel_settings) + ';\n']
                         out += ['}\n']
                     elif i == 1:
                         pass
@@ -773,15 +766,14 @@ class OPSC(object):
                     else:
                         raise ValueError("While Loop should only have two conditions.")
                 # Create the C code for the for loop and populate it with equations
-                iteration_index = start.lhs
-                bool_settings = {'kernel': True, 'OPS_V2': self.OPS_V2, 'arrays_to_cast' : self.arrays_to_cast, 'boolean_equality' : True}
-                out += ['for (int %s; %s; %s++)' % ((ccode(start, settings=settings), ccode(end, settings=bool_settings), ccode(iteration_index, settings=bool_settings))) + '{\n']
+                iteration_index = start.lhs      
+                out += ['for (int %s; %s; %s++)' % ((ccode(start, settings=default_kernel_settings), ccode(end, settings=bool_settings), ccode(iteration_index, settings=bool_settings))) + '{\n']
                 # Add equations inside the for loop
                 if is_sequence(evaluate):
                     for eqn in evaluate:
-                        out += [ccode(eqn, settings=settings) + ';\n']
+                        out += [ccode(eqn, settings=default_kernel_settings) + ';\n']
                 else:
-                    out += [ccode(evaluate, settings=settings) + ';\n']
+                    out += [ccode(evaluate, settings=default_kernel_settings) + ';\n']
                 out += ['}\n']
             else:
                 pprint(eq)

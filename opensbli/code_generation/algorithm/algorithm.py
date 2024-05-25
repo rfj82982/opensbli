@@ -401,6 +401,7 @@ class TraditionalAlgorithmRK(object):
             sc = b.get_temporal_schemes[0]
             # Iteration counter for any conditional expressions
             temporal_iteration = sc.temporal_iteration
+            temporal_iteration.main_file = True # do not apply in-kernel formatting on the code-writer
             # Raise an error if there is more than one temporal scheme
             if len(b.get_temporal_schemes) > 1:
                 raise ValueError("Found more than one temporal scheme on the block")
