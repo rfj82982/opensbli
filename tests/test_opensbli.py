@@ -373,6 +373,7 @@ def test_app_cmake_build(app_dir: str) -> int:
         "..",
         f"-DOPS_INSTALL_DIR={os.getenv('OPS_INSTALL_DIR')}",
         "-DCMAKE_BUILD_TYPE=Release",
+	"-DLEGACY_CODEGEN=ON",
     )
     # add -DHDF5_ROOT if HDF5_INSTALL_PATH env variable is found
     if os.getenv("HDF5_INSTALL_PATH"):

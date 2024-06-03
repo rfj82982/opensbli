@@ -88,7 +88,7 @@ fi
 
 source ${EnvDir}/Python/bin/activate "${EnvDir}/Python"
 export OPS_INSTALL_DIR=$EnvDir/OPS-INSTALL
-export OPS_TRANSLATOR=$OPS_INSTALL_DIR/bin/ops_translator/c
+export OPS_TRANSLATOR=$OPS_INSTALL_DIR/translator/ops_translator_legacy/c
 export PYTHONPATH=$PYTHONPATH:$EnvDir/OpenSBLI
 
 python test_opensbli.py
