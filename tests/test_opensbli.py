@@ -28,11 +28,20 @@ class TestModes(Enum):
     SIMPLE_TEST_CASES = auto()
     VERIFICATION_TEST_CASES = auto()
 
+class TranslatorMode(Enum):
+    """
+    Enum class for the different translator modes.
+    """
+
+    LEGACY = auto()
+    MODERN = auto()
+
 
 # Default is to run all test cases
 TEST_MODE = TestModes.ALL_TEST_CASES
 SCRIPT_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 VERBOSE = False
+TRANSLATOR_MODE = TranslatorMode.MODERN
 
 # The following two lists are used to define the test cases to be run. The first
 # list contains the test applications, while the second list contains the
@@ -373,7 +382,7 @@ def test_app_cmake_build(app_dir: str) -> int:
         "..",
         f"-DOPS_INSTALL_DIR={os.getenv('OPS_INSTALL_DIR')}",
         "-DCMAKE_BUILD_TYPE=Release",
-	"-DLEGACY_CODEGEN=ON",
+        f"-DLEGACY_CODEGEN={'ON' if TRANSLATOR_MODE is TranslatorMode.LEGACY else 'OFF'}",
     )
     # add -DHDF5_ROOT if HDF5_INSTALL_PATH env variable is found
     if os.getenv("HDF5_INSTALL_PATH"):
@@ -480,6 +489,9 @@ def run_tests() -> None:
     if not os.getenv("OPS_TRANSLATOR"):
         raise EnvironmentError("$OPS_TRANSLATOR has not been set")
 
+    _log(f"OPS_INSTALL_DIR : {os.getenv('OPS_INSTALL_DIR')}", suppress_output=True)
+    _log(f"OPS_TRANSLATOR  :  {os.getenv('OPS_TRANSLATOR')}", suppress_output=True)
+
     test_app_paths = prepare_test_environment()
     num_tests = len(test_app_paths)
     num_failed = 0
@@ -533,6 +545,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     ap = ArgumentParser()
     ap.add_argument("--verif-only", action="store_true", default=False)
+    ap.add_argument("--legacy-translator", action="store_true", default=False)
     ap.add_argument("--verbose", action="store_true", default=False)
     args = ap.parse_args()
 
@@ -541,6 +554,8 @@ if __name__ == "__main__":
     # Set the test mode based on the command line arguments
     if args.verif_only:
         TEST_MODE = TestModes.VERIFICATION_TEST_CASES
+    if args.legacy_translator:
+        TRANSLATOR_MODE = TranslatorMode.LEGACY
 
     # Run the test procedure
     _log(f"Script directory: {SCRIPT_DIRECTORY}", suppress_output=True)
