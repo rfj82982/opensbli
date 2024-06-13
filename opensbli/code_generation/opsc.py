@@ -992,7 +992,7 @@ class OPSC(object):
         output += [WriteString('ops_partition(\"\");')]
         output += [WriteString('ops_timers(&partition_end0, &elapsed_partition_end0);')]
         output += [WriteString('ops_printf("-----------------------------------------\\n MPI partition and reading input file time: %lf\\n -----------------------------------------\\n", elapsed_partition_end0-elapsed_partition_start0);')]
-        output += [WriteString('fflush(stdout);\n')]
+        # output += [WriteString('fflush(stdout);\n')]
         return output
 
     def restart_notification(self):

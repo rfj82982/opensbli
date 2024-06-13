@@ -216,11 +216,13 @@ class SimulationMonitor(object):
         variables = ', '.join(iterations + variables)
         # Check if the output should be written directly to a log file
         if len(self.output_files) > 0:
-            output_print = ["ops_fprintf(f%d, \"%s\\n\", %s);" % (block.blocknumber, placeholders, variables)] + ["fflush(f%d);" % block.blocknumber]
+            # output_print = ["ops_fprintf(f%d, \"%s\\n\", %s);" % (block.blocknumber, placeholders, variables)] + ["fflush(f%d);" % block.blocknumber]
+            output_print = ["ops_fprintf(f%d, \"%s\\n\", %s);" % (block.blocknumber, placeholders, variables)]
         else:
             if self.nblocks > 1:
                 raise ValueError("For multi-block problems, please specify a output file name for the simulation monitor output.")
-            output_print = ["ops_printf(\"%s\\n\", %s);" % (placeholders, variables)] + ["fflush(stdout);"]
+            # output_print = ["ops_printf(\"%s\\n\", %s);" % (placeholders, variables)] + ["fflush(stdout);"]
+            output_print = ["ops_printf(\"%s\\n\", %s);" % (placeholders, variables)]
         return ["// Write the output values"] + output_print
 
     def generate_reduction_loops(self, block):
