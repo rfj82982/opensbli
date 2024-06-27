@@ -94,7 +94,11 @@ for j=1:N1-1
     msume=msume+0.5*(y(1,j+1,1)-y(1,j,1))*(rholam(j)*ulam(j)+rholam(j+1)*ulam(j+1));
 end
 
+% centreline velocities
+ucl=u(1,(N1-1)/2+1,1);
 ulamcl=ulam(1,(N1-1)/2+1,1);
+
+% print the results
 fprintf('\nrelative error in centreline velocity = %g \n',(ucl-ulamcl)/ulamcl)
 fprintf('relative error in integral of density = %g \n',(rsum-rsume)/rsume)
 fprintf('relative error in mass flowrate = %g \n',(msum-msume)/msume)
@@ -103,12 +107,18 @@ fprintf('relative error in mass flowrate = %g \n',(msum-msume)/msume)
 subplot(3,1,1)
 plot(y(1,:),ulam,y(1,:),u(1,:),'o')
 legend('Exact','OpenSBLI')
+xlabel('y')
+ylabel('u')
 
 subplot(3,1,2)
 plot(y(1,:),Tlam,y(1,:),T(1,:),'o')
 legend('Exact','OpenSBLI')
+xlabel('y')
+ylabel('T')
 
 subplot(3,1,3)
 plot(y(1,:),rholam,y(1,:),rho(1,:),'o')
 legend('Exact','OpenSBLI')
+xlabel('y')
+ylabel('\rho')
 
