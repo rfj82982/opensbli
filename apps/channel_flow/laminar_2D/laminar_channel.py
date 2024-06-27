@@ -8,12 +8,12 @@ from opensbli.utilities.helperfunctions import substitute_simulation_parameters
 simulation_parameters = {
 'Re'	: '90.0',
 'gama'	: '1.4',
-'Minf'	: '0.1',
+'Minf'	: '0.01',
 'Pr'	: '0.72',
-'dt'	: '0.0002',
-'niter'	: '5000000',
+'dt'	: '0.0001',
+'niter'	: '100000',
 'block0np0'	: '16',
-'block0np1'	: '64',
+'block0np1'	: '81',
 'Delta0block0'	: '2.0*M_PI/block0np0',
 'Delta1block0'	: '2.0/(block0np1-1)',
 "c0"	: '-1',
@@ -32,7 +32,6 @@ coordinate_symbol = "x"
 # symbol for the coordinate system in the equations
 conservative = True
 NS = NS_Split('KGP', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
-# NS = NS_Split('Feiereisen', ndim, constants, coordinate_symbol=coordinate_symbol, conservative=conservative, viscosity='dynamic')
 
 mass, momentum, energy = NS.mass, NS.momentum, NS.energy
 # Add channel forcing term
@@ -48,7 +47,9 @@ simulation_eq.add_equations(energy)
 velocity = "Eq(u_i, rhou_i/rho)"
 pressure = "Eq(p, (gama-1)*(rhoE - rho*(1/2)*(KD(_i,_j)*u_i*u_j)))"
 temperature = "Eq(T, p*gama*Minf*Minf/(rho))"
-viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
+# exact solution for mu=const
+viscosity = "Eq(mu, 1.0)"
+#viscosity = "Eq(mu, (T**(1.5)*(1.0+SuthT/RefT)/(T+SuthT/RefT)))"
 
 # Instantiate EinsteinEquation class for expanding the Einstein indices in the equations
 einstein_eq = EinsteinEquation()
@@ -75,7 +76,7 @@ dx, dy = block.deltas
 # Indices for the grid location
 i, j = block.grid_indexes
 # Some constants used
-gama, Minf = symbols('gama Minf', **{'cls': ConstantObject})
+gama, Re, Pr, Minf = symbols('gama Re Pr Minf ', **{'cls': ConstantObject})
 """ Conservative vector is the time advancement arrays of the simulation equations.
 the order follows the order in which they are added to the simulation equations
 class, i.e. arrays of density, momentum (components), energy in the present case"""
@@ -126,16 +127,17 @@ grid_equations = [Eq(x, i * dx), Eq(y, -1.0 + j * dy)]
 # Initialisation equations
 initial_equations = []
 # local varibales for temperature and pressure
-temperature, pressure = symbols('T p', **{'cls': GridVariable})
+density, pressure, ulam = symbols('r p u0', **{'cls': GridVariable})
 # Equations for pressure and temperature
+initial_equations += [Eq(ulam,0.5*Re*(1.0-y**2))]
 initial_equations += [Eq(pressure, 1.0 / (gama * Minf**2.0))]
-initial_equations += [Eq(temperature, 1.0 + 0.01944 * (1.0 - (y - 1.0)**4))]
+initial_equations += [Eq(density, 1.0/(1.0 + (gama-1.0)*Pr*Re**2*Minf**2*(1.0-y**4)/12.0))]
 
 # Initialise the conservative vector
-initial_equations += [Eq(q_vector[0], 1.0 / temperature)]
-initial_equations += [Eq(q_vector[1], 0.0)]
+initial_equations += [Eq(q_vector[0], density)]
+initial_equations += [Eq(q_vector[1], density*ulam)]
 initial_equations += [Eq(q_vector[2], 0.0)]
-initial_equations += [Eq(q_vector[3], pressure / (gama - 1.0))]
+initial_equations += [Eq(q_vector[3], pressure/(gama - 1.0)+0.5*density*ulam**2)]
 
 # Instantiate a grid based initialisation classes
 initial = GridBasedInitialisation()
