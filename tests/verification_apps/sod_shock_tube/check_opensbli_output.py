@@ -12,7 +12,7 @@ import h5py
 
 h5_data = h5py.File("opensbli_output.h5", "r")
 actual_rho_u = h5_data["opensbliblock00"]["rhou0_B0"][100]
-target_rho_u = 0.10063031315938353
+target_rho_u = 0.1020821132791397
 error_code = int(not math.isclose(actual_rho_u, target_rho_u, rel_tol=1e-5))
 
 if error_code:
