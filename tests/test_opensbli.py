@@ -12,12 +12,14 @@ from __future__ import annotations
 import glob
 import logging
 import os
+import pathlib
 import shutil
 import subprocess
 from argparse import ArgumentParser
 from enum import Enum, auto
-from typing import List, Dict
 from functools import reduce
+from typing import Dict, List
+
 
 class TestModes(Enum):
     """
@@ -27,6 +29,7 @@ class TestModes(Enum):
     ALL_TEST_CASES = auto()
     SIMPLE_TEST_CASES = auto()
     VERIFICATION_TEST_CASES = auto()
+
 
 class TranslatorMode(Enum):
     """
@@ -77,12 +80,14 @@ VERIFICATION_TEST_CASES = [
     f"{SCRIPT_DIRECTORY}/verification_apps/sod_shock_tube/verify_sod_shock_tube.py",
     f"{SCRIPT_DIRECTORY}/verification_apps/tg_sym/verify_tg_sym.py",
     f"{SCRIPT_DIRECTORY}/verification_apps/channel_flow_laminar_2D/verify_laminar_channel.py",
+    f"{SCRIPT_DIRECTORY}/verification_apps/airfoil_multiblock_2D/verify_airfoil_MB_2D.py",
 ]
 ALL_TEST_CASES = APP_TEST_CASES + VERIFICATION_TEST_CASES
 
 
 def setup_logger(log_file: str) -> logging.Logger:
-    """Setup the file logger.
+    """
+    Setup the file logger.
 
     Parameters
     ----------
@@ -111,7 +116,8 @@ logger = setup_logger("./test.log")
 
 
 def _log(message: str, suppress_output: bool = False) -> None:
-    """Print a message to standard out.
+    """
+    Print a message to standard out.
 
     Parameters
     ----------
@@ -128,7 +134,7 @@ def _log(message: str, suppress_output: bool = False) -> None:
 
 def _log_failure(message: str, suppress_output: bool = False) -> None:
     """
-    Print a failure message in red color.
+    Print a failure message in red.
 
     Parameters
     ----------
@@ -145,7 +151,7 @@ def _log_failure(message: str, suppress_output: bool = False) -> None:
 
 def _log_success(message: str, suppress_output: bool = False) -> None:
     """
-    Print a success message in green color.
+    Print a success message in green.
 
     Parameters
     ----------
@@ -159,7 +165,10 @@ def _log_success(message: str, suppress_output: bool = False) -> None:
     if not suppress_output or VERBOSE:
         print(f"\033[92m✓ {message}\033[0m")
 
-def _run_process(commands: list, cwd: str) -> Dict[int, str | None, str | None]:
+
+def _run_process(
+    commands: list, cwd: str, use_shell: bool = False
+) -> Dict[int, str | None, str | None]:
     """
     Execute a subprocess with the given commands and current working directory.
 
@@ -169,6 +178,9 @@ def _run_process(commands: list, cwd: str) -> Dict[int, str | None, str | None]:
         The list of command-line arguments to be executed.
     cwd : str
         The path to the current working directory for the subprocess.
+    use_shell : bool
+        Execute the provided commands directly in the shell. Useful for when
+        you need to activate a Python environment first.
 
     Returns
     -------
@@ -186,19 +198,99 @@ def _run_process(commands: list, cwd: str) -> Dict[int, str | None, str | None]:
     _log(f"- Running: `{' '.join(commands)}`", suppress_output=True)
 
     try:
-        rc = subprocess.run(
-            commands,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        if use_shell:
+            rc = subprocess.run(
+                " ".join(commands),
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                executable="/bin/bash",
+                shell=True,
+            )
+        else:
+            rc = subprocess.run(
+                commands,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
         return {
             "return_code": rc.returncode,
             "stdout": rc.stdout.decode(),
-            "stderr": rc.stderr.decode() if rc.stderr else "Process failed with no error message",
+            "stderr": rc.stderr.decode()
+            if rc.stderr
+            else "Process failed with no error message",
         }
     except Exception as e:
         return {"return_code": 1, "stdout": None, "stderr": str(e)}
+
+
+def _activate_python_env(commands: list, env_location: str) -> list:
+    """
+    Prepend an activation of a Python venv to a list of commands.
+
+    Parameters
+    ----------
+    commands : list
+        The list of commands to prepend with the environment activation.
+    env_location : str
+        The file path to the Python environment to activate.
+
+    Returns
+    -------
+    list
+        The updated listed of commands.
+
+    Notes
+    -----
+    This function exists for when you need to activate a Python environment for
+    a set of commands or script. This is a fix for an issue encountered on WSL
+    where CMake would not be able to activate the OPS translator venv causing
+    an app build to fail. By activating the venv first, CMake finds the correct
+    venv required for translation.
+    """
+    return ("source", f"{env_location}/bin/activate", "&&", *commands)
+
+
+def _copy_cmakelists_to_app(app_dir: str) -> str:
+    """
+    Copy the OPS CMakeLists.txt to the app directory.
+
+    Parameters
+    ----------
+    app_dir : str
+        The directory containing the application to be compiled.
+
+    Returns
+    -------
+    str
+        The file path of the CMakeLists.txt copied to the app directory.
+
+    Notes
+    -----
+    Checks for a CMakeLists.txt in the "EnvDirectory" which is the directory
+    containing the OpenSBLI, OPS, Python venv and possibly HDF5 files created
+    using the "CreateOpenSBLIEnv.sh" installation script. If this is not the
+    setup used, then the CMakeLists.txt in the apps/ directory will be copied
+    instead. This CMakeLists.txt may be out of date with the latest version of
+    OPS.
+    """
+
+    path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../../CMakeLists.txt")
+    if path.exists():
+        # need to modify this file to remove OPS mess and add a OpenSBLI build option
+        content = path.read_text()
+        content = "\n".join(
+            [line for line in content.splitlines() if "add_subdirectory" not in line]
+        )
+        content += '\nBUILD_OPS_C_SAMPLE(OpenSBLI "NONE" "NONE" "NONE" "NO" "NO")\n'
+        new_path = pathlib.Path(f"{app_dir}/CMakeLists.txt")
+        new_path.write_text(content)
+    else:
+        path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../apps/CMakeLists.txt")
+        shutil.copyfile(str(path.absolute()), f"{app_dir}/CMakeLists.txt")
+
+    return str(path.resolve())
 
 
 def prepare_test_environment() -> List[str]:
@@ -329,9 +421,20 @@ def test_app_translates(app_dir: str) -> int:
     translator = os.getenv("OPS_TRANSLATOR")
     if not translator:
         raise EnvironmentError("OPS_TRANSLATOR environment variable is not set.")
-    rc = _run_process(("python", f"{translator}/ops.py", "opensbli.cpp"), app_dir)
+    commands = (
+        "python",
+        f"{translator}/ops.py",
+        "opensbli.cpp",
+    )
+    if TRANSLATOR_MODE == TranslatorMode.MODERN:
+        commands = _activate_python_env(
+            commands, f"{os.getenv('OPS_TRANSLATOR')}/../ops_venv"
+        )
+    rc = _run_process(commands, app_dir, use_shell=True)
     if rc["return_code"]:
-        _log_failure(f"Failed to translate using OPS_TRANSLATOR into parallel OPS code:\n{rc['stderr']}")
+        _log_failure(
+            f"Failed to translate using OPS_TRANSLATOR into parallel OPS code:\n{rc['stderr']}"
+        )
 
     return rc["return_code"]
 
@@ -370,14 +473,12 @@ def test_app_cmake_build(app_dir: str) -> int:
     # Copy CMake file to test directory
     # create build dir, where target binaries will be built and use CMake to
     # prepare build files and build the test app
-    src = f"{SCRIPT_DIRECTORY}/../apps/CMakeLists.txt"
-    shutil.copyfile(src, f"{app_dir}/CMakeLists.txt")
     build_dir = f"{app_dir}/test-build"
     shutil.rmtree(build_dir, ignore_errors=True)
     os.makedirs(build_dir, exist_ok=True)
 
     # Prepare build files using CMake
-    cmake_command = (
+    commands = (
         "cmake",
         "..",
         f"-DOPS_INSTALL_DIR={os.getenv('OPS_INSTALL_DIR')}",
@@ -386,8 +487,15 @@ def test_app_cmake_build(app_dir: str) -> int:
     )
     # add -DHDF5_ROOT if HDF5_INSTALL_PATH env variable is found
     if os.getenv("HDF5_INSTALL_PATH"):
-        cmake_command = (*cmake_command, *(f"-DHDF5_ROOT={os.getenv('HDF5_INSTALL_PATH')}",))
-    rc = _run_process(cmake_command, build_dir)
+        commands = (
+            *commands,
+            *(f"-DHDF5_ROOT={os.getenv('HDF5_INSTALL_PATH')}",),
+        )
+    if TRANSLATOR_MODE == TranslatorMode.MODERN:
+        commands = _activate_python_env(
+            commands, f"{os.getenv('OPS_TRANSLATOR')}/../ops_venv"
+        )
+    rc = _run_process(commands, build_dir, use_shell=True)
     if rc["return_code"]:
         shutil.rmtree(build_dir)
         _log_failure(f"CMake failed to configure properly:\n{rc['stderr']}")
@@ -437,7 +545,10 @@ def test_app_output(app_dir: str) -> int:
         return 0
 
     build_dir = f"{app_dir}/test-build"
-    globbed_apps = [os.path.basename(app) for app in sorted(glob.glob(f"{build_dir}/OpenSBLI_*[!_opencl*]"))]
+    globbed_apps = [
+        os.path.basename(app)
+        for app in sorted(glob.glob(f"{build_dir}/OpenSBLI_*[!_opencl*]"))
+    ]
     _log(f"Apps found: {globbed_apps}", suppress_output=True)
 
     mode_rc = {}
@@ -457,10 +568,12 @@ def test_app_output(app_dir: str) -> int:
         # then run verification script which will return non-zero if the tested
         # quantities are not similar enough
         # todo: modify to pass relative tolerance as argument  to script
-        mode_rc[app_name] = _run_process(("python", "check_opensbli_output.py"), app_dir)
+        mode_rc[app_name] = _run_process(
+            ("python", "check_opensbli_output.py"), app_dir
+        )
     # count how many failed using reduction
     return_code = reduce(lambda x, y: x + abs(y["return_code"]), mode_rc.values(), 0)
-    shutil.rmtree(build_dir)
+    shutil.rmtree(build_dir, ignore_errors=True)
 
     # print error messages, if there are any
     if return_code:
@@ -490,7 +603,7 @@ def run_tests() -> None:
         raise EnvironmentError("$OPS_TRANSLATOR has not been set")
 
     _log(f"OPS_INSTALL_DIR : {os.getenv('OPS_INSTALL_DIR')}", suppress_output=True)
-    _log(f"OPS_TRANSLATOR  :  {os.getenv('OPS_TRANSLATOR')}", suppress_output=True)
+    _log(f"OPS_TRANSLATOR  : {os.getenv('OPS_TRANSLATOR')}", suppress_output=True)
 
     test_app_paths = prepare_test_environment()
     num_tests = len(test_app_paths)
@@ -500,9 +613,11 @@ def run_tests() -> None:
         app_name = os.path.splitext(os.path.basename(app_path))[0]
         app_file = os.path.basename(app_path)
         app_dir = os.path.dirname(app_path)
+        cmake_src = _copy_cmakelists_to_app(app_dir)
         _log("-" * 80)
         _log(f"Testing: \033[1m{app_name}\033[0m")
         _log(f"Directory: {app_dir}", suppress_output=True)
+        _log(f"CMakeLists.txt: {cmake_src}", suppress_output=True)
 
         # Test that OpenSBLI can generate the test case
         return_code = test_app_generates(app_file, app_dir)
@@ -536,7 +651,7 @@ def run_tests() -> None:
     _log("-" * 80)
 
     if num_failed == 0:
-        os.rmdir(f"{SCRIPT_DIRECTORY}/_opensbli-test-workspace")
+        shutil.rmtree(f"{SCRIPT_DIRECTORY}/_opensbli-test-workspace")
 
     return num_failed
 
