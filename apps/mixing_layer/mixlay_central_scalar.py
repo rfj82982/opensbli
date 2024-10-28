@@ -146,7 +146,7 @@ initial_equations += [Eq(q_vector[2],rho*vpert)]
 initial_equations += [Eq(q_vector[3],p/(gama-1.0)+0.5*rho*(uref**2+vpert**2))]
 initial_equations += [Eq(q_vector[4],rho*fref)]
 
-initial conditions
+# initial conditions
 initial = GridBasedInitialisation()
 initial.add_equations(grid_equations + initial_equations)
 
