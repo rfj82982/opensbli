@@ -1,0 +1,8 @@
+numpy
+python-utils
+cached-property
+pytest-shutil
+sympy==1.1
+h5py
+scipy
+matplotlib

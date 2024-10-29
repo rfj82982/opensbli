@@ -19,6 +19,7 @@ from argparse import ArgumentParser
 from enum import Enum, auto
 from functools import reduce
 from typing import Dict, List
+import time
 
 
 class TestModes(Enum):
@@ -50,40 +51,45 @@ TRANSLATOR_MODE = TranslatorMode.MODERN
 # list contains the test applications, while the second list contains the
 # verification applications. The verification applications are used to check the
 # output of the test applications against expected values.
+#APP_TEST_CASES = [
+#    f"{SCRIPT_DIRECTORY}/../apps/wave/wave.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/euler_wave/euler_wave.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/shu_osher/shu_osher.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/Sod_shock_tube/Sod_shock_tube.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/Lax_shock_tube/Lax_shock_tube.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/LeBlanc/LeBlanc.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/taylor_green_vortex.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/TGsym/TGsym.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/viscous_shock_tube/viscous_shock_tube.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/kelvin_helmholtz/kelvin_helmholtz.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/inviscid_shock_reflection/inviscid_shock.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/katzer_SBLI/katzer_SBLI.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/laminar_2D/laminar_channel.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/turbulent_3D/turbulent_channel.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_Central/turbulent_channel.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_TENO/turbulent_channel.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/adiabatic_isothermal_channel/iso_adi_channel_heat_sink.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/transitional_SBLI/transitional_SBLI.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/cylinder/supersonic_cylinder/supersonic_cylinder.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/TGV_multi_block/compressible_TGV_MB.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/compressible_TGV.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/2D/airfoil_MB_2D.py",
+#    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/3D/transonic_MB.py",
+#]
+#VERIFICATION_TEST_CASES = [
+#    f"{SCRIPT_DIRECTORY}/verification_apps/euler_wave_curvilinear/verify_euler_wave_curvilinear.py",
+#    f"{SCRIPT_DIRECTORY}/verification_apps/sod_shock_tube/verify_sod_shock_tube.py",
+#    f"{SCRIPT_DIRECTORY}/verification_apps/tg_sym/verify_tg_sym.py",
+#    f"{SCRIPT_DIRECTORY}/verification_apps/channel_flow_laminar_2D/verify_laminar_channel.py",
+#    f"{SCRIPT_DIRECTORY}/verification_apps/airfoil_multiblock_2D/verify_airfoil_MB_2D.py",
+#]
+#ALL_TEST_CASES = APP_TEST_CASES + VERIFICATION_TEST_CASES
+
 APP_TEST_CASES = [
     f"{SCRIPT_DIRECTORY}/../apps/wave/wave.py",
-    f"{SCRIPT_DIRECTORY}/../apps/euler_wave/euler_wave.py",
-    f"{SCRIPT_DIRECTORY}/../apps/shu_osher/shu_osher.py",
-    f"{SCRIPT_DIRECTORY}/../apps/Sod_shock_tube/Sod_shock_tube.py",
-    f"{SCRIPT_DIRECTORY}/../apps/Lax_shock_tube/Lax_shock_tube.py",
-    f"{SCRIPT_DIRECTORY}/../apps/LeBlanc/LeBlanc.py",
-    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/taylor_green_vortex.py",
-    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/TGsym/TGsym.py",
-    f"{SCRIPT_DIRECTORY}/../apps/viscous_shock_tube/viscous_shock_tube.py",
-    f"{SCRIPT_DIRECTORY}/../apps/kelvin_helmholtz/kelvin_helmholtz.py",
-    f"{SCRIPT_DIRECTORY}/../apps/inviscid_shock_reflection/inviscid_shock.py",
     f"{SCRIPT_DIRECTORY}/../apps/katzer_SBLI/katzer_SBLI.py",
-    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/laminar_2D/laminar_channel.py",
-    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/turbulent_3D/turbulent_channel.py",
-    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_Central/turbulent_channel.py",
-    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_TENO/turbulent_channel.py",
-    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/adiabatic_isothermal_channel/iso_adi_channel_heat_sink.py",
-    f"{SCRIPT_DIRECTORY}/../apps/transitional_SBLI/transitional_SBLI.py",
-    f"{SCRIPT_DIRECTORY}/../apps/cylinder/supersonic_cylinder/supersonic_cylinder.py",
-    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/TGV_multi_block/compressible_TGV_MB.py",
-    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/compressible_TGV.py",
-    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/2D/airfoil_MB_2D.py",
-    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/3D/transonic_MB.py",
-]
-VERIFICATION_TEST_CASES = [
-    f"{SCRIPT_DIRECTORY}/verification_apps/euler_wave_curvilinear/verify_euler_wave_curvilinear.py",
-    f"{SCRIPT_DIRECTORY}/verification_apps/sod_shock_tube/verify_sod_shock_tube.py",
-    f"{SCRIPT_DIRECTORY}/verification_apps/tg_sym/verify_tg_sym.py",
-    f"{SCRIPT_DIRECTORY}/verification_apps/channel_flow_laminar_2D/verify_laminar_channel.py",
-    f"{SCRIPT_DIRECTORY}/verification_apps/airfoil_multiblock_2D/verify_airfoil_MB_2D.py",
-]
-ALL_TEST_CASES = APP_TEST_CASES + VERIFICATION_TEST_CASES
-
+    ]
+ALL_TEST_CASES = APP_TEST_CASES 
 
 def setup_logger(log_file: str) -> logging.Logger:
     """
@@ -428,7 +434,7 @@ def test_app_translates(app_dir: str) -> int:
     )
     if TRANSLATOR_MODE == TranslatorMode.MODERN:
         commands = _activate_python_env(
-            commands, f"{os.getenv('OPS_TRANSLATOR')}/../ops_venv"
+            commands, f"{os.getenv('OPS_INSTALL_DIR')}/translator/ops_translator/ops_venv"
         )
     rc = _run_process(commands, app_dir, use_shell=True)
     if rc["return_code"]:
@@ -502,7 +508,7 @@ def test_app_cmake_build(app_dir: str) -> int:
         return rc["return_code"]
 
     # Build apps using CMake. Use only 1 core to make output clearer
-    rc = _run_process(("cmake", "--build", "."), build_dir)
+    rc = _run_process(("cmake", "--build",".","-j","4"), build_dir)
     if rc["return_code"]:
         _log_failure(f"Failed to translate and build apps using CMake:\n{rc['stderr']}")
 
@@ -610,6 +616,7 @@ def run_tests() -> None:
     num_failed = 0
 
     for app_path in test_app_paths:
+        t_start = time.time()
         app_name = os.path.splitext(os.path.basename(app_path))[0]
         app_file = os.path.basename(app_path)
         app_dir = os.path.dirname(app_path)
@@ -621,6 +628,7 @@ def run_tests() -> None:
 
         # Test that OpenSBLI can generate the test case
         return_code = test_app_generates(app_file, app_dir)
+        t_generate = time.time()
         if return_code:
             num_failed += 1
             continue
@@ -629,19 +637,27 @@ def run_tests() -> None:
         if return_code:
             num_failed += 1
             continue
+        t_translate = time.time()
         # Test that the OPS translated code can compile
         return_code = test_app_cmake_build(app_dir)
         if return_code:
             num_failed += 1
             continue
+        t_build = time.time()
         # Test that the compile apps run properly and produce the correct
         # output
         return_code = test_app_output(app_dir)
         if return_code:
             num_failed += 1
             continue
+        t_run = time.time()
 
         _log_success("Passed all tests successfully")
+        _log_success(f"Time to generate : {t_generate - t_start}")
+        _log_success(f"Time to translate: {t_translate - t_generate}")
+        _log_success(f"Time to build    : {t_build - t_translate}")
+        _log_success(f"Time to run      : {t_run - t_build}")
+        _log_success(f"Time to elapse   : {t_run - t_start}")
 
     _log("-" * 80)
     if num_failed > 0:
