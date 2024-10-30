@@ -11,9 +11,9 @@ if ! [ -f ${python_activate} ]; then
   virtualenv -p python3.7 ${python_dir}
 fi
 # Activate the Virtual Enviroment
-echo "My activate command call 1 ${python_activate}"
 source ${python_activate}
 # Not strictly necessary but we can make sure that all libs are available
 python3 -m pip install --upgrade pip
 python3 -m pip install -r ${local_dir}/requirements.txt
+echo "My activate command call ${python_activate}"
 
