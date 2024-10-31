@@ -182,7 +182,7 @@ def main(cases):
 
     Lz = cases[1]
     case = cases[0]
-    base_dir = '../%s/' % case
+    base_dir = '../../%s/' % case
     Lx, Ly = 2.0461756979465546, 22.5
 
     mblock = True
@@ -308,15 +308,15 @@ def main(cases):
     # Save x coordinates
     np.save(x_coords, x)
 
-cases = [('M02', 0.05), ('M06', 0.05), ('M08', 0.05)]
-Mach_numbers = [0.2, 0.6, 0.8]
+cases = [('2D', 0.05)]
+Mach_numbers = [0.2]
 markers = ['^', 'o', 's']
 new_labels = [r'$M=%.1f$' % M for M in Mach_numbers]
 colors = ['b', 'g', 'r', 'k', 'm', 'c', 'y', '0.25', '0.75']
 
 # Utility function
 PP = OpenSBLIPreProcess()
-skip_process = True
+skip_process = False
 # Take only 1 spanwise plane, don't span average
 #  Multi-processing of the cases
 if not skip_process:
@@ -346,7 +346,7 @@ fig, ax1 = plt.subplots()
 # Time average and plot Cp
 for i, case in enumerate(cases):
     case = case[0]
-    base_dir = '../%s/' % case
+    base_dir = '../../%s/' % case
     outPath = base_dir + 'time_history/'
     # Load x profile
     x = np.load(outPath + 'x_coords.npy')
@@ -361,7 +361,7 @@ for i, case in enumerate(cases):
     print("Case: %s ---" % case, np.min(Cp), np.max(Cp))
     plt.plot(x, Cp, label='%s' % new_labels[i], linewidth=linewidth, color=colors[i])
     # Add reference data
-    LJ = np.genfromtxt('../reference_data/LJ_reference_CP_%s.csv' % case, delimiter=',')
+    LJ = np.genfromtxt('../reference_data/LJ_reference_CP_%s.csv' % 'M02', delimiter=',')
     LJ_x, LJ_Cp = LJ[:,0], LJ[:,1]
     print(np.min(LJ_x), np.max(LJ_x))
     print(np.min(LJ_Cp), np.max(LJ_Cp))
@@ -392,7 +392,7 @@ fig, ax1 = plt.subplots()
 LE = 499
 for i, case in enumerate(cases):
     case = case[0]
-    base_dir = '../%s/' % case
+    base_dir = '../../%s/' % case
     outPath = base_dir + 'time_history/'
     # Load x profile
     x = np.load(outPath + 'x_coords.npy')
@@ -411,7 +411,7 @@ for i, case in enumerate(cases):
     xp = xp*-1
     plt.plot(xs, Cf[LE-1:], label='%s' % new_labels[i] ,color=colors[i], linewidth=linewidth)
     # Add reference data
-    LJ = np.genfromtxt('../reference_data/LJ_reference_CF_%s.csv' % case, delimiter=',')
+    LJ = np.genfromtxt('../reference_data/LJ_reference_CF_%s.csv' % 'M02', delimiter=',')
     LJ_x, LJ_Cf = LJ[:,0], LJ[:,1]
     plt.plot(LJ_x, LJ_Cf, color='k', marker=markers[i], markerfacecolor='none', markeredgewidth=1, ls='', ms=9, markevery=3)
     plt.legend(loc='best', prop={'size': 13})
