@@ -9,7 +9,7 @@ np.seterr(divide="ignore")
 
 #----------------------------------------------------------------------#
 # read the probe file, made of float values
-probe = np.loadtxt("cylinder_probes.log", dtype='f', delimiter=',', skiprows=1)
+probe = np.loadtxt("block0_cylinder_probes.log", dtype='f', delimiter=',', skiprows=1)
 
 #----------------------------------------------------------------------#
 # construct the iterations array

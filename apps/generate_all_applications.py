@@ -3,7 +3,9 @@ import os, subprocess, shutil
 # List of the current applications
 cases = {
 '/wave/'    : 'wave.py',
+'/cylinder/incompressible_cylinder/' : 'cylinder_central.py',
 '/euler_wave/'  : 'euler_wave.py',
+'/euler_wave_curvilinear/' : 'euler_wave_curvilinear.py',
 '/shu_osher/'   : 'shu_osher.py',
 '/Sod_shock_tube/'  : 'Sod_shock_tube.py',
 '/Lax_shock_tube/'  : 'Lax_shock_tube.py',
