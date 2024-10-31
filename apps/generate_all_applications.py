@@ -29,6 +29,7 @@ cases = {
 '/turbulent_counter_flow/'      : 'turbulent_counter_flow.py',
 '/vortex_core/'     : 'vortex_core.py',
 '/mixing_layer/'   : 'mixlay_central_scalar.py',
+'/flat_plate_transition/' : 'flat_plate_transition.py',
 }
 
 

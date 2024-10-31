@@ -62,4 +62,4 @@ def plot(files, n_levels, min_val, max_val):
 
 files, iters = find_files('./')
 
-plot(files, 20, 0.5, 2.4)
+plot(files, 257, 0.5, 2.4)

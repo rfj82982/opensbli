@@ -96,7 +96,7 @@ class Plot(plotFunctions):
         t = 2.5
         exact = 1.0 + 0.2*numpy.sin(numpy.pi*(self.x+self.y - t*(u_const+v_const)))
         npoints = numpy.shape(exact)
-        print numpy.shape(exact)
+        print(numpy.shape(exact))
 
         rho_error = numpy.abs(exact - rho)
         L1 = numpy.sum(rho_error)/(npoints[0]*npoints[1])
@@ -106,9 +106,9 @@ class Plot(plotFunctions):
         text_file.write("L1, Linf\n")
         text_file.write("%e, %e" % (L1, Linf))
         text_file.close()
-        print "=================================="
-        print "L^1 error: %e " % L1
-        print "L_inf error: %e " % Linf
+        print("==================================")
+        print("L^1 error: %e " % L1)
+        print("L_inf error: %e " % Linf)
         f.close()
 
 
