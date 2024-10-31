@@ -287,14 +287,14 @@ multi_block.set_equations(stat_equation_classes)
 filters = {0:[], 1:[], 2:[]}
 shock_filters = []
 for no, block in enumerate(multi_block.blocks):
-    if no == 0 or no == 1 or no == 2: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
-        WF = WENOFilter(block, order=5, metrics=metriceq, airfoil=True, flux_type='LLF')
+    if no == 1: # Main aerofoil block, C-mesh. Don't filter near the aerofoil
+        WF = WENOFilter(block, order=5, metrics=metriceq, airfoil=True, optimize=True, flux_type='LLF')
         shock_filters.append(WF)
         filters[no] += [WF.equation_classes]
 
 # Add DRP filters for freestream
 for no, block in enumerate(multi_block.blocks):
-    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.3333333, multi_block=multi_block).equation_classes]
+    filters[no] += [ExplicitFilter(block, [0,1,2], width=9, filter_type='DRP', optimized=False, sigma=0.3333333, airfoil=True, multi_block=multi_block).equation_classes]
 
 # Add a binomial filter on the outlet boundary to kill reflections
 for no, block in enumerate(multi_block.blocks):
@@ -318,7 +318,7 @@ multi_block.set_filters(filters)
 # HDF5 input/output
 x,y,z = symbols("x0, x1, x2", **{'cls':DataObject})
 kwargs = {'iotype': "Write"}
-q_hdf5 = iohdf5(save_every=1000, **kwargs)
+q_hdf5 = iohdf5(save_every=50000, **kwargs)
 q_hdf5.add_arrays(simulation_eq.time_advance_arrays)
 # Read in the grid file
 kwargs = {'iotype': "Read"}
@@ -384,7 +384,8 @@ multi_block.discretise()
 
 # Add a periodic boundary condition call for WENO filters
 for i, block in enumerate(multi_block.blocks):
-    shock_filters[i].update_periodic_boundary(block, halos=[-4,4])
+    if i == 1:
+        shock_filters[0].update_periodic_boundary(block, halos=[-4,4])
 
 # Add the wake treatment kernelss
 wake_ker = generate_wake_kernel(q_vector, multi_block, wall_energy[0])

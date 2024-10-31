@@ -301,7 +301,7 @@ block_data = {}
 
 
 # Specify the input grid files
-input_files = ["../Bl1.dat", "../Bl2.dat","../Bl3.dat"]
+input_files = ["../NASA-CRM/crm.c-grid.block-%d.dat" % i for i in range(3)]
 # Number of halo points to add on each side of each direction (default 5)
 nhalo = 5
 ndim = 3
