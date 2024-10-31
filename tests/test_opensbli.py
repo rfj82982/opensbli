@@ -51,45 +51,39 @@ TRANSLATOR_MODE = TranslatorMode.MODERN
 # list contains the test applications, while the second list contains the
 # verification applications. The verification applications are used to check the
 # output of the test applications against expected values.
-#APP_TEST_CASES = [
-#    f"{SCRIPT_DIRECTORY}/../apps/wave/wave.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/euler_wave/euler_wave.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/shu_osher/shu_osher.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/Sod_shock_tube/Sod_shock_tube.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/Lax_shock_tube/Lax_shock_tube.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/LeBlanc/LeBlanc.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/taylor_green_vortex.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/TGsym/TGsym.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/viscous_shock_tube/viscous_shock_tube.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/kelvin_helmholtz/kelvin_helmholtz.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/inviscid_shock_reflection/inviscid_shock.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/katzer_SBLI/katzer_SBLI.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/laminar_2D/laminar_channel.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/turbulent_3D/turbulent_channel.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_Central/turbulent_channel.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_TENO/turbulent_channel.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/adiabatic_isothermal_channel/iso_adi_channel_heat_sink.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/transitional_SBLI/transitional_SBLI.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/cylinder/supersonic_cylinder/supersonic_cylinder.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/TGV_multi_block/compressible_TGV_MB.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/compressible_TGV.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/2D/airfoil_MB_2D.py",
-#    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/3D/transonic_MB.py",
-#]
-#VERIFICATION_TEST_CASES = [
-#    f"{SCRIPT_DIRECTORY}/verification_apps/euler_wave_curvilinear/verify_euler_wave_curvilinear.py",
-#    f"{SCRIPT_DIRECTORY}/verification_apps/sod_shock_tube/verify_sod_shock_tube.py",
-#    f"{SCRIPT_DIRECTORY}/verification_apps/tg_sym/verify_tg_sym.py",
-#    f"{SCRIPT_DIRECTORY}/verification_apps/channel_flow_laminar_2D/verify_laminar_channel.py",
-#    f"{SCRIPT_DIRECTORY}/verification_apps/airfoil_multiblock_2D/verify_airfoil_MB_2D.py",
-#]
-#ALL_TEST_CASES = APP_TEST_CASES + VERIFICATION_TEST_CASES
-
 APP_TEST_CASES = [
     f"{SCRIPT_DIRECTORY}/../apps/wave/wave.py",
+    f"{SCRIPT_DIRECTORY}/../apps/euler_wave/euler_wave.py",
+    f"{SCRIPT_DIRECTORY}/../apps/shu_osher/shu_osher.py",
+    f"{SCRIPT_DIRECTORY}/../apps/Sod_shock_tube/Sod_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/../apps/Lax_shock_tube/Lax_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/../apps/LeBlanc/LeBlanc.py",
+    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/taylor_green_vortex.py",
+    f"{SCRIPT_DIRECTORY}/../apps/taylor_green_vortex/TGsym/TGsym.py",
+    f"{SCRIPT_DIRECTORY}/../apps/viscous_shock_tube/viscous_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/../apps/kelvin_helmholtz/kelvin_helmholtz.py",
+    f"{SCRIPT_DIRECTORY}/../apps/inviscid_shock_reflection/inviscid_shock.py",
     f"{SCRIPT_DIRECTORY}/../apps/katzer_SBLI/katzer_SBLI.py",
-    ]
-ALL_TEST_CASES = APP_TEST_CASES 
+    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/laminar_2D/laminar_channel.py",
+    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/turbulent_3D/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_Central/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/compressible_TCF_TENO/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/../apps/channel_flow/adiabatic_isothermal_channel/iso_adi_channel_heat_sink.py",
+    f"{SCRIPT_DIRECTORY}/../apps/transitional_SBLI/transitional_SBLI.py",
+    f"{SCRIPT_DIRECTORY}/../apps/cylinder/supersonic_cylinder/supersonic_cylinder.py",
+    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/TGV_multi_block/compressible_TGV_MB.py",
+    f"{SCRIPT_DIRECTORY}/../apps/compressible_taylor_green_vortex/compressible_TGV.py",
+    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/2D/airfoil_MB_2D.py",
+    f"{SCRIPT_DIRECTORY}/../apps/aerofoils/multi_block/3D/transonic_MB.py",
+]
+VERIFICATION_TEST_CASES = [
+    f"{SCRIPT_DIRECTORY}/verification_apps/euler_wave_curvilinear/verify_euler_wave_curvilinear.py",
+    f"{SCRIPT_DIRECTORY}/verification_apps/sod_shock_tube/verify_sod_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/verification_apps/tg_sym/verify_tg_sym.py",
+    f"{SCRIPT_DIRECTORY}/verification_apps/channel_flow_laminar_2D/verify_laminar_channel.py",
+    #f"{SCRIPT_DIRECTORY}/verification_apps/airfoil_multiblock_2D/verify_airfoil_MB_2D.py", # this takes about 10 min -> too long
+]
+ALL_TEST_CASES = APP_TEST_CASES + VERIFICATION_TEST_CASES
 
 def setup_logger(log_file: str) -> logging.Logger:
     """
@@ -281,20 +275,22 @@ def _copy_cmakelists_to_app(app_dir: str) -> str:
     instead. This CMakeLists.txt may be out of date with the latest version of
     OPS.
     """
-
-    path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../../CMakeLists.txt")
-    if path.exists():
-        # need to modify this file to remove OPS mess and add a OpenSBLI build option
-        content = path.read_text()
-        content = "\n".join(
-            [line for line in content.splitlines() if "add_subdirectory" not in line]
-        )
-        content += '\nBUILD_OPS_C_SAMPLE(OpenSBLI "NONE" "NONE" "NONE" "NO" "NO")\n'
-        new_path = pathlib.Path(f"{app_dir}/CMakeLists.txt")
-        new_path.write_text(content)
-    else:
-        path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../apps/CMakeLists.txt")
-        shutil.copyfile(str(path.absolute()), f"{app_dir}/CMakeLists.txt")
+    # Use only the CMake from App -> need to modify to use new CMake
+    #path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../../CMakeLists.txt")
+    #if path.exists():
+    #    # need to modify this file to remove OPS mess and add a OpenSBLI build option
+    #    content = path.read_text()
+    #    content = "\n".join(
+    #        [line for line in content.splitlines() if "add_subdirectory" not in line]
+    #    )
+    #    content += '\nBUILD_OPS_C_SAMPLE(OpenSBLI "NONE" "NONE" "NONE" "NO" "NO")\n'
+    #    new_path = pathlib.Path(f"{app_dir}/CMakeLists.txt")
+    #    new_path.write_text(content)
+    #else:
+    #    path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../apps/CMakeLists.txt")
+    #    shutil.copyfile(str(path.absolute()), f"{app_dir}/CMakeLists.txt")
+    path = pathlib.Path(f"{SCRIPT_DIRECTORY}/../apps/CMakeLists.txt")
+    shutil.copyfile(str(path.absolute()), f"{app_dir}/CMakeLists.txt")
 
     return str(path.resolve())
 

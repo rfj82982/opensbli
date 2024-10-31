@@ -28,6 +28,6 @@ cd opensbli_venv/
 source setup_venv.sh 
 echo "My activate command ${python_activate}"
 cd ../tests
-python test_opensbli.py
+python test_opensbli.py --verif-only 
 cd ..
 
