@@ -27,7 +27,8 @@ cases = {
 '/aerofoils/multi_block/2D/'    : 'airfoil_MB_2D.py',
 '/aerofoils/multi_block/3D/'    : 'transonic_MB.py',
 '/turbulent_counter_flow/'      : 'turbulent_counter_flow.py',
-'/vortex_core/3D/'     : 'vortex_core.py',
+'/vortex_core/'     : 'vortex_core.py',
+'/mixing_layer/'   : 'mixlay_central_scalar.py',
 }
 
 
