@@ -19,7 +19,6 @@ cases = {
 '/inviscid_shock_reflection/'   : 'inviscid_shock.py',
 '/katzer_SBLI/' : 'katzer_SBLI.py',
 '/channel_flow/laminar_2D/' : 'laminar_channel.py',
-'/channel_flow/turbulent_3D/'   : 'turbulent_channel.py',
 '/channel_flow/compressible_TCF_Central/'   : 'turbulent_channel.py',
 '/channel_flow/compressible_TCF_TENO/'  : 'turbulent_channel.py',
 '/channel_flow/adiabatic_isothermal_channel'    : 'iso_adi_channel_heat_sink.py',
