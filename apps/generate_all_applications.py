@@ -23,7 +23,6 @@ cases = {
 '/channel_flow/compressible_TCF_TENO/'  : 'turbulent_channel.py',
 '/channel_flow/adiabatic_isothermal_channel'    : 'iso_adi_channel_heat_sink.py',
 '/transitional_SBLI/'   : 'transitional_SBLI.py',
-'/cylinder/supersonic_cylinder/'    : 'supersonic_cylinder.py',
 '/compressible_taylor_green_vortex/'    : 'compressible_TGV.py',
 '/aerofoils/multi_block/2D/'    : 'airfoil_MB_2D.py',
 '/aerofoils/multi_block/3D/'    : 'transonic_MB.py',
