@@ -221,8 +221,9 @@ OpenSBLI requires a Python 3 installation for code generation and the Oxford Par
 
 
 The installation of libraries will depend on whether you are using a local machine or an HPC cluster. If you are intending to use OpenSBLI on an HPC cluster you will need to load suitable system modules and point OPS to them via the environment variables outlined in section \ref{sec:OPS}. MPI and HDF5 libraries must have been compiled with the same compiler or you will face errors during compilation of OPS executables. If you are not sure where the  modules are located, please contact your system administrator. \textbf{Important note: SymPy version 1.1 is required, newer versions are currently not supported.} The requirements are:
-\subsection*{OpenSBLI requirements (Python 2)}
+\subsection*{OpenSBLI requirements (Python 3)}
 \begin{verbatim}
+Python versions 3 <= 3.7*
 SymPy version 1.1 : Symbolic Python libary used by OpenSBLI
 Matplotlib : Python plotting library
 h5py : Python library to read in HDF5 output files for plotting
@@ -237,7 +238,15 @@ An MPI distribution : (OpenMPI, MPICH, Intel MPI, ..)
 HDF5 libraries : Used for I/O within OPS
 CUDA/OpenCL libraries : Required only if you intend to run on GPUs
 \end{verbatim}
-\textbf{Important note:} Codes can be generated with OpenSBLI on a local machine (laptop) and copied onto another machine to be translated, compiled and run with OPS. While you can install both OpenSBLI and OPS on an HPC cluster, it is not necessary to have both on the same machine. OPS however must be installed (and built) on the machine you wish to run simulations on.
+\textbf{Note:} Codes can be generated with OpenSBLI on a local machine (laptop) and copied onto another machine to be translated, compiled and run with OPS. While you can install both OpenSBLI and OPS on an HPC cluster, it is not necessary to have both on the same machine. OPS however must be installed (and built) on the machine you wish to run simulations on.
+
+
+\noindent \textbf{Python 3.8*:} this version of Python is supported with the following patch to SymPy (modify \verb|<base_python_dir>| as appropriate for your system):
+
+\begin{lstlisting}
+sed -i -e "s/value=ast.Name/value=ast.NameConstant/g" <base_python_dir>sympy/parsing/sympy_parser.py
+sed -i -e "s/id='False'/value=False/g" <base_python_dir>/sympy/parsing/sympy_parser.py
+\end{lstlisting}
 
 \subsection{Installation of libraries on an Ubuntu local machine}
 \textbf{**Ignore this section if installing OpenSBLI on an HPC cluster**}\\
