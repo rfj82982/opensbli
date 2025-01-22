@@ -18,6 +18,8 @@ if(${CMAKE_PROJECT_NAME} STREQUAL APP)
   option(OPS_TEST "Turn on tests for Apps" OFF)
   option(ENABLE_IEEE "Enable IEEE flags" OFF)
   option(LEGACY_CODEGEN "Build apps with Legacy code-gen" OFF)
+  set (OPS_TARGET "all" CACHE STRING "Default OPS target to build the OpenSBLI app")
+  set_property(CACHE OPS_TARGET PROPERTY STRINGS all seq mpi cuda)
 
   if(NOT OPS_VERBOSE_WARNING)
     message(
@@ -706,240 +708,248 @@ macro(
   endif()
 
   # TARGET: DEV_SEQ, SEQ, OPENMP, TILED
-  add_executable(${Name}_dev_seq ${DEV} ${OTHERS})
-  target_include_directories(${Name}_dev_seq PRIVATE ${TMP_SOURCE_DIR})
+  if(OPS_TARGET MATCHES "all" OR OPS_TARGET MATCHES "seq")
+    add_executable(${Name}_dev_seq ${DEV} ${OTHERS})
+    target_include_directories(${Name}_dev_seq PRIVATE ${TMP_SOURCE_DIR})
 
-  add_executable(
-    ${Name}_seq ${OPS} ${OTHERS}
-                "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-  target_include_directories(${Name}_seq PRIVATE ${TMP_SOURCE_DIR})
-
-  add_executable(
-    ${Name}_openmp ${OPS} ${OTHERS}
-                   "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-  target_include_directories(${Name}_openmp PRIVATE ${TMP_SOURCE_DIR})
-
-  add_executable(
-    ${Name}_tiled ${OPS} ${OTHERS}
+    add_executable(
+      ${Name}_seq ${OPS} ${OTHERS}
                   "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-  target_include_directories(${Name}_tiled PRIVATE ${TMP_SOURCE_DIR})
-  target_compile_definitions(${Name}_tiled PRIVATE "-DOPS_LAZY")
+    target_include_directories(${Name}_seq PRIVATE ${TMP_SOURCE_DIR})
 
-  if(HDF5_SEQ)
-    target_link_libraries(${Name}_dev_seq ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
-                          MPI::MPI_CXX)
-    target_link_libraries(${Name}_seq ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
-                          MPI::MPI_CXX)
-    target_link_libraries(${Name}_openmp ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
-                          MPI::MPI_CXX)
-    target_link_libraries(${Name}_tiled ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
-                          MPI::MPI_CXX)
-  endif()
+    add_executable(
+      ${Name}_openmp ${OPS} ${OTHERS}
+                     "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
+    target_include_directories(${Name}_openmp PRIVATE ${TMP_SOURCE_DIR})
 
-  if(${Trid} STREQUAL "YES")
-    set(TRID Yes)
-  else()
-    set(TRID No)
-  endif()
+    add_executable(
+      ${Name}_tiled ${OPS} ${OTHERS}
+                    "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
+    target_include_directories(${Name}_tiled PRIVATE ${TMP_SOURCE_DIR})
+    target_compile_definitions(${Name}_tiled PRIVATE "-DOPS_LAZY")
 
-  if(TRID)
-    target_link_libraries(${Name}_dev_seq ops_trid_seq -L${LIBTRID_PATH}/lib
-                          -ltridcpu)
-    target_link_libraries(${Name}_seq ops_trid_seq -L${LIBTRID_PATH}/lib
-                          -ltridcpu)
-    target_link_libraries(${Name}_openmp ops_trid_seq -L${LIBTRID_PATH}/lib
-                          -ltridcpu)
-    target_link_libraries(${Name}_tiled ops_trid_seq -L${LIBTRID_PATH}/lib
-                          -ltridcpu)
-  endif()
-
-  target_link_libraries(${Name}_dev_seq ops_seq OpenMP::OpenMP_CXX)
-  target_link_libraries(${Name}_seq ops_seq OpenMP::OpenMP_CXX)
-  target_link_libraries(${Name}_openmp ops_seq OpenMP::OpenMP_CXX)
-  target_link_libraries(${Name}_tiled ops_seq OpenMP::OpenMP_CXX)
-
-  install(TARGETS ${Name}_dev_seq DESTINATION ${APP_INSTALL_DIR}/${Name})
-  install(TARGETS ${Name}_seq DESTINATION ${APP_INSTALL_DIR}/${Name})
-  install(TARGETS ${Name}_openmp DESTINATION ${APP_INSTALL_DIR}/${Name})
-  install(TARGETS ${Name}_tiled DESTINATION ${APP_INSTALL_DIR}/${Name})
-
-  # Sequential tests disabled since it is too time consuming for some tests at
-  # this moment
-  if((OPS_TEST)
-     AND (${GenerateTest} STREQUAL "YES")
-     AND (NOT SKIP_SEQ_TESTING))
-
-    add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_dev_seq
-                   ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh dev_seq)
-    add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_seq
-                   ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh seq)
-    add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_openmp
-                   ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh openmp)
-    add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_tiled
-                   ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh tiled)
-  endif()
-
-  if(CUDA)
-    add_executable(${Name}_cuda ${OPS} ${OTHERS}
-                                "${TMP_SOURCE_DIR}/cuda/cuda_kernels.cu")
-    target_include_directories(${Name}_cuda PRIVATE ${TMP_SOURCE_DIR})
-    target_link_libraries(${Name}_cuda ops_cuda CUDA::cudart_static -lcurand
-                          OpenMP::OpenMP_CXX)
-    target_compile_options(${Name}_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-                                                --fmad=false>)
     if(HDF5_SEQ)
-      target_link_libraries(${Name}_cuda ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
+      target_link_libraries(${Name}_dev_seq ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
+                            MPI::MPI_CXX)
+      target_link_libraries(${Name}_seq ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
+                            MPI::MPI_CXX)
+      target_link_libraries(${Name}_openmp ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
+                            MPI::MPI_CXX)
+      target_link_libraries(${Name}_tiled ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
                             MPI::MPI_CXX)
     endif()
 
+    if(${Trid} STREQUAL "YES")
+      set(TRID Yes)
+    else()
+      set(TRID No)
+    endif()
+
     if(TRID)
-      target_link_libraries(
-        ${Name}_cuda
-        ops_trid_cuda
-        -L${LIBTRID_PATH}/lib
-        -ltridcuda
-        CUDA::cublas_static
-        CUDA::cublasLt_static
-        CUDA::culibos)
+      target_link_libraries(${Name}_dev_seq ops_trid_seq -L${LIBTRID_PATH}/lib
+                            -ltridcpu)
+      target_link_libraries(${Name}_seq ops_trid_seq -L${LIBTRID_PATH}/lib
+                            -ltridcpu)
+      target_link_libraries(${Name}_openmp ops_trid_seq -L${LIBTRID_PATH}/lib
+                            -ltridcpu)
+      target_link_libraries(${Name}_tiled ops_trid_seq -L${LIBTRID_PATH}/lib
+                            -ltridcpu)
     endif()
 
-    install(TARGETS ${Name}_cuda DESTINATION ${APP_INSTALL_DIR}/${Name})
+    target_link_libraries(${Name}_dev_seq ops_seq OpenMP::OpenMP_CXX)
+    target_link_libraries(${Name}_seq ops_seq OpenMP::OpenMP_CXX)
+    target_link_libraries(${Name}_openmp ops_seq OpenMP::OpenMP_CXX)
+    target_link_libraries(${Name}_tiled ops_seq OpenMP::OpenMP_CXX)
 
+    install(TARGETS ${Name}_dev_seq DESTINATION ${APP_INSTALL_DIR}/${Name})
+    install(TARGETS ${Name}_seq DESTINATION ${APP_INSTALL_DIR}/${Name})
+    install(TARGETS ${Name}_openmp DESTINATION ${APP_INSTALL_DIR}/${Name})
+    install(TARGETS ${Name}_tiled DESTINATION ${APP_INSTALL_DIR}/${Name})
+
+    # Sequential tests disabled since it is too time consuming for some tests at
+    # this moment
     if((OPS_TEST)
-       AND (GPU_NUMBER GREATER_EQUAL 1)
-       AND (${GenerateTest} STREQUAL "YES"))
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_cuda
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh cuda)
+       AND (${GenerateTest} STREQUAL "YES")
+       AND (NOT SKIP_SEQ_TESTING))
+
+      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_dev_seq
+                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh dev_seq)
+      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_seq
+                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh seq)
+      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_openmp
+                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh openmp)
+      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_tiled
+                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh tiled)
     endif()
   endif()
 
-  if(OMPOFFLOAD)
-    add_executable(
-      ${Name}_ompoffload
-      ${OPS} ${OTHERS}
-      "${TMP_SOURCE_DIR}/openmp_offload/openmp_offload_kernels.cpp")
-    target_include_directories(${Name}_ompoffload PRIVATE ${TMP_SOURCE_DIR})
-    target_link_libraries(${Name}_ompoffload ops_ompoffload OpenMP::OpenMP_CXX)
-    target_compile_options(${Name}_ompoffload PRIVATE ${OMPOFFLOAD_FLAGS})
-    if(HDF5_SEQ)
-      target_link_libraries(${Name}_ompoffload ops_hdf5_seq hdf5::hdf5
-                            hdf5::hdf5_hl MPI::MPI_CXX)
-    endif()
-    target_link_options(${Name}_ompoffload PRIVATE ${OMPOFFLOAD_FLAGS})
-    install(TARGETS ${Name}_ompoffload DESTINATION ${APP_INSTALL_DIR}/${Name})
+  if(OPS_TARGET MATCHES "all" OR OPS_TARGET MATCHES "cuda")
+    if(CUDA)
+      add_executable(${Name}_cuda ${OPS} ${OTHERS}
+                                  "${TMP_SOURCE_DIR}/cuda/cuda_kernels.cu")
+      target_include_directories(${Name}_cuda PRIVATE ${TMP_SOURCE_DIR})
+      target_link_libraries(${Name}_cuda ops_cuda CUDA::cudart_static -lcurand
+                            OpenMP::OpenMP_CXX)
+      target_compile_options(${Name}_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                                                  --fmad=false>)
+      if(HDF5_SEQ)
+        target_link_libraries(${Name}_cuda ops_hdf5_seq hdf5::hdf5 hdf5::hdf5_hl
+                              MPI::MPI_CXX)
+      endif()
 
-    if((OPS_TEST)
-       AND (GPU_NUMBER GREATER_EQUAL 1)
-       AND (${GenerateTest} STREQUAL "YES"))
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_ompoffload
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh ompoffload)
-    endif()
-  endif()
+      if(TRID)
+        target_link_libraries(
+          ${Name}_cuda
+          ops_trid_cuda
+          -L${LIBTRID_PATH}/lib
+          -ltridcuda
+          CUDA::cublas_static
+          CUDA::cublasLt_static
+          CUDA::culibos)
+      endif()
 
-  if(OPS_HIP)
-    if(HIP AND NOT TRID)
-      add_executable(${Name}_hip ${OPS} ${OTHERS}
-                                 "${TMP_SOURCE_DIR}/hip/hip_kernels.cpp")
-      message("${TMP_SOURCE_DIR}/hip/${KernelName}_hip_kernel.cpp")
+      install(TARGETS ${Name}_cuda DESTINATION ${APP_INSTALL_DIR}/${Name})
 
-      target_include_directories(${Name}_hip PRIVATE ${TMP_SOURCE_DIR})
-      target_link_libraries(${Name}_hip ops_hip hip::device OpenMP::OpenMP_CXX)
-
-      # if (HDF5_SEQ) target_link_libraries(${Name}_hip ops_hdf5_seq hdf5::hdf5
-      # hdf5::hdf5_hl  MPI::MPI_CXX) endif()
-      install(TARGETS ${Name}_hip DESTINATION ${APP_INSTALL_DIR}/${Name})
       if((OPS_TEST)
          AND (GPU_NUMBER GREATER_EQUAL 1)
          AND (${GenerateTest} STREQUAL "YES"))
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_cuda
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh cuda)
+      endif()
+    endif()
 
-        set(args "OPS_CL_DEVICE=1 OPS_BLOCK_SIZE_X=512 OPS_BLOCK_SIZE_Y=1")
-        add_test(
-          NAME ${Name}_hip
-          COMMAND
-            ${CMAKE_COMMAND} -DCMD=$<TARGET_FILE:${Name}_opencl> -DARG=${args}
-            -DOPS_INSTALL_PATH=${OPS_CMAKE_INSTALL_PATH} -P
-            ${OPS_APP_SRC}/runtests.cmake
-          WORKING_DIRECTORY "${TMP_SOURCE_DIR}")
+    if(OMPOFFLOAD)
+      add_executable(
+        ${Name}_ompoffload
+        ${OPS} ${OTHERS}
+        "${TMP_SOURCE_DIR}/openmp_offload/openmp_offload_kernels.cpp")
+      target_include_directories(${Name}_ompoffload PRIVATE ${TMP_SOURCE_DIR})
+      target_link_libraries(${Name}_ompoffload ops_ompoffload OpenMP::OpenMP_CXX)
+      target_compile_options(${Name}_ompoffload PRIVATE ${OMPOFFLOAD_FLAGS})
+      if(HDF5_SEQ)
+        target_link_libraries(${Name}_ompoffload ops_hdf5_seq hdf5::hdf5
+                              hdf5::hdf5_hl MPI::MPI_CXX)
+      endif()
+      target_link_options(${Name}_ompoffload PRIVATE ${OMPOFFLOAD_FLAGS})
+      install(TARGETS ${Name}_ompoffload DESTINATION ${APP_INSTALL_DIR}/${Name})
+
+      if((OPS_TEST)
+         AND (GPU_NUMBER GREATER_EQUAL 1)
+         AND (${GenerateTest} STREQUAL "YES"))
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_ompoffload
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh ompoffload)
+      endif()
+    endif()
+
+    if(OPS_HIP)
+      if(HIP AND NOT TRID)
+        add_executable(${Name}_hip ${OPS} ${OTHERS}
+                                   "${TMP_SOURCE_DIR}/hip/hip_kernels.cpp")
+        message("${TMP_SOURCE_DIR}/hip/${KernelName}_hip_kernel.cpp")
+
+        target_include_directories(${Name}_hip PRIVATE ${TMP_SOURCE_DIR})
+        target_link_libraries(${Name}_hip ops_hip hip::device OpenMP::OpenMP_CXX)
+
+        # if (HDF5_SEQ) target_link_libraries(${Name}_hip ops_hdf5_seq hdf5::hdf5
+        # hdf5::hdf5_hl  MPI::MPI_CXX) endif()
+        install(TARGETS ${Name}_hip DESTINATION ${APP_INSTALL_DIR}/${Name})
+        if((OPS_TEST)
+           AND (GPU_NUMBER GREATER_EQUAL 1)
+           AND (${GenerateTest} STREQUAL "YES"))
+
+          set(args "OPS_CL_DEVICE=1 OPS_BLOCK_SIZE_X=512 OPS_BLOCK_SIZE_Y=1")
+          add_test(
+            NAME ${Name}_hip
+            COMMAND
+              ${CMAKE_COMMAND} -DCMD=$<TARGET_FILE:${Name}_opencl> -DARG=${args}
+              -DOPS_INSTALL_PATH=${OPS_CMAKE_INSTALL_PATH} -P
+              ${OPS_APP_SRC}/runtests.cmake
+            WORKING_DIRECTORY "${TMP_SOURCE_DIR}")
+        endif()
       endif()
     endif()
   endif()
 
-  if(MPI)
-    add_executable(${Name}_dev_mpi ${DEV} ${OTHERS})
-    target_include_directories(${Name}_dev_mpi PRIVATE ${TMP_SOURCE_DIR})
-    target_compile_definitions(${Name}_dev_mpi PRIVATE "-DOPS_MPI")
+  if(OPS_TARGET MATCHES "all" OR OPS_TARGET MATCHES "mpi")
+    if(MPI)
+      add_executable(${Name}_dev_mpi ${DEV} ${OTHERS})
+      target_include_directories(${Name}_dev_mpi PRIVATE ${TMP_SOURCE_DIR})
+      target_compile_definitions(${Name}_dev_mpi PRIVATE "-DOPS_MPI")
 
-    add_executable(
-      ${Name}_mpi ${OPS} ${OTHERS}
-                  "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-    target_include_directories(${Name}_mpi PRIVATE ${TMP_SOURCE_DIR})
-    target_compile_definitions(${Name}_mpi PRIVATE "-DOPS_MPI")
+      add_executable(
+        ${Name}_mpi ${OPS} ${OTHERS}
+                    "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
+      target_include_directories(${Name}_mpi PRIVATE ${TMP_SOURCE_DIR})
+      target_compile_definitions(${Name}_mpi PRIVATE "-DOPS_MPI")
 
-    add_executable(
-      ${Name}_mpi_openmp ${OPS} ${OTHERS}
-                         "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-    target_include_directories(${Name}_mpi_openmp PRIVATE ${TMP_SOURCE_DIR})
-    target_compile_definitions(${Name}_mpi_openmp PRIVATE "-DOPS_MPI")
+      add_executable(
+        ${Name}_mpi_openmp ${OPS} ${OTHERS}
+                           "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
+      target_include_directories(${Name}_mpi_openmp PRIVATE ${TMP_SOURCE_DIR})
+      target_compile_definitions(${Name}_mpi_openmp PRIVATE "-DOPS_MPI")
 
-    add_executable(
-      ${Name}_mpi_tiled ${OPS} ${OTHERS}
-                        "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
-    target_include_directories(${Name}_mpi_tiled PRIVATE ${TMP_SOURCE_DIR})
-    target_compile_definitions(${Name}_mpi_tiled PRIVATE "-DOPS_MPI -DOPS_LAZY")
+      add_executable(
+        ${Name}_mpi_tiled ${OPS} ${OTHERS}
+                          "${TMP_SOURCE_DIR}/mpi_openmp/mpi_openmp_kernels.cpp")
+      target_include_directories(${Name}_mpi_tiled PRIVATE ${TMP_SOURCE_DIR})
+      target_compile_definitions(${Name}_mpi_tiled PRIVATE "-DOPS_MPI -DOPS_LAZY")
 
-    if(HDF5_MPI)
-      target_link_libraries(${Name}_dev_mpi PRIVATE ops_hdf5_mpi hdf5::hdf5
-                                                    hdf5::hdf5_hl MPI::MPI_CXX)
-      target_link_libraries(${Name}_mpi PRIVATE ops_hdf5_mpi hdf5::hdf5
-                                                hdf5::hdf5_hl MPI::MPI_CXX)
-      target_link_libraries(
-        ${Name}_mpi_openmp PRIVATE ops_hdf5_mpi hdf5::hdf5 hdf5::hdf5_hl
-                                   MPI::MPI_CXX)
-      target_link_libraries(
-        ${Name}_mpi_tiled PRIVATE ops_hdf5_mpi hdf5::hdf5 hdf5::hdf5_hl
-                                  MPI::MPI_CXX)
-    endif()
+      if(HDF5_MPI)
+        target_link_libraries(${Name}_dev_mpi PRIVATE ops_hdf5_mpi hdf5::hdf5
+                                                      hdf5::hdf5_hl MPI::MPI_CXX)
+        target_link_libraries(${Name}_mpi PRIVATE ops_hdf5_mpi hdf5::hdf5
+                                                  hdf5::hdf5_hl MPI::MPI_CXX)
+        target_link_libraries(
+          ${Name}_mpi_openmp PRIVATE ops_hdf5_mpi hdf5::hdf5 hdf5::hdf5_hl
+                                     MPI::MPI_CXX)
+        target_link_libraries(
+          ${Name}_mpi_tiled PRIVATE ops_hdf5_mpi hdf5::hdf5 hdf5::hdf5_hl
+                                    MPI::MPI_CXX)
+      endif()
 
-    if(TRID)
-      target_link_libraries(
-        ${Name}_dev_mpi PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
-                                -ltridcpu_mpi MPI::MPI_CXX)
-      target_link_libraries(
-        ${Name}_mpi PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib -ltridcpu_mpi
-                            MPI::MPI_CXX)
-      target_link_libraries(
-        ${Name}_mpi_openmp PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
-                                   -ltridcpu_mpi MPI::MPI_CXX)
-      target_link_libraries(
-        ${Name}_mpi_tiled PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
+      if(TRID)
+        target_link_libraries(
+          ${Name}_dev_mpi PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
                                   -ltridcpu_mpi MPI::MPI_CXX)
-    endif()
+        target_link_libraries(
+          ${Name}_mpi PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib -ltridcpu_mpi
+                              MPI::MPI_CXX)
+        target_link_libraries(
+          ${Name}_mpi_openmp PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
+                                     -ltridcpu_mpi MPI::MPI_CXX)
+        target_link_libraries(
+          ${Name}_mpi_tiled PRIVATE ops_trid_mpi -L${LIBTRID_PATH}/lib
+                                    -ltridcpu_mpi MPI::MPI_CXX)
+      endif()
 
-    target_link_libraries(${Name}_dev_mpi PRIVATE ops_mpi MPI::MPI_CXX
-                                                  OpenMP::OpenMP_CXX)
-    target_link_libraries(${Name}_mpi PRIVATE ops_mpi MPI::MPI_CXX
-                                              OpenMP::OpenMP_CXX)
-    target_link_libraries(${Name}_mpi_openmp PRIVATE ops_mpi MPI::MPI_CXX
-                                                     OpenMP::OpenMP_CXX)
-    target_link_libraries(${Name}_mpi_tiled PRIVATE ops_mpi MPI::MPI_CXX
+      target_link_libraries(${Name}_dev_mpi PRIVATE ops_mpi MPI::MPI_CXX
                                                     OpenMP::OpenMP_CXX)
+      target_link_libraries(${Name}_mpi PRIVATE ops_mpi MPI::MPI_CXX
+                                                OpenMP::OpenMP_CXX)
+      target_link_libraries(${Name}_mpi_openmp PRIVATE ops_mpi MPI::MPI_CXX
+                                                       OpenMP::OpenMP_CXX)
+      target_link_libraries(${Name}_mpi_tiled PRIVATE ops_mpi MPI::MPI_CXX
+                                                      OpenMP::OpenMP_CXX)
 
-    if((OPS_TEST) AND (${GenerateTest} STREQUAL "YES"))
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_dev_mpi
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh dev_mpi)
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi)
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi_openmp
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi_openmp)
-      add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi_tiled
-                     ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi_tiled)
+      if((OPS_TEST) AND (${GenerateTest} STREQUAL "YES"))
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_dev_mpi
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh dev_mpi)
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi)
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi_openmp
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi_openmp)
+        add_cmake_test(${CMAKE_CURRENT_BINARY_DIR}/${Name}_mpi_tiled
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cmake_test.sh mpi_tiled)
+      endif()
+
+      install(TARGETS ${Name}_dev_mpi DESTINATION ${APP_INSTALL_DIR}/${Name})
+      install(TARGETS ${Name}_mpi DESTINATION ${APP_INSTALL_DIR}/${Name})
+      install(TARGETS ${Name}_mpi_openmp DESTINATION ${APP_INSTALL_DIR}/${Name})
+      install(TARGETS ${Name}_mpi_tiled DESTINATION ${APP_INSTALL_DIR}/${Name})
     endif()
+  endif()
 
-    install(TARGETS ${Name}_dev_mpi DESTINATION ${APP_INSTALL_DIR}/${Name})
-    install(TARGETS ${Name}_mpi DESTINATION ${APP_INSTALL_DIR}/${Name})
-    install(TARGETS ${Name}_mpi_openmp DESTINATION ${APP_INSTALL_DIR}/${Name})
-    install(TARGETS ${Name}_mpi_tiled DESTINATION ${APP_INSTALL_DIR}/${Name})
-
+  if(OPS_TARGET MATCHES "all" OR OPS_TARGET MATCHES "cuda")
     if(CUDA_MPI)
       add_executable(${Name}_mpi_cuda ${OPS} ${OTHERS}
                                       "${TMP_SOURCE_DIR}/cuda/cuda_kernels.cu")
