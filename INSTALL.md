@@ -104,8 +104,13 @@ redone followed by the build. This can be done as follows:
 (py37_opt) $ cmake ../
 (py37_opt) $ cmake --build . -j 2 ! or more for parallel build   
 ``` 
-
-
+1. Modification of the OpenSBLI python file *app.py*. In this case am OpenSBLI code translations needs to done by
+```
+(py37_opt) $ cd apps/_opensbli-build-workspace**/app
+(py37_opt) $ python app.py
+``` 
+**PS** The OpenSBLI python code generation is guarantee to work only within the OpenSBLI python virtual enviroment. 
+Please see section [install](#Install) on how to activate it. 
 
 
 
