@@ -110,7 +110,19 @@ redone followed by the build. This can be done as follows:
 (py37_opt) $ python app.py
 ``` 
 **PS** The OpenSBLI python code generation is guarantee to work only within the OpenSBLI python virtual enviroment. 
-Please see section [install](#Install) on how to activate it. 
+Please see sections [above](#Installation) on how to activate it. 
+
+# Testing
+A testing framework is also available for OpenSBLI. This is based on the [test_opensbli.py](tests/test_opensbli.py) 
+python script. 
+The code generation, OPS translation and CMake build follow the structure given in the above sections. 
+In this case the workspace is located under **tests/_opensbli-test-workspac** and the full output is 
+recorded in *tests/test.log*. In case of a fully successful test run the working directory is deleted. 
+To run the full test from scratch with the activation of the OpenSBLI virtual enviroment use: 
+```
+$ ./RunTests.sh path/to/hdf5/mpi path/to/OPS/opt
+``` 
+ 
 
 
 
