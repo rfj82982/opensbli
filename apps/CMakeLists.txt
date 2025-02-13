@@ -174,6 +174,7 @@ if(${CMAKE_PROJECT_NAME} STREQUAL APP)
   endif()
 
   # Trying to find the OPS library TODO this shall become FindOPS.cmake later
+  message(STATUS "OPS INSTALL DIR ${OPS_INSTALL_DIR}")
   set(SEARCH_PATHS "${OPS_INSTALL_DIR}" "/usr/local" "/usr")
   # Tyring to find the include directory
   set(OPS_HEAD
@@ -548,6 +549,8 @@ macro(
   Trid
   GenerateTest)
 
+  # Create tmp dir and remove the old 
+  createtempdir()
   # Copy all source and head files into tmp
   file(GLOB CPP "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
