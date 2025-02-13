@@ -72,16 +72,41 @@ The default name for the workspace directory is **apps/_opensbli-build-workspace
 apps are build. 
 Inside every *app* directory there is the following struture: 
 
-* the `app.py` original OpenSBLI python script
-* the `opensbli.cpp` code generated file together with all relevant include files
-* the `Makefile` and `CMakeList.txt` for app build
-* the **test-build** folder with the app  build done with the CMake system 
- 
+* the *app.py* original OpenSBLI python script
+* the *opensbli.cpp* code generated file together with all relevant include files
+* the *CMakeList.txt* for app build
+* the **test-build** folder with the app  build done with the CMake system
+
+**P.S.** A *Makefile* is also available in the working directory, however it is not guarantee 
+to work unless OPS has been built using the traditional make procedure. The procedure here 
+described assumes a CMake build for both OPS and OpenSBLI app. 
+
 A script is available to perform the activation of the python virtual enviroment, set up of the
 OpenSBLI variables and run of the python app generation and can be used as 
 ```
 (py37_opt) $ source GenerateApps.sh path/to/hdf5/mpi path/to/OPS/opt   
 ``` 
+
+### App modification and rebuild
+It is possible to modify and regenerate/rebuild a specific app. To do so two possibilities are available
+and are here described. In both cases it is assumed that the worrking enviroment is the generated 
+working directory located 
+```
+(py37_opt) $ cd apps/_opensbli-build-workspace**/app   
+``` 
+where **app** is the app that we are trying to build like [wave](app/wave)
+
+1. Direct modification of the *opensbli.cpp* source file. In this case only the OPS translation needs to be 
+redone followed by the build. This can be done as follows: 
+```
+(py37_opt) $ cd apps/_opensbli-build-workspace**/app/test-build
+(py37_opt) $ cmake --build . --target clean ! remove the already generated targets
+(py37_opt) $ cmake ../
+(py37_opt) $ cmake --build . -j 2 ! or more for parallel build   
+``` 
+
+
+
 
 
 
