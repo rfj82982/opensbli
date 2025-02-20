@@ -129,7 +129,7 @@ and followed by the build as decribed in the above point.
 **PS** The OpenSBLI python code generation is guarantee to work only within the OpenSBLI python virtual enviroment. 
 Please see sections [above](#Installation) on how to activate it. 
 
-# Testing
+## Testing
 A testing framework is also available for OpenSBLI. This is based on the [test_opensbli.py](tests/test_opensbli.py) 
 python script. 
 The code generation, OPS translation and CMake build follow the structure given in the above sections. 
@@ -138,4 +138,13 @@ recorded in *tests/test.log*. In case of a fully successful test run the working
 To run the full test from scratch with the activation of the OpenSBLI virtual enviroment use: 
 ```
 $ source SetUpOSBLI.sh TEST
-``` 
+```
+
+## Usage of external build of HDF5 and OPS
+System installation of HDF5 and external OPS can be used and the location path can be passed to the 
+set-up script as:
+```
+$ source SetUpOSBLI.sh ENV /path/to/root/HDF5 /path/to/root/OPS
+```
+with the caveat that the OPS has been built using the same HDF5. 
+ 
