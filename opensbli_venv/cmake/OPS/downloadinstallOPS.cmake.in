@@ -1,0 +1,23 @@
+# downloadBuild2decomp.cmake.in
+#
+cmake_minimum_required(VERSION 3.18)
+
+project(downloadBuildOPS NONE)
+
+include(ExternalProject)
+
+ExternalProject_Add(downloadBuildOPS
+    GIT_REPOSITORY    "https://github.com/OP-DSL/OPS.git"
+    GIT_TAG           "develop"
+    SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/OPS-src"
+    
+    # Configure step
+    CMAKE_ARGS      -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/../osbli_opt
+                    -DGPU_ARCH=75
+    
+    # Build step
+    BUILD_COMMAND     ${CMAKE_COMMAND} --build . -j 4
+    
+    # Install step
+    INSTALL_COMMAND   ${CMAKE_COMMAND} --install .
+)

@@ -1,0 +1,23 @@
+# downloadBuild2decomp.cmake.in
+#
+cmake_minimum_required(VERSION 3.18)
+
+project(downloadBuildHDF5 NONE)
+
+include(ExternalProject)
+
+ExternalProject_Add(downloadBuildHDF5
+    GIT_REPOSITORY    "https://github.com/HDFGroup/hdf5"
+    GIT_TAG           "hdf5_1.14.6"
+    SOURCE_DIR        "${CMAKE_CURRENT_BINARY_DIR}/hdf5-src"
+    
+    # Configure step
+    CMAKE_ARGS      -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_BINARY_DIR}/../osbli_opt
+                    -DHDF5_ENABLE_PARALLEL=ON
+    
+    # Build step
+    BUILD_COMMAND     ${CMAKE_COMMAND} --build . -j 4
+    
+    # Install step
+    INSTALL_COMMAND   ${CMAKE_COMMAND} --install .
+)

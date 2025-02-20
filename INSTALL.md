@@ -13,47 +13,61 @@ OPS (Oxford Parallel library for Structured mesh solvers) domain specific langua
 * Scipy
 * Matplotlib
 
-A Python virtual enviroment has been created under [opensbli_venv](opensbli_venv) 
-and It can be activated by sourcing the script 
-```
-$ cd opensbli_venv
-$ source setup_venv.sh
-```
-All relevant libraries will be installed under `opensbli_venv/py37_opt`.
-To be sure that you are working under the `python_venv` the propt of your terminal 
-should  looks like
-```
-(py37_opt) $  cd ../
-``` 
-OpenSBLI requires also a working version of the HDF5 library installed with MPI support 
-and a working version of the development branch of OPS defined as
-```
-(py37_opt) $ export OPS_INSTALL_DIR=path/to/OPS/opt 
-(py37_opt) $ export OPS_TRANSLATOR=$OPS_INSTALL_DIR/translator/ops_translator/ops-translator
-(py37_opt) $ export PYTHONPATH=$PYTHONPATH:path/to/opensbli/repository
-(py37_opt) $ export HDF5_INSTALL_PATH=path/to/hdf5/mpi
-```
-A set-up-script to install, activate the virtual enviroment and set up the enviromental variables 
-for OpenSBLI is available as [SetUpEnviroment.sh](SetUpEnviroment.sh) and can be activated by
-```
-(py37_opt) $ source SetUpEnviroment.sh path/to/hdf5/mpi path/to/OPS/opt   
-``` 
-where the first input is the path to the HDF5 install directory and the second is the path 
-to the OPS installation. 
+The code translation to enable the automatic parallelisation on different hybrid computing architectures
+is performed using OPS with the possibility to have parallel HDF5 for data postprocessing. 
 
-Work is on progress to have an automatic installation of HDF5 and OPS requirements in case the
-requirements are not found. 
+To have all requirements together a virtual enviroment is created and can be activated using [SetUpOSBLI.sh](SetUpOSBLI.sh). 
+The script is creating and activating the correct Python virtual enviroment. 
+HDF5 and OPS are optional inputs and, if not provided, are installed in the same virtual enviroment 
+that is located at *opensbli_venv/opensbli_opt* 
+The virtual enviroment can be activated by sourcing the script 
+```
+$ source SetUpOSBLI.sh
+```
+To be sure that you are working under the virtual enviroment is using the correct Python 3.7
+the terminal prompt should looks like
+```
+(osbli_opt) $  python --version
+Python 3.7.17
+``` 
+The result of the set-up bash script is the installation of the required libraries and the
+set up the enviromental variables necessary for OpenSBLI to do the code generation 
+and OPS to do the code translation. 
+The necessary enviromental variables are:
+```
+(osbli_opt) $ export PYTHONPATH=$PYTHONPATH:path/to/opensbli/repository
+(osbli_opt) $ export HDF5_INSTALL_PATH=path/to/hdf5/mpi
+(osbli_opt) $ export OPS_INSTALL_DIR=path/to/OPS/opt 
+(osbli_opt) $ export OPS_TRANSLATOR=$OPS_INSTALL_DIR/translator/ops_translator/ops-translator
+```
+These are stored in the file *opensbli_venv/osbli_env.sh*. The set-up script is always checking 
+at every invocation if the OpenSBLI enviromental variables are defined to avoid constant 
+reinstall HDF5 and OPS. 
+The final structure of the OpenSBLI virtual enviroment is 
+```
+(osbli_opt) $ ls opensbli_venv/
+CMakeLists.txt  build  cmake  osbli_env.sh  osbli_opt  requirements.txt  setup_venv.sh
+``` 
+where
+
+* *CMakeLists.txt*: CMake main file for download and build HDF5 and OPS
+* **build**: working directory for the additional library build
+* **cmake**: support CMake files for configure and build
+* *osbli_env.sh*: file with enviromental variables for OpenSBLI and OPS
+* **osbli_opt**: installtion directory for the virtual enviroment
+* *requirements.txt*: list of requirements for the python virtual enviroment
+* *setup.venv.sh*: set-up script for the virtual enviroment  
 
 ## Automatic Apps Installation
 It is possible to generate and compile all [apps](apps) using the python script 
 [generate_all_applications.py](apps/generate_all_applications.py) as:
 ```
-(py37_opt) $ cd ../apps
-(py37_opt) $ python generate_all_applications.py 
+(osbli_opt) $ cd ../apps
+(osbli_opt) $ python generate_all_applications.py 
 ``` 
 that can take the following inputs:
 ```
-(py37_opt) rfj82982@ccp-gpu2:apps$ python generate_all_applications.py --help 
+(osbli_opt) $ python generate_all_applications.py --help 
 usage: generate_all_applications.py [-h] [--legacy-translator] [--verbose]
                                     [--generate] [--app APP] [--target TARGET]
 
@@ -84,7 +98,7 @@ described assumes a CMake build for both OPS and OpenSBLI app.
 A script is available to perform the activation of the python virtual enviroment, set up of the
 OpenSBLI variables and run of the python app generation and can be used as 
 ```
-(py37_opt) $ source GenerateApps.sh path/to/hdf5/mpi path/to/OPS/opt   
+(osbli_opt) $ source SetUpOSBLI.sh TEST  
 ``` 
 
 ### App modification and rebuild
@@ -92,23 +106,26 @@ It is possible to modify and regenerate/rebuild a specific app. To do so two pos
 and are here described. In both cases it is assumed that the worrking enviroment is the generated 
 working directory located 
 ```
-(py37_opt) $ cd apps/_opensbli-build-workspace**/app   
+(osbli_opt) $ cd apps/_opensbli-build-workspace**/app   
 ``` 
 where **app** is the app that we are trying to build like [wave](app/wave)
 
-1. Direct modification of the *opensbli.cpp* source file. In this case only the OPS translation needs to be 
-redone followed by the build. This can be done as follows: 
+1. Direct modification of the *opensbli.cpp* source file. In this case only the OPS translation step needs to be 
+performed, which is followed by the build step. This can be done as follows: 
 ```
-(py37_opt) $ cd apps/_opensbli-build-workspace**/app/test-build
-(py37_opt) $ cmake --build . --target clean ! remove the already generated targets
-(py37_opt) $ cmake ../
-(py37_opt) $ cmake --build . -j 2 ! or more for parallel build   
+(osbli_opt) $ cd apps/_opensbli-build-workspace**/app/test-build
+(osbli_opt) $ cmake --build . --target clean ! remove the already generated targets
+(osbli_opt) $ cmake ../
+(osbli_opt) $ cmake --build . -j 2 ! or more for parallel build   
 ``` 
-1. Modification of the OpenSBLI python file *app.py*. In this case am OpenSBLI code translations needs to done by
+1. Modification of the OpenSBLI python file *app.py*. In this case an OpenSBLI code translations needs to be
+performed 
 ```
-(py37_opt) $ cd apps/_opensbli-build-workspace**/app
-(py37_opt) $ python app.py
+(osbli_opt) $ cd apps/_opensbli-build-workspace**/app
+(osbli_opt) $ python app.py
 ``` 
+and followed by the build as decribed in the above point.  
+
 **PS** The OpenSBLI python code generation is guarantee to work only within the OpenSBLI python virtual enviroment. 
 Please see sections [above](#Installation) on how to activate it. 
 
@@ -120,24 +137,5 @@ In this case the workspace is located under **tests/_opensbli-test-workspac** an
 recorded in *tests/test.log*. In case of a fully successful test run the working directory is deleted. 
 To run the full test from scratch with the activation of the OpenSBLI virtual enviroment use: 
 ```
-$ ./RunTests.sh path/to/hdf5/mpi path/to/OPS/opt
+$ source SetUpOSBLI.sh TEST
 ``` 
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
