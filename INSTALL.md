@@ -48,7 +48,7 @@ The final structure of the OpenSBLI virtual enviroment is
 (osbli_opt) $ ls opensbli_venv/
 CMakeLists.txt  build  cmake  osbli_env.sh  osbli_opt  requirements.txt  setup_venv.sh
 ``` 
-where
+where 
 
 * *CMakeLists.txt*: CMake main file for download and build HDF5 and OPS
 * **build**: working directory for the additional library build
@@ -56,7 +56,19 @@ where
 * *osbli_env.sh*: file with enviromental variables for OpenSBLI and OPS
 * **osbli_opt**: installtion directory for the virtual enviroment
 * *requirements.txt*: list of requirements for the python virtual enviroment
-* *setup.venv.sh*: set-up script for the virtual enviroment  
+* *setup.venv.sh*: set-up script for the virtual enviroment 
+
+## About Python requirements
+The OpenSBLI workflow requires two different Python versions: 
+
+* **Python3.7** for the OpenSBLI code generation
+* **Python8.8** or above for the OPS code translation
+
+The handling of Python3.7 is done via the OpenSBLI virtual enviroment. 
+If a Python3.7 is available on the system this will be used and the   
+additional library requirements will be installed. If no Python3.7 is available
+a MiniConda is downlaoded and installed. 
+The requirement for Python3.8 is instead managed by the OPS virtual enviroment. 
 
 ## Automatic Apps Installation
 It is possible to generate and compile all [apps](apps) using the python script 

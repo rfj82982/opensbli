@@ -38,7 +38,7 @@ then
   echo "OPS is provided and this will be used $OPS_INSTALL_DIR"
 else
   echo "Too many inputs we exit"
- exit
+  exit 1
 fi
 
 cd opensbli_venv/
