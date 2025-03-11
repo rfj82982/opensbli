@@ -37,6 +37,7 @@ if [ -z "${PY37}" ]; then
     wget -c https://repo.anaconda.com/miniconda/${PackageName}
     chmod a+x ./${PackageName}
     ./${PackageName} -b -p ${py37install}
+    cd ../
   else
     echo "Python3.7 is installed locally via Miniconda"
   fi
@@ -56,12 +57,13 @@ fi
 echo "My activate command call ${osbli_venv_activate}"
 source ${osbli_venv_activate}
 # Update Python3.7 packages only in case of non Conda download
-if [ -z "${py37install}/bin/python3.7" ]; then
-  # Not strictly necessary but we can make sure that all libs are available
-  python3 -m pip install --upgrade pip
-  python3 -m pip install -r ${local_dir}/requirements.txt
-fi
+#if [ -z "${py37install}/bin/python3.7" ]; then
+# Not strictly necessary but we can make sure that all libs are available
+python3 -m pip install --upgrade pip
+python3 -m pip install -r ${local_dir}/requirements.txt
+#fi
 if [ ! -f osbli_env.sh ]; then
+  echo "My HDF5 ENV PATH ${HDF5_INSTALL_PATH}" 
   cmake -S . -B build 
 fi
 source osbli_env.sh
