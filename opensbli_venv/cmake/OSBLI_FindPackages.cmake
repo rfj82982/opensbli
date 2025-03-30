@@ -43,7 +43,7 @@ osbli_code_generation (){
 }
 
 #
-osbli_cmake_command (){
+osbli_cmake_configure (){
   cp ${osbli_venv_dir}/../../apps/CMakeLists.txt . 
   source ${OPS_INSTALL_DIR}/translator/ops_translator/ops_venv/bin/activate && cmake -S . -B test-build -DOPS_INSTALL_DIR=${OPS_INSTALL_DIR} -DCMAKE_BUILD_TYPE=Release -DLEGACY_CODEGEN=OFF -DHDF5_ROOT=$HDF5_INSTALL_PATH  
 }

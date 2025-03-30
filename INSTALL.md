@@ -146,7 +146,7 @@ This is useful in case of building new cases starting from a new *newcase.py* py
    the command always requires am open_sbli python input file. The result is the creation of a *opensbli.cpp*
    file and relative includes files.
 1. *ops_translation*: command to run the OPS python code translation. The input of the command is always the file *opensbli.cpp*
-1. *osbli_cmake_command*: this command creates the CMake configure to compile the fifferent backends for the app. 
+1. *osbli_cmake_configure*: this command creates the CMake configure to compile the fifferent backends for the app. 
    The CMake build system will be created under the folder **test-build**
 
 Please remember that afterwards the apps needs to be build by using: 
@@ -161,7 +161,7 @@ An example of how to build an app step-by-step is the following:
 (osbli_opt) $ cp path_to_opensbli/apps/wave/* . 
 (osbli_opt) $ osbli_code_generation wave.py
 (ops_venv) $ ops_translation
-(ops_venv) $ osbli_cmake_command
+(ops_venv) $ osbli_cmake_configure
 (ops_venv) $ cmake --build test-build -j 4 
 (ops_venv) $ ls test-build/OpenSBLI_* 
 test-build/OpenSBLI_cuda     test-build/OpenSBLI_mpi             test-build/OpenSBLI_mpi_openmp  test-build/OpenSBLI_seq
