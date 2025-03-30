@@ -62,7 +62,7 @@ where
 The OpenSBLI workflow requires two different Python versions: 
 
 * **Python3.7** for the OpenSBLI code generation
-* **Python8.8** or above for the OPS code translation
+* **Python3.8** or above for the OPS code translation
 
 The handling of Python3.7 is done via the OpenSBLI virtual enviroment. 
 If a Python3.7 is available on the system this will be used and the   
@@ -115,7 +115,7 @@ OpenSBLI variables and run of the python app generation and can be used as
 
 ### App modification and rebuild
 It is possible to modify and regenerate/rebuild a specific app. To do so two possibilities are available
-and are here described. In both cases it is assumed that the worrking enviroment is the generated 
+and they are here described. In both cases it is assumed that the worrking enviroment is the generated 
 working directory located 
 ```
 (osbli_opt) $ cd apps/_opensbli-build-workspace**/app   
@@ -134,12 +134,45 @@ performed, which is followed by the build step. This can be done as follows:
 performed 
 ```
 (osbli_opt) $ cd apps/_opensbli-build-workspace**/app
-(osbli_opt) $ python app.py
+(osbli_opt) $ osbli_code_generation app.py
 ``` 
 and followed by the build as decribed in the above point.  
 
-**PS** The OpenSBLI python code generation is guarantee to work only within the OpenSBLI python virtual enviroment. 
-Please see sections [above](#Installation) on how to activate it. 
+### App build from scratch 
+The OpenSBLI virtual enviroment provides also commands to build an apps in a step to step fashion. 
+This is useful in case of building new cases starting from a new *newcase.py* python file. 
+
+1. *osbli_code_generation*: command to generate the OPS C++ file from the file *newcase.py*. Remember that 
+   the command always requires am open_sbli python input file. The result is the creation of a *opensbli.cpp*
+   file and relative includes files.
+1. *ops_translation*: command to run the OPS python code translation. The input of the command is always the file *opensbli.cpp*
+1. *osbli_cmake_command*: this command creates the CMake configure to compile the fifferent backends for the app. 
+   The CMake build system will be created under the folder **test-build**
+
+Please remember that afterwards the apps needs to be build by using: 
+```
+(osbli_opt) $ cmake --build test-build -j ...
+```      
+
+An example of how to build an app step-by-step is the following: 
+```
+(osbli_opt) $ mkdir mytestapp
+(osbli_opt) $ cd mytestapp
+(osbli_opt) $ cp path_to_opensbli/apps/wave/* . 
+(osbli_opt) $ osbli_code_generation wave.py
+(ops_venv) $ ops_translation
+(ops_venv) $ osbli_cmake_command
+(ops_venv) $ cmake --build test-build -j 4 
+(ops_venv) $ ls test-build/OpenSBLI_* 
+test-build/OpenSBLI_cuda     test-build/OpenSBLI_mpi             test-build/OpenSBLI_mpi_openmp  test-build/OpenSBLI_seq
+test-build/OpenSBLI_dev_mpi  test-build/OpenSBLI_mpi_cuda        test-build/OpenSBLI_mpi_tiled   test-build/OpenSBLI_tiled
+test-build/OpenSBLI_dev_seq  test-build/OpenSBLI_mpi_cuda_tiled  test-build/OpenSBLI_openmp
+```
+If you would like to build less targets you can use the CMake variable `OPS_TARGET`. This can be modified using *ccmake* as
+```
+cmake --build test-build --target clean 
+ccmake test-build
+```
 
 ## Testing
 A testing framework is also available for OpenSBLI. This is based on the [test_opensbli.py](tests/test_opensbli.py) 
@@ -158,5 +191,5 @@ set-up script as:
 ```
 $ source SetUpOSBLI.sh ENV /path/to/root/HDF5 /path/to/root/OPS
 ```
-with the caveat that the OPS has been built using the same HDF5. 
+with the caveat that the OPS has to be built with the same HDF5. 
  

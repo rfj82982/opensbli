@@ -56,8 +56,33 @@ TRANSLATOR_MODE = TranslatorMode.MODERN
 APP_TEST_CASES = [
     f"{SCRIPT_DIRECTORY}/wave/wave.py",
     f"{SCRIPT_DIRECTORY}/euler_wave/euler_wave.py",
+    f"{SCRIPT_DIRECTORY}/shu_osher/shu_osher.py",
+    f"{SCRIPT_DIRECTORY}/Sod_shock_tube/Sod_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/Lax_shock_tube/Lax_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/LeBlanc/LeBlanc.py",
+    f"{SCRIPT_DIRECTORY}/taylor_green_vortex/taylor_green_vortex.py",
+    f"{SCRIPT_DIRECTORY}/taylor_green_vortex/TGsym/TG_IsoT.py",
+    f"{SCRIPT_DIRECTORY}/taylor_green_vortex/inviscid/inviscid_taylor_green_vortex.py",
+    f"{SCRIPT_DIRECTORY}/viscous_shock_tube/viscous_shock_tube.py",
+    f"{SCRIPT_DIRECTORY}/kelvin_helmholtz/kelvin_helmholtz.py",
+    f"{SCRIPT_DIRECTORY}/inviscid_shock_reflection/inviscid_shock.py",
+    f"{SCRIPT_DIRECTORY}/katzer_SBLI/katzer_SBLI.py",
+    f"{SCRIPT_DIRECTORY}/channel_flow/laminar_2D/laminar_channel.py",
+    f"{SCRIPT_DIRECTORY}/channel_flow/turbulent_3D/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/channel_flow/compressible_TCF_Central/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/channel_flow/compressible_TCF_TENO/turbulent_channel.py",
+    f"{SCRIPT_DIRECTORY}/channel_flow/adiabatic_isothermal_channel/iso_adi_channel_heat_sink.py",
+    f"{SCRIPT_DIRECTORY}/transitional_SBLI/transitional_SBLI.py",
+    f"{SCRIPT_DIRECTORY}/cylinder/supersonic_cylinder/supersonic_cylinder.py",
+    f"{SCRIPT_DIRECTORY}/compressible_taylor_green_vortex/TGV_multi_block/compressible_TGV_MB.py",
+    f"{SCRIPT_DIRECTORY}/compressible_taylor_green_vortex/compressible_TGV.py",
+    f"{SCRIPT_DIRECTORY}/aerofoils/multi_block/2D/airfoil_MB_2D.py",
+    f"{SCRIPT_DIRECTORY}/aerofoils/multi_block/3D/transonic_MB.py",
+    f"{SCRIPT_DIRECTORY}/turbulent_counter_flow/turbulent_counter_flow.py",
+    f"{SCRIPT_DIRECTORY}/vortex_core/3D/vortex_core.py",
 ]
 
+#    f"{SCRIPT_DIRECTORY/taylor_green_vortex/TGsym/TGsym.py",
 
 def setup_logger(log_file: str) -> logging.Logger:
     """
@@ -634,18 +659,21 @@ def run_tests() -> None:
 
         # Test that OpenSBLI can generate the test case
         if GENERATE:
+            _log_success("OpenSBLI code generation")
             return_code = test_app_generates(app_file, app_dir)
             if return_code:
                 num_failed += 1
                 continue
         t_generate = time.time()
         # Test that OPS can translate the OpenSBLI code
+        _log_success("OPS code translation")
         return_code = test_app_translates(app_dir)
         if return_code:
             num_failed += 1
             continue
         t_translate = time.time()
         # Test that the OPS translated code can compile
+        _log_success("CMake code build")
         return_code = test_app_cmake_build(app_dir)
         if return_code:
             num_failed += 1
@@ -662,7 +690,7 @@ def run_tests() -> None:
         _log_success(f"Time to generate : {t_generate - t_start}")
         _log_success(f"Time to translate: {t_translate - t_generate}")
         _log_success(f"Time to build    : {t_build - t_translate}")
-        _log_success(f"Time to elapse   : {t_build - t_start}")
+        _log_success(f"Elapse Time      : {t_build - t_start}")
 
     _log("-" * 80)
     if num_failed > 0:
@@ -682,7 +710,7 @@ if __name__ == "__main__":
     ap = ArgumentParser()
     ap.add_argument("--legacy-translator", action="store_true", default=False)
     ap.add_argument("--verbose", action="store_true", default=False)
-    ap.add_argument("--generate", action="store_false", default=True)
+    ap.add_argument("--nogenerate", action="store_false", default=True)
     ap.add_argument("--app", type=str,default="all")
     ap.add_argument("--target", type=str,default="all")
     args = ap.parse_args()
@@ -691,7 +719,7 @@ if __name__ == "__main__":
 
     # Set the global verbosity flag
     VERBOSE = args.verbose
-    GENERATE = args.generate
+    GENERATE = args.nogenerate
     if args.legacy_translator:
         TRANSLATOR_MODE = TranslatorMode.LEGACY
     if app_build != "all":

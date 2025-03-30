@@ -17,7 +17,7 @@ if [[ "$PYTHON_VERSION" =~ ^3\.[0-9]+\.[0-9]+ ]]; then
   if [ "$MINOR_VERSION" -lt "8" ]; then
     echo "Python3 must be version 8 or above for OPS to work"
     echo "We are exiting "
-    exit 1
+    return 1
   fi
 else
   echo "You are not using Python 3. needed for OSBLI to work"
@@ -46,7 +46,7 @@ else
   py37="python3.7"
 fi
 # Now we need to create the virtual enviroment
-osbli_venv_dir=${local_dir}/osbli_opt
+export osbli_venv_dir=${local_dir}/osbli_opt
 export osbli_venv_activate=${osbli_venv_dir}/bin/activate
 if ! [ -f ${osbli_venv_activate} ]; then
   echo "Virtual Enviroment do not exists we need to create it"
@@ -63,7 +63,7 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r ${local_dir}/requirements.txt
 #fi
 if [ ! -f osbli_env.sh ]; then
-  echo "My HDF5 ENV PATH ${HDF5_INSTALL_PATH}" 
+  echo "Myosbli_venv_activate HDF5 ENV PATH ${HDF5_INSTALL_PATH}" 
   cmake -S . -B build 
 fi
 source osbli_env.sh
