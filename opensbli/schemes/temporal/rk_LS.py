@@ -57,7 +57,10 @@ class RungeKuttaLS(Scheme):
             else:
                 n_stages = order # Regular (3,3) RK scheme, non-SSP
         elif order == 4:  # 4th order scheme is 5-stage
-            n_stages = order + 1
+            if stages == None:
+                n_stages = 5 # default (5,4) scheme for 4th order
+            else:
+                n_stages = stages
         return n_stages
 
     def create_constants(cls, order, stages):
@@ -122,11 +125,30 @@ class RungeKuttaLS(Scheme):
                 B1, B2, B3 = Rational(1, 3), Rational(15, 16), Rational(8, 15)
                 cls.solution_coeffs.value = [B1, B2, B3]
                 cls.stage_coeffs.value = [A1, A2, A3]
+        # 4th-order 5-stage schemes from: Carpenter, Mark H & Kennedy, Christopher A 1994 Fourth-order 2N-storage Runge-Kutta schemes. NASA Langley Research Center.
+        # Higher stage schemes from: J. Niegemann et al. Efficient low-storage Runge–Kutta schemes with optimized stability regions. Journal of Computational Physics 231 (2012) 364–372.
         elif cls.order == 4:
-            A1, A2, A3, A4, A5 = 0, -0.4178904745, -1.192151694643, -1.697784692471, -1.514183444257
-            B1, B2, B3, B4, B5 = 0.1496590219993, 0.3792103129999, 0.8229550293869, 0.6994504559488, 0.1530572479681
-            cls.solution_coeffs.value = [B1, B2, B3, B4, B5]
-            cls.stage_coeffs.value = [A1, A2, A3, A4, A5]
+            # Pick the scheme based on the number of stages
+            if cls.stages == 5: # 
+                A1, A2, A3, A4, A5 = 0, -0.4178904745, -1.192151694643, -1.697784692471, -1.514183444257
+                B1, B2, B3, B4, B5 = 0.1496590219993, 0.3792103129999, 0.8229550293869, 0.6994504559488, 0.1530572479681
+                cls.solution_coeffs.value = [B1, B2, B3, B4, B5]
+                cls.stage_coeffs.value = [A1, A2, A3, A4, A5]
+            elif cls.stages == 12:
+                A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12 = 0, -0.0923311242368072, -0.9441056581158819, -4.3271273247576394, -2.1557771329026072, -0.9770727190189062, -0.7581835342571139, -1.7977525470825499, -2.6915667972700770, -4.6466798960268143, -0.1539613783825189, -0.5943293901830616
+                B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12 = 0.0650008435125904, 0.0161459902249842, 0.5758627178358159, 0.1649758848361671, 0.3934619494248182, 0.0443509641602719, 0.2074504268408778, 0.6914247433015102, 0.3766646883450449, 0.0757190350155483, 0.2027862031054088, 0.2167029365631842
+                cls.solution_coeffs.value = [B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12]
+                cls.stage_coeffs.value = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12]
+            elif cls.stages == 13:
+                A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13 = 0, -0.6160178650170565, -0.4449487060774118, -1.0952033345276178, -1.2256030785959187, -0.2740182222332805, -0.0411952089052647, -0.1797084899153560, -1.1771530652064288, -0.4078831463120878, -0.8295636426191777, -4.7895970584252288, - 0.6606671432964504
+                B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13 = 0.0271990297818803, 0.1772488819905108, 0.0378528418949694, 0.6086431830142991, 0.2154313974316100, 0.2066152563885843, 0.0415864076069797, 0.0219891884310925, 0.9893081222650993, 0.0063199019859826, 0.3749640721105318, 1.6080235151003195, 0.0961209123818189
+                cls.solution_coeffs.value = [B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13]
+                cls.stage_coeffs.value = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13]
+            elif cls.stages == 14:
+                A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14 = 0, -0.7188012108672410, -0.7785331173421570, -0.0053282796654044, -0.8552979934029281, -3.9564138245774565, -1.5780575380587385, -2.0837094552574054, -0.7483334182761610, - 0.7032861106563359, 0.0013917096117681, -0.0932075369637460, -0.9514200470875948, -7.1151571693922548
+                B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13, B14 = 0.0367762454319673, 0.3136296607553959, 0.1531848691869027, 0.0030097086818182, 0.3326293790646110, 0.2440251405350864, 0.3718879239592277, 0.6204126221582444, 0.1524043173028741, 0.0760894927419266, 0.0077604214040978, 0.0024647284755382, 0.0780348340049386, 5.5059777270269628
+                cls.solution_coeffs.value = [B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13, B14]
+                cls.stage_coeffs.value = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14]        
         else:
             raise NotImplementedError("Only 3rd and 4th order RK schemes are currently implemented.")
         return
