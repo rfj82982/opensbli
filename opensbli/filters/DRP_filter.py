@@ -294,7 +294,7 @@ class ExplicitFilter(object):
         UDF.computation_name = 'Airfoil_filter_mask'
         # Filter regions
         x, y = block.location_dataset('x0'), block.location_dataset('x1')
-        filter_condition = [ExprCondPair(0, And(Abs(y) < 0.1, x > 0.1))]
+        filter_condition = [ExprCondPair(0, And(Abs(y) < 0.5, x > 0.1))]
         filter_condition += [ExprCondPair(1, True)]
         self.filter_mask = block.location_dataset('filter_mask')
         output_eqns = [OpenSBLIEq(self.filter_mask, Piecewise(*filter_condition))]

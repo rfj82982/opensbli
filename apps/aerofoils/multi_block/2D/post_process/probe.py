@@ -10,7 +10,7 @@ np.seterr(divide="ignore")
 
 #----------------------------------------------------------------------#
 # read the probe file, made of float values
-probe = np.loadtxt("../airfoil_probes.log", dtype='f', delimiter=',', skiprows=1)
+probe = np.loadtxt("../block2_airfoil_output.log", dtype='f', delimiter=',', skiprows=1)
 #----------------------------------------------------------------------#
 # pick only second probe location
 i = 5
@@ -22,6 +22,7 @@ print("Total collection time: {}".format(time_all[-1]))
 
 # saturated signal only
 start_index  = -3900
+start_index = 0
 time_sat     = probe[start_index:,1] - probe[start_index,1] # iteration x dt_code => nondimensional
 q_prime_sat  = probe[start_index:,i] - np.mean(probe[start_index:,i])
 
@@ -37,7 +38,7 @@ q_prime_sat  = probe[start_index:,i] - np.mean(probe[start_index:,i])
 fs = 1/(time_sat[1]-time_sat[0])
 
 #calculate the PSD for the lift coefficients
-f, PSD = signal.periodogram(q_prime_sat[0:-1], fs, window='hanning', scaling='spectrum')
+f, PSD = signal.periodogram(q_prime_sat[0:-1], fs, window='hann', scaling='spectrum')
 PSD = 2 * (PSD / fs) / np.sqrt(2)
 
 #----------------------------------------------------------------------#
@@ -58,7 +59,7 @@ print("Peak Frequency",f[max_idx])
 # make plot #
 linewidth = 2
 # plot the entire time evolution
-plot_range = 400
+plot_range = 1
 plt.figure(1)
 plt.subplot(2,1,1)
 plt.plot(time_all[-plot_range:] - time_all[-plot_range],q_prime_all[-plot_range:],color="black",linewidth=linewidth, label='$10\%$ of the data collection period')

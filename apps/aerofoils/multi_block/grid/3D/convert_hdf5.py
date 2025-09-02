@@ -1,9 +1,10 @@
-# Converts the SBLI 2d block grid into HDF5 format. For reading into OpenSBLI
+#] Converts the SBLI 2d block grid into HDF5 format. For reading into OpenSBLI
 # Structured mesh, sharp trailing edge version.
 
 import numpy as np
 import h5py
 from opensbli import *
+import matplotlib.pylab as plt
 
 def apply_group_attributes(group, block):
     group.attrs.create("dims", [block.ndim], dtype="int32")
@@ -22,7 +23,10 @@ def set_hdf5_metadata(dset, halos, npoints, block):
     dset.attrs.create("ops_type", u"ops_dat",dtype="S10")
     dset.attrs.create("block_index", [block.blocknumber], dtype="int32")
     dset.attrs.create("base", [0 for i in range(block.ndim)], dtype="int32")
-    dset.attrs.create("type", u"double",dtype="S15")
+    if precision == 'SP':
+        dset.attrs.create("type", u"float",dtype="S15")
+    else:
+        dset.attrs.create("type", u"double",dtype="S15")
     dset.attrs.create("block", u"%s" % block.blockname,dtype="S25")
     dset.attrs.create("size", npoints, dtype="int32")
     return
@@ -63,7 +67,7 @@ def create_z_coordinates(block_data, full_z):
     zm = [z_coordinates[0] - k*dz for k in reversed(range(1, nhalo+1))]
     zp = [z_coordinates[-1] + k*dz for k in range(1, nhalo+1)]
     z_coordinates = np.around(np.array(zm + z_coordinates + zp), decimals=10)
-    print("Z coordinates including halo points are:", z_coordinates)
+    # print("Z coordinates including halo points are:", z_coordinates)
     for k in range(full_z.shape[0]):
         z = np.full((full_shape[0], full_shape[1]), z_coordinates[k])
         full_z[k, :, :] = np.transpose(z)
@@ -74,7 +78,6 @@ def fill_halo_coordinates(block_data, block_number):
     x, y = block_data[block_number]['x'], block_data[block_number]['y']
     # Create an array with zeros padded around the data
     shape = [nz] + list(x.shape) 
-    print(shape)
     new_shape = tuple([shape[i]+ 2*nhalo for i in range(ndim)])
     print("Reversed shape for C-style indexing", new_shape)
     # Full arrays with halo points on the outside
@@ -265,7 +268,85 @@ def fill_halo_coordinates(block_data, block_number):
 
     return full_x,  full_y, full_z
 
+def plot_mesh(ax, x_reduce, y_reduce, block_number, x, y):
+
+
+    total_grid_points = 0
+
+    if block_number == 1:
+        # Plot the airfoil
+        ax.plot(x[:,0], y[:,0], color='k', lw=edge_thickness)
+        # Plot the grid lines
+        ax.plot(x_reduce[:,1:nlines], y_reduce[:,1:nlines], color=colors[block_number], lw=grid_line_thickness)
+        ax.plot(x_reduce[:,1:nlines].T, y_reduce[:,1:nlines].T, color=colors[block_number], lw=grid_line_thickness)
+        # Plot the edges on this block
+        ax.plot(x_reduce[0,1:nlines].T, y_reduce[0,1:nlines].T, color='k', lw=edge_thickness)
+        ax.plot(x_reduce[-1,1:nlines].T, y_reduce[-1,1:nlines].T, color='k', lw=edge_thickness)
+        # Add trip location
+        xPS, xSS = x[0:550,0], x[550:,0]
+        yPS, ySS = y[0:550,0], y[550:,0]
+        ps = np.argmin(np.abs(xPS - 0.1))
+        ss = np.argmin(np.abs(xSS - 0.1))
+        print("Indices: {}, {}".format(ps, ss))
+        print("Trip location at: {}".format(x[ps,0]))
+        print("Trip location at: {}".format(x[ss,0]))
+
+        ax.scatter(xPS[ps+1], yPS[ps+1]-0.0075, s=15, marker=(4, 0, 45-10), color='magenta', zorder=10000)
+        ax.scatter(xSS[ss], ySS[ss]+0.0075, s=15, marker=(4, 0, 45+5), color='magenta', zorder=10000, label='Trip Location')
+    else:
+        # Plot the grid lines
+        ax.plot(x_reduce[0:,1:nlines], y_reduce[0:,1:nlines], color=colors[block_number], lw=grid_line_thickness)
+        ax.plot(x_reduce[0:,1:nlines].T, y_reduce[0:,1:nlines].T, color=colors[block_number], lw=grid_line_thickness)
+        # Plot the block edges
+        if block_number == 2:
+            # ax.plot(x_reduce[0,1:nlines], y_reduce[0,1:nlines], color='k', lw=edge_thickness)
+            ax.plot(x_reduce[:,0], y_reduce[:,0], color='k', lw=edge_thickness)
+            
+    if block_number == 0:
+        labelx, labely = 0.825, 0.86
+        text_to_write = 'Wake \nBlocks'
+        t = ax.text(labelx, labely, text_to_write,
+        verticalalignment='bottom', horizontalalignment='left',
+        transform=ax.transAxes,
+        color='black', fontsize=fontsize-2)
+        t.set_bbox(dict(facecolor='white', alpha=0.85, edgecolor='black', linewidth=0.75))
+    elif block_number == 1:
+        labelx, labely = 0.05, 0.86
+        text_to_write = 'Aerofoil \nBlock'
+        t = ax.text(labelx, labely, text_to_write,
+        verticalalignment='bottom', horizontalalignment='left',
+        transform=ax.transAxes,
+        color='black', fontsize=fontsize-2)
+        t.set_bbox(dict(facecolor='white', alpha=0.85, edgecolor='black', linewidth=0.75))
+    # else:
+    #     labelx, labely = 0.825, 0.86
+    #     text_to_write = 'Wake \nBlock: %d' % block_number
+
+
+    return ax
+
+def add_zoom(ax, axins_1, x, y, block_number):
+
+    nlines = 100
+    axins_1.plot(x[0:,0:nlines], y[0:,0:nlines], color=colors[block_number], lw=grid_line_thickness, zorder=0)
+    axins_1.plot(x[0:,0:nlines].T, y[0:,0:nlines].T, color=colors[block_number], lw=grid_line_thickness, zorder=0)
+    if block_number == 1:
+        # print(np.abs(y[1500,19]) - np.abs(y[1500,0]))
+        axins_1.plot(x[:,0], y[:,0], color='k', lw=edge_thickness)
+        # Plot the edges on this block
+        axins_1.plot(x[0,0:nlines].T, y[0,0:nlines].T, color='k', lw=edge_thickness)
+        axins_1.plot(x[-1,0:nlines].T, y[-1,0:nlines].T, color='k', lw=edge_thickness)
+
+    # Plot the block edges
+    if block_number == 2:
+        axins_1.plot(x[:,0], y[:,0], color='k', lw=edge_thickness)
+    return ax, axins_1
+
+
 def read_blocks(block_data):
+    # Plotting mesh
+    fig, ax = plt.subplots()
+    # Loop over the blocks
     total_grid_points = 0
     for block_number, block in enumerate(input_files):
         print("\n\nReading from %s." % block)
@@ -274,9 +355,65 @@ def read_blocks(block_data):
         print("Nx, Ny from the input file for block %d" % block_number, nx, ny)
         f.close()
         # Read the data
-        x,y,z = np.loadtxt(block, skiprows =1, unpack=True)
+        x,z,y = np.loadtxt(block, skiprows =1, unpack=True)
+        # For grid use
         x = x.reshape(nx, ny)
         y = y.reshape(nx, ny)
+        # Reduced grid lines for plotting
+        nplotx = 8 # plot only every 10th grid line
+        nploty = 10 # plot only every 10th grid line
+        nplot = 7
+        x_reduce = x[::nplot, ::nplot]
+        y_reduce = y[::nplot, ::nplot]
+        
+        # Plot the aerofoil
+        ax = plot_mesh(ax, x_reduce, y_reduce, block_number, x, y)
+        if block_number == 0:
+            # Add zoom inset for Sebastian (JFM review)
+            from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
+            axins_1 = zoomed_inset_axes(ax, 100, loc='lower left')
+            # Set limits to reduce to TE region only
+            # x1, x2, y1, y2 = 0.9925, 1.006, -0.0525, -0.035
+            # x1, x2, y1, y2 = 0.9955, 0.99925, -0.0457, -0.04
+            x1, x2, y1, y2 = 0.994, 1, -0.0453, -0.0405
+            axins_1.set_xlim([x1,x2])
+            axins_1.set_ylim([y1,y2])
+            plt.xticks(visible=False)
+            plt.yticks(visible=False)
+            from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+            mark_inset(ax, axins_1, loc1=2, loc2=1, fc="none", ec="0", lw=0.5)
+        
+        add_zoom(ax, axins_1, x, y, block_number)
+
+
+        # Mesh wake zoom
+        if block_number == 0:
+            axins_2 = zoomed_inset_axes(ax, 100, loc='lower right')
+            wake_x = 0.05
+            wake_y = -0.0187
+            x1, x2, y1, y2 = 0.992+wake_x, 0.998+wake_x, -0.0455 + wake_y, -0.0405 + wake_y
+            axins_2.set_xlim([x1,x2])
+            axins_2.set_ylim([y1,y2])
+            plt.xticks(visible=False)
+            plt.yticks(visible=False)
+            from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+            mark_inset(ax, axins_2, loc1=2, loc2=1, fc="none", ec="0", lw=0.5)
+
+        add_zoom(ax, axins_2, x, y, block_number)
+
+
+        print("Min/max x = ({}, {})".format(np.min(np.abs(x)), np.max(np.abs(x))))
+        print("Min/max y = ({}, {})".format(np.min(np.abs(y)), np.max(np.abs(y))))
+
+        if block_number == 2:
+            ax.axis('equal')
+            ax.set_xlim([-0.125, 1.6])
+            ax.set_ylim([-0.05, 0.05])
+            # leg = ax.legend(bbox_to_anchor=(0.425, 0.14), prop={'size': fontsize-2}, facecolor='white', framealpha=0.85, edgecolor='black')
+            # leg.get_frame().set_linewidth(0.75)
+            ax.set_xlabel(r"$x$")
+            ax.set_ylabel(r"$y$")
+            plt.savefig('CRM_Mesh.pdf', bbox_inches='tight')
     # Sharp trailing edge -> take away one point at the start and end of the grid in x, from block 2
         if block_number == 1:
             if sharp_TE:
@@ -297,11 +434,19 @@ def read_blocks(block_data):
     return
 
 
+colors = ['g', 'b', 'r']
+nlines = 100
+grid_line_thickness = 0.2
+edge_thickness = 0.6
+
 block_data = {}
 
+fontsize = 16
+plt.rcParams.update({'font.size': fontsize})
+plt.rcParams.update({"text.usetex": True,"font.family": "serif","font.serif": ["Palatino"]})
 
-# Specify the input grid files
-input_files = ["../Bl1.dat", "../Bl2.dat","../Bl3.dat"]
+    # Specify the input grid files
+input_files = ["../NASA-CRM/crm.c-grid.block-%d.dat" % i for i in range(3)]
 # Number of halo points to add on each side of each direction (default 5)
 nhalo = 5
 ndim = 3
@@ -316,6 +461,7 @@ nz = 50
 # Span width
 Lz = 0.05
 
+precision = 'DP'
 sharp_TE = True
 
 total_grid_points = 0
@@ -341,6 +487,10 @@ for block_number, block in enumerate(input_files):
     block_dset_name = b.location_dataset("x0").base
     print("OpenSBLI block shape without halo points: %s" % OPS_shape)
     # Create x coordinates
+    if precision == 'SP':
+        full_x = full_x.astype(np.single)
+        full_y = full_y.astype(np.single)
+        full_z = full_z.astype(np.single)
     dset = g1.create_dataset('%s' % (block_dset_name), data=full_x)
     set_hdf5_metadata(dset, halos=halo, npoints=[OPS_shape[0], OPS_shape[1], OPS_shape[2]], block=b)
     # Create y coordinates
@@ -352,75 +502,10 @@ for block_number, block in enumerate(input_files):
     dset = g1.create_dataset('%s' % (block_dset_name), data=full_z)
     set_hdf5_metadata(dset, halos=halo, npoints=[OPS_shape[0], OPS_shape[1], OPS_shape[2]], block=b)
     
-    print("Length in x for block %d:" % block_number, abs(np.amin(x) - np.amax(x)))
-    print("Length in y for block %d:" % block_number, abs(np.amin(y) - np.amax(y)))
+    # print("Length in x for block %d:" % block_number, abs(np.amin(x) - np.amax(x)))
+    # print("Length in y for block %d:" % block_number, abs(np.amin(y) - np.amax(y)))
     # print("Length in z for block %d:" % block_number, abs(np.amin(z) - np.amax(z)))
 h5f.close()
 
 
-
-
-# # Loop over all of the grid points
-# for block_number, block in enumerate(input_files):
-#     print("\n\n\nReading from %s." % block)
-#     f = open(block)
-#     nx,ny = map(int, f.readlines()[0].split())
-#     print("Nx, Ny from the input file for block %d" % block_number, nx, ny)
-#     f.close()
-#     # Read the data
-#     x,y,z = np.loadtxt(block, skiprows =1, unpack=True)
-#     x = x.reshape(nx, ny)
-#     y = y.reshape(nx, ny)
-    
-#     # Sharp trailing edge -> take away one point at the start and end of the grid in x, from block 2
-#     if block_number == 1:
-#         if sharp_TE:
-#             print("Taking off 2 columns in x direction for the sharp trailing edge.")
-#             x = x[1:-1,:]
-#             y = y[1:-1,:]
-#     shape = list(x.shape) +[nz]
-#     total = shape[0]*shape[1]*shape[2]
-#     print("Block %d has %e grid points." % (block_number, int(total)))
-#     total_grid_points +=  total
-#     print("Original 3D shape: %s" % shape)
-#     new_shape = tuple(reversed([shape[i]+ 2*nhalo for i in range(3)]))
-#     print("Reversed shape for C-style indexing", new_shape)
-#     #exit()
-#     newx = np.zeros(new_shape)
-#     newy = np.zeros(new_shape)
-#     newz = np.zeros(new_shape)
-#     for k in range(nz + 2*nhalo):
-#         zloc = dz * float(k - nhalo)
-#         # print(zloc)
-#         z = np.full(x.shape, zloc)
-#         #print z.shape
-#         newx[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(x)
-#         newy[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(y)
-#         newz[k,nhalo:new_shape[1] -nhalo, nhalo:new_shape[2] -nhalo] = np.transpose(z)
-
-#     # Make an OpenSBLI block
-#     b = SimulationBlock(3, block_number=block_number)
-#     g1 = h5f.create_group(b.blockname)
-#     halo = [[-i for i in nhalonhalo     
-    # apply_group_attributes(g1, b)
-#     block_dset_name = b.location_dataset("x0").base
-#     print("OpenSBLI block shape without halo points: %s" % shape)
-
-#     # Create x coordinates
-#     dset = g1.create_dataset('%s' % (block_dset_name), data=newx)
-#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
-#     # Create y coordinates
-#     block_dset_name = b.location_dataset("x1").base
-#     dset = g1.create_dataset('%s' % (block_dset_name), data=newy)
-#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
-#     # Create z coordinates
-#     block_dset_name = b.location_dataset("x2").base
-#     dset = g1.create_dataset('%s' % (block_dset_name), data=newz)
-#     set_hdf5_metadata(dset, halos=halo, npoints=[shape[0], shape[1], nz], block=b)
-    
-#     print("Length in x for block %d:" % block_number, abs(np.amin(x) - np.amax(x)))
-#     print("Length in y for block %d:" % block_number, abs(np.amin(y) - np.amax(y)))
-#     print("Length in z for block %d:" % block_number, zloc)
-# print("Total grid points: %g" % total_grid_points)
-
-# h5f.close()
+ 

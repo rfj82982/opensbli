@@ -48,7 +48,7 @@ class Plot(plotFunctions):
 
     def line_graphs(self, x, variables, names):
         for i, name in enumerate(names):
-            if name is 'Reference':
+            if name == 'Reference':
                 plt.plot(x[i], variables[i], label=labels[i], color=colors[i], linestyle='--')
             else:
                 plt.plot(x[i], variables[i], label=labels[i], color=colors[i])
@@ -112,7 +112,7 @@ class Plot(plotFunctions):
 labels = ['OpenSBLI', 'Reference']
 colors = ['k', 'r']
 Re = 200
-# directory = "./Re%d/" % Re
+directory = './'
 fname = "opensbli_output.h5"
 PC = Plot()
 PC.main_plot(directory + fname, 22)

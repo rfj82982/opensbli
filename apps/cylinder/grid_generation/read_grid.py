@@ -9,7 +9,7 @@ import os
 import re
 
 
-fname = './high-speed/CYL2D.dat'
+fname = './CYL2D.dat'
 # Get the number of points
 with open(fname) as f:
     header = f.readline()

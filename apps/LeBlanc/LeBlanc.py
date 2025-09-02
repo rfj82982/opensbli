@@ -17,8 +17,8 @@ simulation_parameters = {
 }
 
 # Direct application of shock-capturing scheme, otherwise central scheme with filter-step example
-teno = True
-weno = False
+teno = False
+weno = True
 ndim = 1
 # Define all the constants in the equations
 constants = ["gama"]

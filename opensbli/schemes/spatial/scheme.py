@@ -5,13 +5,13 @@
 """
 
 from sympy.calculus import finite_diff_weights
-from sympy import postorder_traversal, Function, flatten, S, factor
+from sympy import postorder_traversal, Function, flatten, S, factor, pprint
 from sympy.core import Add, Mul
 from opensbli.core.opensbliobjects import ConstantObject, DataSet, CoordinateObject
 from opensbli.core.opensblifunctions import CentralDerivative
 from opensbli.equation_types.opensbliequations import OpenSBLIEq, SimulationEquations
 from opensbli.core.kernel import Kernel
-
+import re
 
 class Scheme(object):
 
@@ -284,11 +284,17 @@ class Central(Scheme):
         return residue_kernel
 
     def general_discretisation(self, equations, block, name=None):
-        """
-        This discretises the central derivatives, without any special treatment of grouping them
-        """
-        discretized_equations = flatten(equations)[:]
+        """ This discretises the central derivatives, without any special treatment of grouping them. """
+        input_equations = flatten(equations)[:]
         cds = self.get_local_function(flatten(equations))
+        # Remove LHS work arrays if needed - they have been computed in previous kernels
+        for eqn in input_equations[:]:
+            if isinstance(eqn, OpenSBLIEq):
+                if isinstance(eqn.lhs, DataSet):
+                    if 'wk' in str(eqn.lhs):
+                        lhs_string = re.split(r'(\d+)', str(eqn.lhs))[0]
+                        if lhs_string == 'wk':
+                            input_equations.remove(eqn)
         if cds:
             local_kernels = {}
             for der in cds:
@@ -306,9 +312,9 @@ class Central(Scheme):
                 work_arry_subs[expr] = der.work
                 local_kernels[der].add_equation(expr_discretised)
                 local_kernels[der].set_grid_range(block)
-            for no, c in enumerate(discretized_equations):
-                discretized_equations[no] = discretized_equations[no].subs(work_arry_subs)
-            return local_kernels, discretized_equations
+            for no, c in enumerate(input_equations):
+                input_equations[no] = input_equations[no].subs(work_arry_subs)
+            return local_kernels, input_equations
         else:
             return None, None
 
