@@ -504,6 +504,7 @@ def test_app_cmake_build(app_dir: str) -> int:
         "..",
         f"-DOPS_INSTALL_DIR={os.getenv('OPS_INSTALL_DIR')}",
         "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_CUDA_HOST_COMPILER=gcc10",
         f"-DLEGACY_CODEGEN={'ON' if TRANSLATOR_MODE is TranslatorMode.LEGACY else 'OFF'}",
     )
     if TARGET == 'mpi':

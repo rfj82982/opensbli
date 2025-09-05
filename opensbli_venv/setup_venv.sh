@@ -66,4 +66,5 @@ if [ ! -f osbli_env.sh ]; then
   echo "Myosbli_venv_activate HDF5 ENV PATH ${HDF5_INSTALL_PATH}" 
   cmake -S . -B build 
 fi
+echo "SOURCE OSBLI ENV"
 source osbli_env.sh
