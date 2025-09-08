@@ -28,6 +28,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HDF5_INSTALL_PATH/lib
 export OPS_INSTALL_DIR=${OPS_INSTALL_DIR} 
 export OPS_TRANSLATOR=${OPS_TRANSLATOR}
 alias ops_translation=\"source ${OPS_INSTALL_DIR}/ops_translator/ops_venv/bin/activate && python ${OPS_TRANSLATOR}/ops.py opensbli.cpp\"
+alias osbli_translation=\source ${osbli_venv_activate}\"
 #alias ops_translation=\"python ${OPS_TRANSLATOR}/ops.py opensbli.cpp\"
 ops_activate_gnu (){
   cd ${OPS_INSTALL_DIR}
