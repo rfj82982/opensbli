@@ -48,11 +48,11 @@ fi
 # Now we need to create the virtual enviroment
 export osbli_venv_dir=${local_dir}/osbli_opt
 export osbli_venv_activate=${osbli_venv_dir}/bin/activate
-#if ! [ -f ${osbli_venv_activate} ]; then
+if ! [ -f ${osbli_venv_activate} ]; then
 #  echo "Virtual Enviroment do not exists we need to create it"
 #  python3 -m pip install --user virtualenv
-#  virtualenv -p ${py37} ${osbli_venv_dir}
-#fi
+  virtualenv -p ${py37} ${osbli_venv_dir}
+fi
 # Activate the Virtual Enviroment
 echo "My activate command call ${osbli_venv_activate}"
 source ${osbli_venv_activate}
