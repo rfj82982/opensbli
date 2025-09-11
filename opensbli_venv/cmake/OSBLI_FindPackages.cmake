@@ -43,7 +43,12 @@ ops_activate_pgi (){
   source setup_env_pgi_ops.sh
   cd - 
 }
-#
+ops_activate_pgi_scarf (){
+  cd ${OPS_INSTALL_DIR}
+  deactivate
+  source setup_env_nvhpcscarf_ops.sh
+  cd -
+}#
 osbli_code_generation (){
   if [ -z \"$1\" ];then
     echo \"One input file needs to be provided \"
