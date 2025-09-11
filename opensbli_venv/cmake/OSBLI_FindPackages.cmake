@@ -43,12 +43,14 @@ ops_activate_pgi (){
   source setup_env_pgi_ops.sh
   cd - 
 }
+#
 ops_activate_pgi_scarf (){
   cd ${OPS_INSTALL_DIR}
   deactivate
   source setup_env_nvhpcscarf_ops.sh
   cd -
-}#
+}
+#
 osbli_code_generation (){
   if [ -z \"$1\" ];then
     echo \"One input file needs to be provided \"
@@ -61,11 +63,5 @@ osbli_code_generation (){
   fi
   source ${osbli_venv_activate} && python $input_file  
 }
-
-#
-#osbli_cmake_configure (){
-#  cp ${osbli_venv_dir}/../../apps/CMakeLists.txt . 
-#  source ${OPS_INSTALL_DIR}/translator/ops_translator/ops_venv/bin/activate && cmake -S . -B test-build -DOPS_INSTALL_DIR=${OPS_INSTALL_DIR} -DCMAKE_BUILD_TYPE=Release -DLEGACY_CODEGEN=OFF -DHDF5_ROOT=$HDF5_INSTALL_PATH -DCMAKE_CUDA_HOST_COMPILER=gcc10 
-#}
 ")
 
