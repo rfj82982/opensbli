@@ -51,7 +51,7 @@ export osbli_venv_activate=${osbli_venv_dir}/bin/activate
 if ! [ -f ${osbli_venv_activate} ]; then
 #  echo "Virtual Enviroment do not exists we need to create it"
 #  python3 -m pip install --user virtualenv
-  virtualenv -p ${py37} ${osbli_venv_dir}
+  virtualenv -p ${py37} --pip 23.3.2 ${osbli_venv_dir}
 fi
 # Activate the Virtual Enviroment
 echo "My activate command call ${osbli_venv_activate}"
@@ -59,7 +59,7 @@ source ${osbli_venv_activate}
 # Update Python3.7 packages only in case of non Conda download
 #if [ -z "${py37install}/bin/python3.7" ]; then
 # Not strictly necessary but we can make sure that all libs are available
-python3 -m pip install --upgrade pip
+# python3 -m pip install --upgrade pip
 python3 -m pip install -r ${local_dir}/requirements.txt
 #fi
 if [ ! -f osbli_env.sh ]; then
