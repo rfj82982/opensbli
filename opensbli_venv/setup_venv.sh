@@ -51,7 +51,7 @@ export osbli_venv_activate=${osbli_venv_dir}/bin/activate
 if ! [ -f ${osbli_venv_activate} ]; then
 #  echo "Virtual Enviroment do not exists we need to create it"
 #  python3 -m pip install --user virtualenv
-  virtualenv -p ${py37} --pip 23.3.2 ${osbli_venv_dir}
+  virtualenv -p ${py37} --pip 24.0 ${osbli_venv_dir}
 fi
 # Activate the Virtual Enviroment
 echo "My activate command call ${osbli_venv_activate}"
@@ -60,6 +60,7 @@ source ${osbli_venv_activate}
 #if [ -z "${py37install}/bin/python3.7" ]; then
 # Not strictly necessary but we can make sure that all libs are available
 # python3 -m pip install --upgrade pip
+python3 -m pip install --force-reinstall setuptools=68.0.0 wheel=0.42.0
 python3 -m pip install -r ${local_dir}/requirements.txt
 #fi
 if [ ! -f osbli_env.sh ]; then
