@@ -60,7 +60,7 @@ source ${osbli_venv_activate}
 #if [ -z "${py37install}/bin/python3.7" ]; then
 # Not strictly necessary but we can make sure that all libs are available
 # python3 -m pip install --upgrade pip
-python3 -m pip install --force-reinstall setuptools=68.0.0 wheel=0.42.0
+python3 -m pip install --force-reinstall setuptools==68.0.0 wheel==0.42.0
 python3 -m pip install -r ${local_dir}/requirements.txt
 #fi
 if [ ! -f osbli_env.sh ]; then
